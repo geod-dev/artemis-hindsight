@@ -1,0 +1,117 @@
+# Artemis Hindsight: one container per concern.
+#
+# Networks:
+#   data         web, migrate, toolbox, postgres, hindsight
+#   sandbox-net  toolbox, sandbox   (the agent's computer is reachable only through the toolbox)
+#
+# Start:  cp .env.example .env   (then set ANTHROPIC_API_KEY)
+#         docker compose up --build
+name: artemis-hindsight
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: artemis
+      POSTGRES_PASSWORD: artemis
+      POSTGRES_DB: artemis
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artemis -d artemis"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [data]
+    restart: unless-stopped
+
+  hindsight:
+    # Long-term memory server. Uses its embedded pg0 store (volume below), not the Postgres above.
+    image: ghcr.io/vectorize-io/hindsight:latest
+    shm_size: 1g
+    environment:
+      HINDSIGHT_API_LLM_PROVIDER: anthropic
+      HINDSIGHT_API_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      HINDSIGHT_API_LLM_MODEL: claude-haiku-5-5
+      HINDSIGHT_API_WORKER_ID: artemis-hindsight
+    volumes:
+      - hindsight-data:/home/hindsight/.pg0
+    ports:
+      - "127.0.0.1:8888:8888"  # API
+      - "127.0.0.1:9999:9999"  # Control Plane (web UI)
+    networks: [data]
+    restart: unless-stopped
+
+  sandbox:
+    # The agent's computer: /data/sessions/<id> holds each conversation's files and attachments; /workspace is shared
+    # across conversations. No published ports.
+    build:
+      context: .
+      dockerfile: services/sandbox/Dockerfile
+    volumes:
+      - sandbox-data:/data
+      - sandbox-workspace:/workspace
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    mem_limit: 1g
+    networks: [sandbox-net]
+    restart: unless-stopped
+
+  toolbox:
+    # Lists and runs tools. Calls the sandbox; the backend calls it.
+    build:
+      context: .
+      dockerfile: services/toolbox/Dockerfile
+    environment:
+      SANDBOX_URL: http://sandbox:8080
+    depends_on:
+      - sandbox
+    networks: [data, sandbox-net]
+    restart: unless-stopped
+
+  migrate:
+    # One-shot: applies the database schema before the web app starts.
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    command: ["npm", "run", "db:migrate", "-w", "@artemis/web"]
+    environment:
+      DATABASE_URL: postgres://artemis:artemis@postgres:5432/artemis
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+    restart: "no"
+
+  web:
+    # Next.js: the chat UI and the agent backend (/api/chat).
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://artemis:artemis@postgres:5432/artemis
+      HINDSIGHT_URL: http://hindsight:8888
+      TOOLBOX_URL: http://toolbox:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      toolbox:
+        condition: service_started
+    networks: [data]
+    restart: unless-stopped
+
+networks:
+  data: {}
+  sandbox-net: {}
+
+volumes:
+  postgres-data: {}
+  hindsight-data: {}
+  sandbox-data: {}
+  sandbox-workspace: {}

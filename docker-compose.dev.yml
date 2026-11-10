@@ -1,0 +1,46 @@
+# Development overrides: hot reload for web and toolbox.
+#
+# Run:   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Source folders are bind-mounted, so edits reload without rebuilding. Changes under
+# packages/contracts are not picked up live: rebuild with the same command.
+# After changing dependencies in package.json, run: docker compose down -v (removes the node-modules volume).
+services:
+  # Web is not started by default: it runs on the host (npm run dev), where it is faster.
+  # Start it in Docker only with: docker compose --profile in-docker ... up web
+  web:
+    profiles: ["in-docker"]
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile.dev
+    # Webpack, not Turbopack: Turbopack's watcher gets no change events across the Windows bind mount,
+    # while webpack's polling (WATCHPACK_POLLING) does.
+    command: ["npx", "next", "dev", "--webpack", "-H", "0.0.0.0", "-p", "3000"]
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "1000"  # poll every second across the Windows bind mount
+    volumes:
+      - ./services/web:/repo/services/web
+      # Next's build cache lives in a named volume: its writes would otherwise cross the Windows bind
+      # mount, and the polling watcher would see each write as a change and rebuild again.
+      - web-next:/repo/services/web/.next
+      - node-modules:/repo/node_modules
+
+  toolbox:
+    build:
+      context: .
+      dockerfile: services/toolbox/Dockerfile.dev
+    command: ["npm", "run", "dev", "-w", "@artemis/toolbox"]
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    # Published on the loopback address so the host-run web app can call it at http://127.0.0.1:8080.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./services/toolbox:/repo/services/toolbox
+      - node-modules:/repo/node_modules
+
+volumes:
+  node-modules: {}
+  web-next: {}
