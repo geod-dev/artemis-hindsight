@@ -43,7 +43,7 @@ export const Thread: FC = () => {
             isEmpty && "justify-center pb-[20vh]",
           )}
         >
-          <div className="mb-14 flex flex-col gap-y-6 empty:hidden">
+          <div className="mb-14 flex flex-col gap-y-3 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
           </div>
 
@@ -59,7 +59,7 @@ export const Thread: FC = () => {
                 <BotAvatar size={96} label="Assistant" />
               </div>
             )}
-            <Composer autoFocus typeToFocus />
+            <Composer autoFocus typeToFocus modelPicker />
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>

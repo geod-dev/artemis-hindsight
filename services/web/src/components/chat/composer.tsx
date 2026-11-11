@@ -1,12 +1,15 @@
 "use client";
 
-import { AuiIf, ComposerPrimitive } from "@assistant-ui/react";
-import { ArrowUpIcon, MicIcon, SquareIcon } from "lucide-react";
+import { AuiIf, ComposerPrimitive, useAuiState } from "@assistant-ui/react";
+import { ArrowUpIcon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { useContext, useEffect, useRef, type FC, type RefObject } from "react";
 import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/elements/attachment.aui";
 import { ComposerQuotePreview } from "@/components/assistant-ui/elements/quote.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { ConversationIdContext } from "./conversation-context";
+import { EffortPicker } from "./effort-picker";
+import { DictationWaveform } from "./dictation-waveform";
+import { useDictation } from "./use-dictation";
 
 // Same look as the attach button, so the row of icon buttons reads as one.
 const iconButtonClass =
@@ -34,39 +37,25 @@ const StopButton: FC = () => {
   );
 };
 
-/** Starts dictation; while a session runs, the same slot becomes a stop button. */
-const DictationButton: FC = () => (
-  <>
-    <AuiIf condition={(s) => s.composer.dictation == null}>
-      <ComposerPrimitive.Dictate asChild>
-        <TooltipIconButton
-          tooltip="Dictate"
-          side="bottom"
-          variant="ghost"
-          size="icon"
-          className={iconButtonClass}
-          aria-label="Dictate"
-        >
-          <MicIcon className="size-4" />
-        </TooltipIconButton>
-      </ComposerPrimitive.Dictate>
-    </AuiIf>
-    <AuiIf condition={(s) => s.composer.dictation != null}>
-      <ComposerPrimitive.StopDictation asChild>
-        <TooltipIconButton
-          tooltip="Stop dictation"
-          side="bottom"
-          variant="ghost"
-          size="icon"
-          className="text-destructive hover:bg-destructive/10 size-7 animate-pulse rounded-full motion-reduce:animate-none"
-          aria-label="Stop dictation"
-        >
-          <SquareIcon className="size-3 fill-current" />
-        </TooltipIconButton>
-      </ComposerPrimitive.StopDictation>
-    </AuiIf>
-  </>
-);
+/**
+ * Solid primary when there is text, an attachment or a dictation. Empty, it is disabled and gets the shadcn
+ * disabled look (dimmed), the same as every other shadcn button.
+ */
+const SendButton: FC = () => {
+  const canSend = useAuiState((s) => s.composer.canSend);
+  return (
+    <ComposerPrimitive.Send asChild>
+      <button
+        type="button"
+        aria-label="Send message"
+        disabled={!canSend}
+        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50"
+      >
+        <ArrowUpIcon className="size-4" />
+      </button>
+    </ComposerPrimitive.Send>
+  );
+};
 
 /**
  * With nothing focused, a printable key moves focus to the input, so typing anywhere on the page starts a message.
@@ -92,15 +81,19 @@ function useTypeToFocus(inputRef: RefObject<HTMLTextAreaElement | null>, enabled
 /**
  * The message input box. Same shell and input styling as the Thread bundle's composer.
  * Files are added with the attach button (left) and uploaded to the conversation's sandbox when the message is sent.
- * Dictation records here and is transcribed by the server.
+ * Dictation turns the bottom bar into: cancel (left), live waveform, stop (transcribe), send (transcribe and send).
  * `typeToFocus` makes a keypress with nothing focused move focus into this input (used for the main composer).
  */
-export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean }> = ({
+export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean; modelPicker?: boolean }> = ({
   autoFocus = false,
   typeToFocus = false,
+  modelPicker = false,
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useTypeToFocus(inputRef, typeToFocus);
+  const dictation = useDictation(inputRef);
+  const dictating = dictation.phase !== "idle";
+  const busy = dictation.phase === "transcribing";
 
   return (
     <ComposerPrimitive.Root className="relative flex w-full flex-col">
@@ -119,25 +112,78 @@ export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean }> = ({
           enterKeyHint="send"
           aria-label="Message input"
         />
-        <div className="flex items-center justify-between gap-1.5">
-          <ComposerAddAttachment />
-          <div className="flex items-center gap-1.5">
-            <DictationButton />
-            <AuiIf condition={(s) => s.composer.canCancel}>
-              <StopButton />
-            </AuiIf>
-            <AuiIf condition={(s) => !s.composer.canCancel}>
-              <ComposerPrimitive.Send asChild>
-                <button
-                  type="button"
-                  aria-label="Send message"
-                  className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full"
-                >
-                  <ArrowUpIcon className="size-4" />
-                </button>
-              </ComposerPrimitive.Send>
-            </AuiIf>
+        <div className="flex items-center gap-1.5">
+          {dictating ? (
+            <TooltipIconButton
+              tooltip="Cancel dictation"
+              side="bottom"
+              variant="ghost"
+              size="icon"
+              type="button"
+              className={iconButtonClass}
+              aria-label="Cancel dictation"
+              onClick={dictation.cancel}
+            >
+              <XIcon className="size-4" />
+            </TooltipIconButton>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <ComposerAddAttachment />
+              {modelPicker && <EffortPicker />}
+            </div>
+          )}
+
+          <div className="flex min-w-0 flex-1 items-center">
+            {dictating && <DictationWaveform seconds={dictation.seconds} muted={busy} />}
           </div>
+
+          {dictating ? (
+            <div className="flex items-center gap-1.5">
+              <TooltipIconButton
+                tooltip="Stop dictation"
+                side="bottom"
+                variant="ghost"
+                size="icon"
+                type="button"
+                disabled={busy}
+                className={iconButtonClass}
+                aria-label="Stop dictation"
+                onClick={() => dictation.stop(false)}
+              >
+                <SquareIcon className="size-3 fill-current" />
+              </TooltipIconButton>
+              <button
+                type="button"
+                aria-label="Send dictated message"
+                disabled={busy}
+                onClick={() => dictation.stop(true)}
+                className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full disabled:opacity-50"
+              >
+                <ArrowUpIcon className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <TooltipIconButton
+                tooltip="Dictate"
+                side="bottom"
+                variant="ghost"
+                size="icon"
+                className={iconButtonClass}
+                type="button"
+                aria-label="Dictate"
+                onClick={dictation.start}
+              >
+                <MicIcon className="size-4" />
+              </TooltipIconButton>
+              <AuiIf condition={(s) => s.composer.canCancel}>
+                <StopButton />
+              </AuiIf>
+              <AuiIf condition={(s) => !s.composer.canCancel}>
+                <SendButton />
+              </AuiIf>
+            </div>
+          )}
         </div>
       </div>
     </ComposerPrimitive.Root>

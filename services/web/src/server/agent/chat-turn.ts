@@ -38,8 +38,14 @@ import { endTurn, resumable, startTurn } from "./turn-registry";
  *
  * Returns the stream of this turn, and the stream id the browser keeps to reconnect after a reload.
  */
-export async function runChatTurn(params: { conversationId: string; incoming: UIMessage }): Promise<Response> {
+export async function runChatTurn(params: {
+  conversationId: string;
+  incoming: UIMessage;
+  reasoningEffort?: "low" | "medium" | "high";
+}): Promise<Response> {
   const { conversationId, incoming } = params;
+  // The composer's Low / Medium / High choice. Medium when the browser sends none.
+  const reasoningEffort = params.reasoningEffort ?? "medium";
   const config = getConfig();
   const userText = textOf(incoming);
 
@@ -89,6 +95,10 @@ export async function runChatTurn(params: { conversationId: string; incoming: UI
         tools,
         stopWhen: stepCountIs(config.MAX_AGENT_STEPS),
         abortSignal: turn.abort.signal,
+        // Effort only shapes thinking when thinking is on: adaptive lets the model decide how much to think.
+        providerOptions: {
+          anthropic: { effort: reasoningEffort, thinking: { type: "adaptive", display: "summarized" } },
+        },
       });
       // Every timing change is sent to the browser as message metadata, so it shows without a reload.
       const observed = observeTurnTiming(result.stream, timing, () =>

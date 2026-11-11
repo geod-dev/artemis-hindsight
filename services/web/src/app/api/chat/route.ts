@@ -14,6 +14,8 @@ const requestSchema = z.object({
       "expected a UI message",
     ),
   ),
+  // Model context settings from the composer. Only the reasoning effort is used.
+  config: z.object({ reasoningEffort: z.enum(["low", "medium", "high"]).optional() }).optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -32,7 +34,11 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     // The turn is not tied to this request: closing or reloading the page does not stop the agent.
-    return await runChatTurn({ conversationId: parsed.data.id, incoming });
+    return await runChatTurn({
+      conversationId: parsed.data.id,
+      incoming,
+      reasoningEffort: parsed.data.config?.reasoningEffort,
+    });
   } catch (error) {
     if (error instanceof AttachmentError) {
       return Response.json({ error: error.message }, { status: 422 });

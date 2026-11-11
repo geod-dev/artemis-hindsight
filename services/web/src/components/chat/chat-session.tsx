@@ -8,11 +8,10 @@ import { useMemo } from "react";
 import { createAttachmentAdapter } from "./attachment-adapter";
 import { ConversationIdContext } from "./conversation-context";
 import { MessageTimesContext } from "./day-header";
-import { ServerDictationAdapter } from "./server-dictation-adapter";
+import { dictationAdapter } from "./server-dictation-adapter";
 import { Thread } from "./thread";
 
 const resumableStorage = createResumableSessionStorage();
-const dictationAdapter = new ServerDictationAdapter("/api/transcribe");
 
 export interface ChatSessionProps {
   conversationId: string;
@@ -46,8 +45,9 @@ export function ChatSession({ conversationId, initialMessages, isNewConversation
     () =>
       new AssistantChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: ({ messages, trigger, messageId }) => ({
-          body: { id: conversationId, messages, trigger, messageId },
+        prepareSendMessagesRequest: ({ messages, trigger, messageId, body }) => ({
+          // config holds the model context's settings, such as the reasoning effort chosen in the composer.
+          body: { id: conversationId, messages, trigger, messageId, config: body?.config },
         }),
         resumable: {
           storage: resumableStorage,
