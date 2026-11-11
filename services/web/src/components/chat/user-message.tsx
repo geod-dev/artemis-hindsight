@@ -28,14 +28,20 @@ export const UserMessage: FC = () => {
     <MessagePrimitive.Root
       data-role="user"
       data-aui-quote-selectable="false"
-      className="fade-in slide-in-from-bottom-1 animate-in flex flex-col items-end gap-1 duration-150"
+      className="group fade-in slide-in-from-bottom-1 animate-in flex flex-col items-end gap-1 duration-150"
     >
       <UserMessageAttachments />
       <div className="bg-muted text-foreground max-w-[80%] rounded-(--composer-radius) px-4 py-2 wrap-break-word">
         <MessagePrimitive.Quote>{(quote) => <QuoteBlock {...quote} />}</MessagePrimitive.Quote>
         <MessagePrimitive.Parts />
       </div>
-      <div className="flex items-center gap-1">
+      {/* Hidden until the pointer is over the message (or a key focuses an action), so the row does not clutter the thread. */}
+      <div
+        className={cn(
+          "flex items-center gap-1 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
+          copied ? "opacity-100" : "opacity-0",
+        )}
+      >
         <button
           type="button"
           aria-label="Copy message"
