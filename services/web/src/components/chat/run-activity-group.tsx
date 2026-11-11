@@ -11,6 +11,7 @@ import {
 import type { MessagePrimitive } from "@assistant-ui/react";
 import { ToolEntry } from "./tool-entry";
 import { FILE_TOOLS, fileToolDetails, fileToolDoneIcon, fileToolLabel } from "./file-tool";
+import { EXA_TOOLS, exaToolView } from "./exa-tool";
 import { ThinkingLabel, thinkingText } from "./thinking-label";
 import {
   asRecord,
@@ -95,11 +96,13 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
     const finished = part.result !== undefined;
     const failed = part.isError === true;
     const isFile = FILE_TOOLS.has(part.toolName);
+    // Exa calls show the query or the page title as label, with their own icon and result text.
+    const exa = EXA_TOOLS.has(part.toolName) ? exaToolView(part.toolName, args, part.result) : undefined;
     const description =
       typeof args.description === "string" && args.description.trim()
         ? args.description.trim()
         : `Ran ${part.toolName}`;
-    const label = isFile ? fileToolLabel(part.toolName, args.path, finished) : description;
+    const label = isFile ? fileToolLabel(part.toolName, args.path, finished) : (exa?.label ?? description);
     const command = typeof args.command === "string" ? args.command : safeStringify(part.args);
     // File calls expand to a code diff; a failed call keeps the plain request and result, to show the error.
     const details = isFile && !failed ? fileToolDetails(part.toolName, args, part.result, finished) : undefined;
@@ -112,10 +115,11 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
           <ToolEntry
             label={label}
             request={command}
-            result={formatResult(part.result)}
+            result={exa ? exa.text : formatResult(part.result)}
             running={messageRunning && !finished}
             failed={failed}
             doneIcon={isFile ? fileToolDoneIcon(part.toolName) : "check"}
+            icon={exa?.icon}
             details={details}
           />
         ),

@@ -16,6 +16,8 @@ export interface ToolEntryProps {
   failed: boolean;
   /** The icon shown when the call is done: a check by default, a pencil or a file for file calls. */
   doneIcon?: "check" | "pencil" | "file";
+  /** Replaces doneIcon when set, for example a magnifier or a page favicon. */
+  icon?: ReactNode;
   /** Replaces the request and result when set, for example a code diff of a file change. */
   details?: ReactNode;
 }
@@ -24,7 +26,7 @@ export interface ToolEntryProps {
  * One tool call inside a run: a status icon and its label, expanding to the request and result.
  * Owned by this project, so it can change freely without touching the downloaded assistant-ui elements.
  */
-export function ToolEntry({ label, request, result, running, failed, doneIcon = "check", details }: ToolEntryProps) {
+export function ToolEntry({ label, request, result, running, failed, doneIcon = "check", icon, details }: ToolEntryProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -36,6 +38,8 @@ export function ToolEntry({ label, request, result, running, failed, doneIcon = 
             <LoaderCircleIcon aria-label="Running" className="size-3.5 animate-spin text-muted-foreground" />
           ) : failed ? (
             <XIcon aria-label="Failed" className="size-3.5 text-destructive" />
+          ) : icon !== undefined ? (
+            icon
           ) : doneIcon === "pencil" ? (
             <PencilIcon aria-label="Edited" className="size-3.5 text-muted-foreground" />
           ) : doneIcon === "file" ? (
