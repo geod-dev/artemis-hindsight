@@ -5,6 +5,8 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
+  /** Speech to text (Groq Whisper). Optional: without it the dictation endpoint answers 503 and chat still works. */
+  GROQ_API_KEY: z.string().min(1).optional(),
   CHAT_MODEL: z.string().default("claude-haiku-5-5"),
   MAX_AGENT_STEPS: z.coerce.number().int().min(1).max(50).default(12),
 

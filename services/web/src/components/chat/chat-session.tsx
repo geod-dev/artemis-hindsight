@@ -8,9 +8,11 @@ import { useMemo } from "react";
 import { createAttachmentAdapter } from "./attachment-adapter";
 import { ConversationIdContext } from "./conversation-context";
 import { MessageTimesContext } from "./day-header";
+import { ServerDictationAdapter } from "./server-dictation-adapter";
 import { Thread } from "./thread";
 
 const resumableStorage = createResumableSessionStorage();
+const dictationAdapter = new ServerDictationAdapter("/api/transcribe");
 
 export interface ChatSessionProps {
   conversationId: string;
@@ -61,7 +63,7 @@ export function ChatSession({ conversationId, initialMessages, isNewConversation
     id: conversationId,
     messages: initialMessages,
     transport,
-    adapters: { attachments },
+    adapters: { attachments, dictation: dictationAdapter },
     canResume: true,
     onFinish: () => {
       if (isNewConversation && window.location.pathname !== `/c/${conversationId}`) {

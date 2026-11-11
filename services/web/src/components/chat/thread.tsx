@@ -59,7 +59,7 @@ export const Thread: FC = () => {
                 <BotAvatar size={96} label="Assistant" />
               </div>
             )}
-            <Composer />
+            <Composer autoFocus typeToFocus />
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
