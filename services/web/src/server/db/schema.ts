@@ -27,6 +27,11 @@ export interface TurnTiming {
   startedAt: number;
   endedAt?: number;
   steps: TurnStep[];
+  /**
+   * One entry per reasoning block of the turn, in stream order. The n-th reasoning part of the message is the
+   * n-th entry here. Epoch milliseconds.
+   */
+  reasonings?: { startedAt: number; endedAt?: number }[];
 }
 
 export interface StoredMessageMetadata {

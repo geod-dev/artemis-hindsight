@@ -1,6 +1,7 @@
 "use client";
 
-import { useAuiState } from "@assistant-ui/react";
+import { TextMessagePartProvider, useAuiState } from "@assistant-ui/react";
+import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { useEffect, useMemo, useState, type FC, type PropsWithChildren } from "react";
 import {
   RunActivity,
@@ -10,6 +11,15 @@ import {
 import type { MessagePrimitive } from "@assistant-ui/react";
 import { ToolEntry } from "./tool-entry";
 import { FILE_TOOLS, fileToolDetails, fileToolDoneIcon, fileToolLabel } from "./file-tool";
+import { ThinkingLabel, thinkingText } from "./thinking-label";
+import {
+  asRecord,
+  asTurnTiming,
+  formatDuration,
+  reasoningDuration,
+  reasoningOrdinal,
+  reasoningTiming,
+} from "./turn-timing-view";
 
 /**
  * Renders the turn's tool calls as one RunActivity, with the narration text between them as
@@ -50,7 +60,21 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
   const entries: RunActivityEntry[] = group.indices.flatMap((index): RunActivityEntry[] => {
     const part = parts[index];
     if (!part) return [];
-    if (part.type === "text" || part.type === "reasoning") {
+    if (part.type === "reasoning") {
+      // Thinking inside a run: a plain line with its duration. It is an entry, but it does not expand.
+      const timing = reasoningTiming(turnTiming, reasoningOrdinal(parts, index));
+      const durationMs = reasoningDuration(timing);
+      const live = messageRunning && timing !== undefined && timing.endedAt === undefined;
+      return [
+        {
+          id: `thinking-${index}`,
+          kind: "commentary",
+          label: thinkingText(durationMs, live),
+          content: <ThinkingLabel durationMs={durationMs} live={live} />,
+        },
+      ];
+    }
+    if (part.type === "text") {
       const narration = part.text.trim();
       if (!narration) return [];
       return [
@@ -58,7 +82,11 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
           id: `text-${index}`,
           kind: "commentary",
           label: narration,
-          content: <p className="whitespace-pre-wrap">{narration}</p>,
+          content: (
+            <TextMessagePartProvider text={narration}>
+              <MarkdownText />
+            </TextMessagePartProvider>
+          ),
         },
       ];
     }
@@ -110,37 +138,6 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
   );
 };
 
-/** The parts of the server's turn timing the run shows. Anything malformed counts as no timing. */
-interface TurnTimingView {
-  startedAt: number;
-  endedAt?: number;
-  steps: { firstTextAt?: number }[];
-}
-
-/** Reads the server's turn timing from message metadata. */
-function asTurnTiming(value: unknown): TurnTimingView | undefined {
-  const record = asRecord(value);
-  if (typeof record.startedAt !== "number") return undefined;
-  const steps = Array.isArray(record.steps)
-    ? record.steps.map((step) => ({
-        firstTextAt: typeof asRecord(step).firstTextAt === "number" ? (asRecord(step).firstTextAt as number) : undefined,
-      }))
-    : [];
-  return {
-    startedAt: record.startedAt,
-    ...(typeof record.endedAt === "number" ? { endedAt: record.endedAt } : {}),
-    steps,
-  };
-}
-
-/** "3s" under a minute, then "5m 32s". */
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-}
-
 /** Bash results are `{ exitCode, stdout, stderr, ... }`; show them as a terminal transcript. */
 function formatResult(result: unknown): string {
   if (result === undefined || result === null) return "";
@@ -152,10 +149,6 @@ function formatResult(result: unknown): string {
     return [stdout.trimEnd(), stderr.trimEnd() && `[stderr]\n${stderr.trimEnd()}`, exit].filter(Boolean).join("\n");
   }
   return typeof result === "string" ? result : safeStringify(result);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 function safeStringify(value: unknown): string {

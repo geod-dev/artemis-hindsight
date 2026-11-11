@@ -21,6 +21,8 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     metadata: {
       createdAt: row.createdAt.toISOString(),
       ...(row.metadata?.custom ? { custom: row.metadata.custom } : {}),
+      // The turn's timing: the UI reads it from metadata.custom.turnTiming, where assistant-ui puts extra metadata.
+      ...(row.metadata?.turnTiming ? { turnTiming: row.metadata.turnTiming } : {}),
     },
   }));
 

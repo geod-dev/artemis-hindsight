@@ -4,7 +4,7 @@ import type { TurnTiming } from "../db/schema";
 type StreamPart = { type: string; finishReason?: string; text?: string };
 
 export function createTurnTiming(startedAt: number): TurnTiming {
-  return { startedAt, steps: [] };
+  return { startedAt, steps: [], reasonings: [] };
 }
 
 /** A copy that is safe to store and to send: later changes to the live timing do not alter it. */
@@ -37,6 +37,15 @@ export function observeTurnTiming<T extends StreamPart>(
           current.endedAt = Date.now();
           current.finishReason = part.finishReason;
           onChange();
+        } else if (part.type === "reasoning-start") {
+          (timing.reasonings ??= []).push({ startedAt: Date.now() });
+          onChange();
+        } else if (part.type === "reasoning-end") {
+          const open = timing.reasonings?.findLast((reasoning) => reasoning.endedAt === undefined);
+          if (open) {
+            open.endedAt = Date.now();
+            onChange();
+          }
         }
       },
     }),
