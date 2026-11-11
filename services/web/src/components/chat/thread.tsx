@@ -5,6 +5,7 @@ import { ArrowDownIcon } from "lucide-react";
 import { useContext, type CSSProperties, type FC } from "react";
 import { SelectionToolbar } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
+import { BotAvatar } from "@/components/avatar/bot-avatar";
 import { cn } from "@/lib/utils";
 import { AssistantMessage } from "./assistant-message";
 import { Composer } from "./composer";
@@ -38,7 +39,8 @@ export const Thread: FC = () => {
         <div
           className={cn(
             "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
-            isEmpty && "justify-center",
+            // Empty: avatar and composer are centered above the middle, so the pair sits higher on the page.
+            isEmpty && "justify-center pb-[20vh]",
           )}
         >
           <div className="mb-14 flex flex-col gap-y-6 empty:hidden">
@@ -52,6 +54,11 @@ export const Thread: FC = () => {
             )}
           >
             <ThreadScrollToBottom />
+            {isEmpty && (
+              <div className="animate-in fade-in zoom-in-95 flex justify-center duration-300">
+                <BotAvatar size={96} label="Assistant" />
+              </div>
+            )}
             <Composer />
           </ThreadPrimitive.ViewportFooter>
         </div>
