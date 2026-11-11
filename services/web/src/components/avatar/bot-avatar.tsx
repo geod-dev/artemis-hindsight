@@ -7,10 +7,10 @@ import { loadAvatarDefinition } from "./avatar-definition";
 import { useThinkingMotion } from "./thinking-motion";
 
 /**
- * The bot's colors, the same wherever the avatar appears: a Google blue body, with eyes that take the page
- * background, so they read as cut-outs in both themes.
+ * The bot's colors, the same wherever the avatar appears: the body is the theme's primary color (Google blue in
+ * light mode, the foreground color in dark mode), and the eyes take the page background, so they read as cut-outs.
  */
-const BODY_COLOR = "#4285F4";
+const BODY_COLOR = "var(--primary)";
 const EYE_COLOR = "var(--background)";
 
 export interface BotAvatarProps {
