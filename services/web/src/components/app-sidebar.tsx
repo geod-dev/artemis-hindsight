@@ -1,9 +1,10 @@
 "use client";
 
-import { MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { LogOut, MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConversationTitles } from "@/components/conversation-titles";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,6 +25,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -42,11 +44,23 @@ export interface SidebarConversation {
   updatedAt: string;
 }
 
-export function AppSidebar({ conversations }: { conversations: SidebarConversation[] }) {
+export function AppSidebar({ username, conversations }: { username: string; conversations: SidebarConversation[] }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { renamed } = useConversationTitles();
   const [pendingDelete, setPendingDelete] = useState<SidebarConversation | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // A name received in this session wins over the title the server rendered.
+  const titleOf = (conversation: SidebarConversation) => renamed[conversation.id] ?? conversation.title;
+
+  async function signOut() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -92,16 +106,17 @@ export function AppSidebar({ conversations }: { conversations: SidebarConversati
               )}
               {conversations.map((conversation) => {
                 const href = `/c/${conversation.id}`;
+                const title = titleOf(conversation);
                 return (
                   <SidebarMenuItem key={conversation.id}>
-                    <SidebarMenuButton asChild isActive={pathname === href} tooltip={conversation.title}>
+                    <SidebarMenuButton asChild isActive={pathname === href} tooltip={title}>
                       <Link href={href}>
-                        <span className="truncate">{conversation.title}</span>
+                        <span className="truncate">{title}</span>
                       </Link>
                     </SidebarMenuButton>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <SidebarMenuAction showOnHover aria-label={`Actions for ${conversation.title}`}>
+                        <SidebarMenuAction showOnHover aria-label={`Actions for ${title}`}>
                           <MoreHorizontal />
                         </SidebarMenuAction>
                       </DropdownMenuTrigger>
@@ -120,6 +135,18 @@ export function AppSidebar({ conversations }: { conversations: SidebarConversati
         </SidebarGroup>
       </SidebarContent>
 
+      <SidebarFooter className="gap-2 p-3">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <span className="truncate text-sm text-muted-foreground" title="Signed in as">
+            {username}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => void signOut()} className="gap-2">
+            <LogOut className="size-4" />
+            Sign out
+          </Button>
+        </div>
+      </SidebarFooter>
+
       <SidebarRail />
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
@@ -127,7 +154,7 @@ export function AppSidebar({ conversations }: { conversations: SidebarConversati
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{pendingDelete?.title}” and all of its messages will be removed. This cannot be undone.
+              “{pendingDelete ? titleOf(pendingDelete) : ""}” and all of its messages will be removed. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

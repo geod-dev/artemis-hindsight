@@ -1,8 +1,8 @@
 import type { UIMessage } from "ai";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { ChatPageFrame } from "@/components/chat/chat-page-frame";
 import { ChatSession } from "@/components/chat/chat-session";
+import { getCurrentUser } from "@/server/auth/session";
 import { findConversation } from "@/server/repositories/conversation-repository";
 import { listMessages } from "@/server/repositories/message-repository";
 
@@ -10,7 +10,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
 
-  const conversation = await findConversation(id);
+  // Another user's conversation looks exactly like one that does not exist.
+  const user = await getCurrentUser();
+  if (!user) notFound();
+  const conversation = await findConversation(id, user.id);
   if (!conversation) notFound();
 
   const rows = await listMessages(id);
@@ -27,8 +30,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   }));
 
   return (
-    <ChatPageFrame>
-      <ChatSession key={id} conversationId={id} initialMessages={initialMessages} isNewConversation={false} />
-    </ChatPageFrame>
+    <ChatSession
+      key={id}
+      conversationId={id}
+      initialMessages={initialMessages}
+      isNewConversation={false}
+      initialTitle={conversation.title}
+    />
   );
 }

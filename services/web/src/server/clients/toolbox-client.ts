@@ -76,6 +76,29 @@ export async function readSessionFile(
   };
 }
 
+/** Creates a user's workspace folder. Idempotent. */
+export async function ensureWorkspace(username: string): Promise<void> {
+  await sendFolderRequest("PUT", `/workspaces/${encodeURIComponent(username)}`);
+}
+
+/** Removes a user's workspace folder and everything in it. */
+export async function removeWorkspace(username: string): Promise<void> {
+  await sendFolderRequest("DELETE", `/workspaces/${encodeURIComponent(username)}`);
+}
+
+/** Removes a conversation's session folder: its files and attachments. */
+export async function removeSession(sessionId: string): Promise<void> {
+  await sendFolderRequest("DELETE", `/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+async function sendFolderRequest(method: "PUT" | "DELETE", path: string): Promise<void> {
+  const res = await fetch(new URL(path, getConfig().TOOLBOX_URL), { method, signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new Error(errorMessage(body, res.status));
+  }
+}
+
 function errorMessage(body: unknown, status: number): string {
   return typeof body === "object" && body !== null && "error" in body ? String(body.error) : `HTTP ${status}`;
 }

@@ -2,6 +2,8 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 import { runChatTurn } from "@/server/agent/chat-turn";
 import { AttachmentError } from "@/server/agent/attachments";
+import { getCurrentUser, unauthorized } from "@/server/auth/session";
+import { ConversationOwnershipError } from "@/server/repositories/conversation-repository";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,6 +21,9 @@ const requestSchema = z.object({
 });
 
 export async function POST(req: Request): Promise<Response> {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+
   const body: unknown = await req.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
@@ -38,10 +43,14 @@ export async function POST(req: Request): Promise<Response> {
       conversationId: parsed.data.id,
       incoming,
       reasoningEffort: parsed.data.config?.reasoningEffort,
+      user,
     });
   } catch (error) {
     if (error instanceof AttachmentError) {
       return Response.json({ error: error.message }, { status: 422 });
+    }
+    if (error instanceof ConversationOwnershipError) {
+      return Response.json({ error: "conversation not found" }, { status: 404 });
     }
     console.error("failed to start chat turn", error);
     return Response.json({ error: "the chat service is unavailable" }, { status: 503 });

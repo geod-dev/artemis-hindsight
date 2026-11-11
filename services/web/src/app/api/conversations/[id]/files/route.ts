@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { readSessionFile } from "@/server/clients/toolbox-client";
+import { getCurrentUser, unauthorized } from "@/server/auth/session";
+import { findConversation } from "@/server/repositories/conversation-repository";
 
 export const runtime = "nodejs";
 
@@ -8,8 +10,12 @@ export const runtime = "nodejs";
  * The path is relative to the session folder, e.g. ?path=attachments/report.pdf.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return Response.json({ error: "invalid conversation" }, { status: 400 });
+  if (!(await findConversation(id, user.id))) return Response.json({ error: "conversation not found" }, { status: 404 });
 
   const path = new URL(req.url).searchParams.get("path");
   if (!path) return Response.json({ error: "path is required" }, { status: 400 });

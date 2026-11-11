@@ -19,6 +19,8 @@ interface ActiveTurn {
 interface TurnRegistry {
   resumable: ResumableStreamContext;
   activeByConversation: Map<string, ActiveTurn>;
+  /** Which user started each stream, so a reload can only resume the user's own turns. */
+  ownerByStream: Map<string, string>;
 }
 
 const globalForTurns = globalThis as unknown as { artemisTurnRegistry?: TurnRegistry };
@@ -26,14 +28,21 @@ const globalForTurns = globalThis as unknown as { artemisTurnRegistry?: TurnRegi
 const registry: TurnRegistry = (globalForTurns.artemisTurnRegistry ??= {
   resumable: createResumableStreamContext({ store: createInMemoryResumableStreamStore() }),
   activeByConversation: new Map(),
+  ownerByStream: new Map(),
 });
 
 export const resumable = registry.resumable;
 
-export function startTurn(conversationId: string, streamId: string): ActiveTurn {
+export function startTurn(conversationId: string, streamId: string, ownerId: string): ActiveTurn {
   const turn: ActiveTurn = { streamId, abort: new AbortController() };
   registry.activeByConversation.set(conversationId, turn);
+  (registry.ownerByStream ??= new Map()).set(streamId, ownerId);
   return turn;
+}
+
+/** The user who started a stream, or undefined when the stream is unknown. */
+export function streamOwner(streamId: string): string | undefined {
+  return registry.ownerByStream?.get(streamId);
 }
 
 export function endTurn(conversationId: string, streamId: string): void {

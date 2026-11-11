@@ -1,4 +1,5 @@
 import { GroqNotConfiguredError, transcribeAudio } from "@/server/clients/groq-client";
+import { getCurrentUser, unauthorized } from "@/server/auth/session";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,9 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 /** Speech to text for the composer's dictation: takes the recorded audio, returns the transcript. */
 export async function POST(req: Request): Promise<Response> {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+
   let formData: FormData;
   try {
     formData = await req.formData();

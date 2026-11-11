@@ -9,7 +9,7 @@ import {
   type FsWriteRequest,
   type FsWriteResult,
 } from "@artemis/contracts";
-import { PathError, relativeToSession, resolveAgentPath, type Roots } from "./paths.js";
+import { relativeToSession, resolveAgentPath, type Roots } from "./paths.js";
 
 /** An error the agent can act on. The toolbox returns it to the model as a tool error. */
 export class FileError extends Error {}
@@ -30,7 +30,7 @@ async function guarded<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof FileError || error instanceof PathError) throw error;
+    if (error instanceof FileError) throw error;
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") throw new FileError("no such file; check the path, or use write to create it");
     if (code === "EACCES" || code === "EPERM") throw new FileError("permission denied");
@@ -40,11 +40,7 @@ async function guarded<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function resolve(roots: Roots, sessionId: string, input: string): string {
-  try {
-    return resolveAgentPath(roots, sessionId, input);
-  } catch (error) {
-    throw new FileError((error as Error).message);
-  }
+  return resolveAgentPath(roots, sessionId, input);
 }
 
 export async function readForAgent(roots: Roots, input: FsReadRequest & { sessionId: string }): Promise<FsReadResult> {

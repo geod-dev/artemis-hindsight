@@ -7,11 +7,13 @@ import {
   fsReadRequestSchema,
   fsWriteRequestSchema,
   sessionIdSchema,
+  usernameSchema,
 } from "@artemis/contracts";
 import { saveAttachment, AttachmentError } from "./attachments.js";
 import { runCommand } from "./exec.js";
 import { FileError, editForAgent, readForAgent, serveFile, writeForAgent } from "./files.js";
-import { PathError, type Roots } from "./paths.js";
+import type { Roots } from "./paths.js";
+import { removeSession, removeWorkspace, ensureWorkspace } from "./workspaces.js";
 
 const port = Number(process.env.PORT ?? 8080);
 const roots: Roots = {
@@ -74,7 +76,7 @@ app.get("/sessions/:sessionId/files", async (c) => {
       "cache-control": "private, no-cache",
     });
   } catch (error) {
-    if (error instanceof FileError || error instanceof PathError) return c.json({ error: error.message }, 422);
+    if (error instanceof FileError) return c.json({ error: error.message }, 422);
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return c.json({ error: "no such file" }, 404);
     throw error;
   }
@@ -87,7 +89,7 @@ app.post("/fs/read", async (c) => {
   try {
     return c.json(await readForAgent(roots, parsed.data));
   } catch (error) {
-    if (error instanceof FileError || error instanceof PathError) return c.json({ error: error.message }, 422);
+    if (error instanceof FileError) return c.json({ error: error.message }, 422);
     throw error;
   }
 });
@@ -98,7 +100,7 @@ app.post("/fs/write", async (c) => {
   try {
     return c.json(await writeForAgent(roots, parsed.data));
   } catch (error) {
-    if (error instanceof FileError || error instanceof PathError) return c.json({ error: error.message }, 422);
+    if (error instanceof FileError) return c.json({ error: error.message }, 422);
     throw error;
   }
 });
@@ -109,9 +111,32 @@ app.post("/fs/edit", async (c) => {
   try {
     return c.json(await editForAgent(roots, parsed.data));
   } catch (error) {
-    if (error instanceof FileError || error instanceof PathError) return c.json({ error: error.message }, 422);
+    if (error instanceof FileError) return c.json({ error: error.message }, 422);
     throw error;
   }
+});
+
+// Per-user workspaces (/workspace/<username>) and per-conversation session folders. Created and removed by the web app,
+// through the toolbox: create when a user is made, remove when an archived user is deleted.
+app.put("/workspaces/:username", async (c) => {
+  const username = usernameSchema.safeParse(c.req.param("username"));
+  if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
+  await ensureWorkspace(roots, username.data);
+  return c.json({ ok: true });
+});
+
+app.delete("/workspaces/:username", async (c) => {
+  const username = usernameSchema.safeParse(c.req.param("username"));
+  if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
+  await removeWorkspace(roots, username.data);
+  return c.json({ ok: true });
+});
+
+app.delete("/sessions/:sessionId", async (c) => {
+  const sessionId = sessionIdSchema.safeParse(c.req.param("sessionId"));
+  if (!sessionId.success) return c.json({ error: "invalid session id" }, 400);
+  await removeSession(roots, sessionId.data);
+  return c.json({ ok: true });
 });
 
 serve({ fetch: app.fetch, port }, (info) => {
