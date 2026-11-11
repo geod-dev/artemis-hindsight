@@ -2,6 +2,8 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { sessionIdSchema, toolInvokeRequestSchema } from "@artemis/contracts";
 import { ToolInputError, ToolNotFoundError, ToolRegistry } from "./registry.js";
+import { McpManager } from "./mcp/manager.js";
+import { mcpServersFromEnv } from "./mcp/servers.js";
 import { SandboxClient } from "./sandbox-client.js";
 import { createBashTool } from "./tools/bash.js";
 import { createEditTool } from "./tools/edit.js";
@@ -19,9 +21,15 @@ const registry = new ToolRegistry([
   createEditTool(sandbox),
 ]);
 
+// MCP servers add their tools to the registry as they connect. The toolbox serves its local tools meanwhile.
+const mcp = new McpManager(mcpServersFromEnv(process.env), registry);
+mcp.start();
+
 const app = new Hono();
 
-app.get("/health", (c) => c.json({ status: "ok", tools: registry.list().map((t) => t.name) }));
+app.get("/health", (c) =>
+  c.json({ status: "ok", tools: registry.list().map((t) => t.name), mcp: mcp.status() }),
+);
 
 app.get("/tools", (c) => c.json(registry.list()));
 
@@ -77,6 +85,34 @@ app.get("/sessions/:sessionId/files", async (c) => {
       "x-content-type-options": "nosniff",
       "cache-control": "private, no-cache",
     });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 422);
+  }
+});
+
+// Folder lifecycle, proxied to the sandbox. The sandbox validates the username and session id.
+app.put("/workspaces/:username", async (c) => {
+  try {
+    await sandbox.ensureWorkspace(c.req.param("username"));
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 422);
+  }
+});
+
+app.delete("/workspaces/:username", async (c) => {
+  try {
+    await sandbox.removeWorkspace(c.req.param("username"));
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 422);
+  }
+});
+
+app.delete("/sessions/:sessionId", async (c) => {
+  try {
+    await sandbox.removeSession(c.req.param("sessionId"));
+    return c.json({ ok: true });
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error) }, 422);
   }

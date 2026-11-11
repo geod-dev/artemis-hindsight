@@ -61,6 +61,26 @@ export class SandboxClient {
     };
   }
 
+  /** Creates a user's workspace folder (/workspace/<username>). Idempotent. */
+  async ensureWorkspace(username: string): Promise<void> {
+    await this.send("PUT", `/workspaces/${encodeURIComponent(username)}`);
+  }
+
+  /** Removes a user's workspace folder with everything in it. */
+  async removeWorkspace(username: string): Promise<void> {
+    await this.send("DELETE", `/workspaces/${encodeURIComponent(username)}`);
+  }
+
+  /** Removes a conversation's session folder (its files and attachments). */
+  async removeSession(sessionId: string): Promise<void> {
+    await this.send("DELETE", `/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  private async send(method: "PUT" | "DELETE", path: string): Promise<void> {
+    const res = await fetch(new URL(path, this.baseUrl), { method, signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(await this.errorMessage(res));
+  }
+
   private async post(path: string, body: unknown, timeoutMs = 30_000): Promise<Response> {
     const res = await fetch(new URL(path, this.baseUrl), {
       method: "POST",

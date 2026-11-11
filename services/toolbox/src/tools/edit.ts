@@ -7,7 +7,7 @@ const input = z.object({
     .string()
     .min(1)
     .max(4096)
-    .describe("File to edit. A relative path starts in /data/sessions/<id>. An absolute path must be under /data or /workspace."),
+    .describe("File to edit. A relative path starts in your default folder, /data/sessions/<id>. An absolute path is used as it is."),
   oldString: z.string().min(1).max(5_000_000).describe("The exact text to replace, including whitespace and line breaks."),
   newString: z.string().max(5_000_000).describe("What to replace it with."),
   replaceAll: z.boolean().optional().describe("Replace every match instead of requiring exactly one. Default false."),

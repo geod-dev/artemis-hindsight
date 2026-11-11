@@ -4,6 +4,9 @@
 #   data         web, migrate, toolbox, postgres, hindsight
 #   sandbox-net  toolbox, sandbox   (the agent's computer is reachable only through the toolbox)
 #
+# Every service has a healthcheck, or an explicit `healthcheck: disable: true` when it is a one-shot job.
+# For Coolify, use docker-compose.coolify.yml instead.
+#
 # Start:  cp .env.example .env   (then set ANTHROPIC_API_KEY)
 #         docker compose up --build
 name: artemis-hindsight
@@ -41,6 +44,13 @@ services:
     ports:
       - "127.0.0.1:8888:8888"  # API
       - "127.0.0.1:9999:9999"  # Control Plane (web UI)
+    healthcheck:
+      # /health/ready answers 200 once the API reaches its database (503 before that). The image has no curl.
+      test: ["CMD", "/app/api/.venv/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 6
+      start_period: 90s
     networks: [data]
     restart: unless-stopped
 
@@ -57,6 +67,12 @@ services:
     security_opt: ["no-new-privileges:true"]
     pids_limit: 512
     mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks: [sandbox-net]
     restart: unless-stopped
 
@@ -67,13 +83,21 @@ services:
       dockerfile: services/toolbox/Dockerfile
     environment:
       SANDBOX_URL: http://sandbox:8080
+      EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
     depends_on:
-      - sandbox
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks: [data, sandbox-net]
     restart: unless-stopped
 
   migrate:
-    # One-shot: applies the database schema before the web app starts.
+    # One-shot: applies the database schema before the web app starts. It exits by design, so it has no healthcheck.
     build:
       context: .
       dockerfile: services/web/Dockerfile
@@ -83,11 +107,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      disable: true
     networks: [data]
     restart: "no"
 
   web:
-    # Next.js: the chat UI and the agent backend (/api/chat).
+    # Next.js: the chat UI and the agent backend (/api/chat). Its healthcheck is /api/health (database reachable).
     build:
       context: .
       dockerfile: services/web/Dockerfile
@@ -102,7 +128,13 @@ services:
       migrate:
         condition: service_completed_successfully
       toolbox:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks: [data]
     restart: unless-stopped
 

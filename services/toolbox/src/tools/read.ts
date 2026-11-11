@@ -7,7 +7,7 @@ const input = z.object({
     .string()
     .min(1)
     .max(4096)
-    .describe("File to read. A relative path starts in /data/sessions/<id>. An absolute path must be under /data or /workspace."),
+    .describe("File to read. A relative path starts in your default folder, /data/sessions/<id>. An absolute path is used as it is."),
   offset: z.number().int().min(1).optional().describe("First line to show, 1-based. Default 1."),
   limit: z.number().int().min(1).max(2000).optional().describe("How many lines to show. Default 2000."),
 });

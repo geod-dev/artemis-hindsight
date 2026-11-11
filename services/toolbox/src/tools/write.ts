@@ -7,7 +7,7 @@ const input = z.object({
     .string()
     .min(1)
     .max(4096)
-    .describe("File to write. A relative path starts in /data/sessions/<id>. An absolute path must be under /data or /workspace."),
+    .describe("File to write. A relative path starts in your default folder, /data/sessions/<id>. An absolute path is used as it is."),
   content: z.string().max(5_000_000).describe("The full content of the file."),
 });
 

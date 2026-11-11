@@ -29,7 +29,7 @@ export function createBashTool(sandbox: SandboxClient): Tool<typeof input> {
       "Run a bash command in your sandbox computer and get stdout, stderr and the exit code. " +
       "Your default folder is /data/sessions/<id>, where bash, read, write and edit start. " +
       "Files there persist across calls within this conversation. " +
-      "Use /workspace for larger projects that should persist across conversations. " +
+      "For projects that should persist across conversations, use your user workspace; its path is in the <user_metadata> block. " +
       "Commands time out after the given limit.",
     input,
     async run({ command, timeoutSeconds }, ctx) {
