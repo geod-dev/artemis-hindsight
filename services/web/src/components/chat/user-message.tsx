@@ -7,13 +7,16 @@ import { UserMessageAttachments } from "@/components/assistant-ui/elements/attac
 import { QuoteBlock } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
+import { MessageDebugMenu } from "./message-debug-menu";
 
 /**
- * A user message: the bubble, then a row of actions underneath (copy and edit), like the assistant's.
+ * A user message: the bubble, then a row of actions underneath (copy, edit and the debug menu), like the assistant's.
  * Editing starts the message's edit composer; the Thread renders that composer in place of the bubble.
  */
 export const UserMessage: FC = () => {
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const messageId = useAuiState((s) => s.message.id);
   const text = useAuiState((s) =>
     s.message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n"),
   );
@@ -39,7 +42,7 @@ export const UserMessage: FC = () => {
       <div
         className={cn(
           "flex items-center gap-1 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
-          copied ? "opacity-100" : "opacity-0",
+          copied || menuOpen ? "opacity-100" : "opacity-0",
         )}
       >
         <button
@@ -55,6 +58,7 @@ export const UserMessage: FC = () => {
             <PencilIcon className="size-3.5" />
           </button>
         </ActionBarPrimitive.Edit>
+        <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
       </div>
     </MessagePrimitive.Root>
   );

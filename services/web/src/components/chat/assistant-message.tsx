@@ -9,6 +9,7 @@ import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { BotAvatar } from "@/components/avatar/bot-avatar";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "./code-block";
+import { MessageDebugMenu } from "./message-debug-menu";
 import { sandboxMarkdownComponents } from "./sandbox-file-link";
 import { RunActivityGroup } from "./run-activity-group";
 import { ThinkingLabel } from "./thinking-label";
@@ -35,6 +36,8 @@ const groupFor = (parts: readonly { type: string }[]) => {
  */
 export const AssistantMessage: FC = () => {
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const messageId = useAuiState((s) => s.message.id);
   const isRunning = useAuiState((s) => s.message.status?.type === "running");
   const isLast = useAuiState((s) => s.message.isLast);
   const isCancelled = useAuiState(
@@ -106,7 +109,7 @@ export const AssistantMessage: FC = () => {
           <div
             className={cn(
               "flex items-center gap-1 pe-2 pt-1.5 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
-              copied ? "opacity-100" : "opacity-0",
+              copied || menuOpen ? "opacity-100" : "opacity-0",
             )}
           >
             <button
@@ -117,6 +120,7 @@ export const AssistantMessage: FC = () => {
             >
               {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
             </button>
+            <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
           </div>
         )}
       </div>
