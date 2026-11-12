@@ -1,0 +1,30 @@
+# Deploys the main branch to Coolify on every push to main. Coolify clones the repository itself, so the job only
+# asks it to deploy the application. The Coolify token, URL and application UUID are repository secrets.
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deployment at a time: a second push waits for the first to be queued, instead of racing it.
+concurrency:
+  group: deploy-coolify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Queue the Coolify deployment
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS -X POST \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            -H "Accept: application/json" \
+            "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false")
+          echo "$response"
