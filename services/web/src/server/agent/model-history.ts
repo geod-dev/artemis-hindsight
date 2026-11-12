@@ -1,7 +1,22 @@
 import type { UIMessage } from "ai";
 import { getConfig } from "../config";
+import type { StoredModelInput } from "../db/schema";
 import { attachmentNotice, modelFileParts } from "./attachments";
 import { escapeAttr, renderUserPrompt, textOf, type MemoryLookup } from "./memory-context";
+
+/**
+ * What the model reads for the latest user message, as built by toModelHistory: the text with the memory and
+ * metadata tags, and the files sent as content. The file data is left out; their names and types are kept.
+ */
+export function latestModelInput(modelHistory: UIMessage[]): StoredModelInput | undefined {
+  const latest = modelHistory.findLast((message) => message.role === "user");
+  if (!latest) return undefined;
+  const text = latest.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+  const files = latest.parts.flatMap((part) =>
+    part.type === "file" ? [{ filename: part.filename, mediaType: part.mediaType }] : [],
+  );
+  return { text, files };
+}
 
 /**
  * The user metadata tag: who the user is and where their workspace is. It goes at the top of the first user

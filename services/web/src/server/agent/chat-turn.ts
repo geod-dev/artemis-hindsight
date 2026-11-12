@@ -23,10 +23,11 @@ import {
   ensureConversation,
   touchConversation,
 } from "../repositories/conversation-repository";
-import { listMessages, saveMessage, type MessageRow } from "../repositories/message-repository";
+import { listMessages, saveMessage, setModelInput, type MessageRow } from "../repositories/message-repository";
+import { activateConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
 import { nameConversation } from "./conversation-title";
-import { toModelHistory } from "./model-history";
+import { latestModelInput, toModelHistory } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
@@ -42,7 +43,8 @@ import { endTurn, resumable, startTurn } from "./turn-registry";
  *   2. check the attachments: they must be uploaded to this conversation and still exist in the sandbox
  *   3. create the conversation if it is new
  *   4. recall memory from the user's bank for the user's text (best effort; a failure never blocks the chat)
- *   5. store the user message, with its attachment paths and the memory it was enriched with
+ *   5. store the user message, with its attachment paths and the memory it was enriched with; the conversation becomes
+ *      the user's active one, and the previous active conversation is flushed to memory in the background
  *   6. load the full history from the database, the source of truth, and build the model input
  *   7. stream the model response into the resumable store; every completed step is written to the database
  *   8. when the conversation was just created, name it in the background (see naming below)
@@ -85,20 +87,35 @@ export async function runChatTurn(params: {
       memory: {
         query: lookup.query,
         budget: lookup.budget,
+        status: lookup.status,
+        durationMs: lookup.durationMs,
+        ...(lookup.status === "unavailable" ? { reason: lookup.reason } : {}),
         facts: lookup.status === "ok" ? lookup.facts : [],
       },
       ...(custom ? { custom } : {}),
     },
     status: "complete",
   });
+  // This conversation is now the user's active one. The previous active conversation is flushed to memory in the background.
+  await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
   const modelHistory = await toModelHistory(conversationId, history, lookup, user.username);
   // A quoted message reaches the model as a blockquote in front of its text.
-  const modelMessages = await convertToModelMessages(injectQuoteContext(modelHistory));
+  const quotedHistory = injectQuoteContext(modelHistory);
+  // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.
+  const modelInput = latestModelInput(quotedHistory);
+  if (modelInput) {
+    try {
+      await setModelInput(incoming.id, modelInput);
+    } catch (error) {
+      console.warn("saving the model input failed", { reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  const modelMessages = await convertToModelMessages(quotedHistory);
 
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
-  const tools = await buildToolboxTools(conversationId);
+  const tools = await buildToolboxTools(conversationId, user.username);
 
   const streamId = crypto.randomUUID();
   const turn = startTurn(conversationId, streamId, user.id);
@@ -155,6 +172,8 @@ export async function runChatTurn(params: {
       await persistLatestAssistant(conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
       await touchConversation(conversationId);
       endTurn(conversationId, streamId);
+      // Not awaited. If another conversation took over while this turn streamed, its messages reach memory now.
+      void flushIfInactive(user.id, user.username, conversationId);
     },
     onError: (error) => {
       console.error("chat turn failed", { conversationId, error });
@@ -180,15 +199,17 @@ function announceTitle(writer: UIMessageStreamWriter<UIMessage>, title: string):
   }
 }
 
+/** Recalls the user's memory for the message. The duration covers the recall call, failed or not. */
 async function lookupMemory(username: string, query: string): Promise<MemoryLookup> {
   const budget = getConfig().MEMORY_RECALL_BUDGET;
+  const started = performance.now();
   try {
     const facts = await recallMemories(username, query);
-    return { status: "ok", query, budget, facts };
+    return { status: "ok", query, budget, facts, durationMs: Math.round(performance.now() - started) };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     console.warn("memory recall unavailable", { reason });
-    return { status: "unavailable", query, budget, reason };
+    return { status: "unavailable", query, budget, reason, durationMs: Math.round(performance.now() - started) };
   }
 }
 

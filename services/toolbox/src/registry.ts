@@ -8,6 +8,8 @@ import type { ToolDefinition } from "@artemis/contracts";
  */
 export interface ToolContext {
   sessionId: string;
+  /** The user the conversation belongs to, when the caller sends it. Memory tools need it. */
+  username?: string;
 }
 
 export interface Tool<I extends z.ZodType> {

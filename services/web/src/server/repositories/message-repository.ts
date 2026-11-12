@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { messages, type MessageStatus, type StoredMessageMetadata } from "../db/schema";
+import { messages, type MessageStatus, type StoredMessageMetadata, type StoredModelInput } from "../db/schema";
 
 export type MessageRow = typeof messages.$inferSelect;
 
@@ -11,6 +11,26 @@ export async function listMessages(conversationId: string): Promise<MessageRow[]
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
     .orderBy(asc(messages.position));
+}
+
+/** One message of a conversation, or undefined. The conversation id is part of the lookup, so a message never leaks across conversations. */
+export async function findMessage(conversationId: string, messageId: string): Promise<MessageRow | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(messages)
+    .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversationId)))
+    .limit(1);
+  return row;
+}
+
+/** Records what the model received for a user message. Merged into the stored metadata, so the other keys stay. */
+export async function setModelInput(messageId: string, modelInput: StoredModelInput): Promise<void> {
+  await getDb()
+    .update(messages)
+    .set({
+      metadata: sql`coalesce(${messages.metadata}, '{}'::jsonb) || ${JSON.stringify({ modelInput })}::jsonb`,
+    })
+    .where(eq(messages.id, messageId));
 }
 
 export interface SaveMessageInput {

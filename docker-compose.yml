@@ -39,6 +39,8 @@ services:
       HINDSIGHT_API_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       HINDSIGHT_API_LLM_MODEL: claude-haiku-5-5
       HINDSIGHT_API_WORKER_ID: artemis-hindsight
+      # No consolidation after each retain: duplicates copies of each fact. The daily job in the web app runs it instead.
+      HINDSIGHT_API_ENABLE_AUTO_CONSOLIDATION: "false"
     volumes:
       - hindsight-data:/home/hindsight/.pg0
     ports:
@@ -83,6 +85,7 @@ services:
       dockerfile: services/toolbox/Dockerfile
     environment:
       SANDBOX_URL: http://sandbox:8080
+      HINDSIGHT_URL: http://hindsight:8888  # the memory tools: retain, recall, reflect
       EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
     depends_on:
       sandbox:

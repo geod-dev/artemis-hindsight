@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { usernameSchema } from "./users.js";
 
 // The toolbox exposes a registry of tools over HTTP:
 //   GET  /tools                 -> ToolDefinition[]
@@ -16,6 +17,8 @@ export const toolInvokeRequestSchema = z.object({
   input: z.unknown(),
   context: z.object({
     sessionId: z.string().min(1).max(64),
+    // The user the conversation belongs to. Their memory tools use it as their Hindsight bank.
+    username: usernameSchema.optional(),
   }),
 });
 export type ToolInvokeRequest = z.infer<typeof toolInvokeRequestSchema>;

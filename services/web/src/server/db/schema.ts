@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // Users, their conversations and their messages. Messages store the AI SDK UIMessage parts as JSON,
 // so every step (text, reasoning, tool calls and their results) is kept as it streamed.
@@ -9,12 +9,21 @@ export type UserStatus = "active" | "archived";
 /**
  * A family member. The username is unique, lowercase and never changes: it also names the user's Hindsight
  * memory bank and their workspace folder (/workspace/<username>).
+ *
+ * The memory columns track what is still outside Hindsight: at most one conversation is active per user, and its
+ * unsaved messages are flushed to memory when another conversation receives a message or after an hour of silence.
  */
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   status: text("status").$type<UserStatus>().notNull().default("active"),
+  /** The one conversation that is still receiving messages. Null when every conversation has been flushed. */
+  activeConversationId: uuid("active_conversation_id").references((): AnyPgColumn => conversations.id, {
+    onDelete: "set null",
+  }),
+  /** When the active conversation last received a user message. */
+  activeConversationAt: timestamp("active_conversation_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -57,13 +66,27 @@ export interface TurnTiming {
   reasonings?: { startedAt: number; endedAt?: number }[];
 }
 
+/** What the model received for a user message: its text with the memory and metadata tags, and its files. */
+export interface StoredModelInput {
+  text: string;
+  /** The files sent to the model as content (images and PDFs), without their data. */
+  files: { filename?: string; mediaType: string }[];
+}
+
 export interface StoredMessageMetadata {
   /** Facts recalled from Hindsight that were injected into this user message for the model. */
   memory?: {
     query: string;
     budget: string;
-    facts: { id: string; text: string; type?: string }[];
+    /** "unavailable" when Hindsight could not be reached: `facts` is then empty and `reason` says why. */
+    status?: "ok" | "unavailable";
+    /** How long the recall call took, in milliseconds. Absent on messages stored before it was measured. */
+    durationMs?: number;
+    reason?: string;
+    facts: { id?: string; text: string; type?: string }[];
   };
+  /** The exact input the model read for this user message. Absent on messages stored before it was recorded. */
+  modelInput?: StoredModelInput;
   model?: string;
   /** The assistant turn's timing, measured by the server. Epoch milliseconds. */
   turnTiming?: TurnTiming;
@@ -83,8 +106,12 @@ export const messages = pgTable(
     parts: jsonb("parts").$type<UIMessage["parts"]>().notNull(),
     metadata: jsonb("metadata").$type<StoredMessageMetadata>(),
     status: text("status").$type<MessageStatus>().notNull().default("complete"),
+    /** When this message was retained in the user's Hindsight bank. Null while it has not been sent yet. */
+    memorizedAt: timestamp("memorized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("messages_conversation_position_idx").on(table.conversationId, table.position)],
+  (table) => [
+    index("messages_conversation_position_idx").on(table.conversationId, table.position),
+  ],
 );

@@ -7,18 +7,22 @@ import { mcpServersFromEnv } from "./mcp/servers.js";
 import { SandboxClient } from "./sandbox-client.js";
 import { createBashTool } from "./tools/bash.js";
 import { createEditTool } from "./tools/edit.js";
+import { createMemoryTools } from "./tools/memory.js";
 import { createReadTool } from "./tools/read.js";
 import { createWriteTool } from "./tools/write.js";
+import { HindsightClient, hindsightFromEnv } from "./hindsight-client.js";
 
 const port = Number(process.env.PORT ?? 8080);
 const sandboxUrl = process.env.SANDBOX_URL ?? "http://sandbox:8080";
 
 const sandbox = new SandboxClient(sandboxUrl);
+const hindsight = new HindsightClient(hindsightFromEnv(process.env));
 const registry = new ToolRegistry([
   createBashTool(sandbox),
   createReadTool(sandbox),
   createWriteTool(sandbox),
   createEditTool(sandbox),
+  ...createMemoryTools(hindsight),
 ]);
 
 // MCP servers add their tools to the registry as they connect. The toolbox serves its local tools meanwhile.
@@ -42,8 +46,12 @@ app.post("/tools/:name/invoke", async (c) => {
   if (!sessionId.success) {
     return c.json({ ok: false, error: sessionId.error.issues[0]?.message ?? "invalid sessionId" }, 400);
   }
+  const { username } = parsed.data.context;
   try {
-    const output = await registry.invoke(c.req.param("name"), parsed.data.input, { sessionId: sessionId.data });
+    const output = await registry.invoke(c.req.param("name"), parsed.data.input, {
+      sessionId: sessionId.data,
+      ...(username ? { username } : {}),
+    });
     return c.json({ ok: true, output });
   } catch (error) {
     if (error instanceof ToolNotFoundError) return c.json({ ok: false, error: error.message }, 404);

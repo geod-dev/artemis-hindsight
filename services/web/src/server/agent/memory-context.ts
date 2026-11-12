@@ -3,8 +3,8 @@ import type { RecalledFact } from "../clients/hindsight-client";
 
 /** What the memory lookup produced for one user turn. */
 export type MemoryLookup =
-  | { status: "ok"; query: string; budget: string; facts: RecalledFact[] }
-  | { status: "unavailable"; query: string; budget: string; reason: string };
+  | { status: "ok"; query: string; budget: string; facts: RecalledFact[]; durationMs: number }
+  | { status: "unavailable"; query: string; budget: string; reason: string; durationMs: number };
 
 /**
  * Renders the recalled memory, the attachment notice and the user's text as one XML-tagged user message, e.g.

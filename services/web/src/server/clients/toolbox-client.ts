@@ -22,15 +22,21 @@ export async function listToolboxTools(): Promise<ToolDefinition[]> {
 
 export type ToolboxInvokeResult = { ok: true; output: unknown } | { ok: false; error: string };
 
+/** Who the tool runs for: the conversation's session folder and the user whose memory the memory tools use. */
+export interface ToolCallContext {
+  sessionId: string;
+  username: string;
+}
+
 export async function invokeToolboxTool(
   name: string,
   input: unknown,
-  sessionId: string,
+  context: ToolCallContext,
 ): Promise<ToolboxInvokeResult> {
   const res = await fetch(new URL(`/tools/${encodeURIComponent(name)}/invoke`, getConfig().TOOLBOX_URL), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ input, context: { sessionId } }),
+    body: JSON.stringify({ input, context }),
     signal: AbortSignal.timeout(330_000),
   });
   const body: unknown = await res.json().catch(() => null);

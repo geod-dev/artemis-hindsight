@@ -15,6 +15,13 @@
       "when": 1794395725702,
       "tag": "0001_users_and_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794474848318,
+      "tag": "0002_memory_flush",
+      "breakpoints": true
     }
   ]
 }
