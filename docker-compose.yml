@@ -42,6 +42,11 @@ services:
       # No consolidation after each retain: duplicates copies of each fact. The daily job in the web app runs it instead.
       HINDSIGHT_API_ENABLE_AUTO_CONSOLIDATION: "false"
       HINDSIGHT_API_RECALL_PREFER_OBSERVATIONS: "true"
+      # Embeddings from Voyage through its OpenAI-compatible API (native client, no LiteLLM layer).
+      HINDSIGHT_API_EMBEDDINGS_PROVIDER: openai
+      HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL: https://api.voyageai.com/v1
+      HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL: voyage-4-lite
+      HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
       # Per-operation LLM: LiteLLM applies the reasoning effort as Claude thinking. The native Anthropic provider has
       # no effort control, so it would ignore these settings.
       HINDSIGHT_API_RETAIN_LLM_PROVIDER: litellm
