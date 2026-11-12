@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Artemis",
   description: "Chat with an AI agent that has a sandboxed computer and long-term memory.",
-  // The chat avatar as the favicon. The browser picks the light or dark version from its own color scheme.
+  // The mascot as the favicon. The browser picks the light or dark version from its own color scheme.
   icons: {
     icon: [
       { url: "/favicon-light.svg", type: "image/svg+xml", media: "(prefers-color-scheme: light)" },
