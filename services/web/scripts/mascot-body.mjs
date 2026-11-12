@@ -1,10 +1,10 @@
-// Regenerates the body path in public/avatar/definition.json.
+// Regenerates the body path in public/mascot/definition.json.
 //
 // The body is a circle whose radius wobbles with a cosine: `lobes` soft bumps around the rim, each `amp` units
 // in or out from `base`. Lower `amp` means less variation along the edge, so fewer spikes.
 //
-//   node scripts/avatar-body.mjs                                   # the current defaults
-//   node scripts/avatar-body.mjs --lobes 7 --amp 1.5 --base 36 --points 360
+//   node scripts/mascot-body.mjs                                   # the current defaults
+//   node scripts/mascot-body.mjs --lobes 7 --amp 1.5 --base 36 --points 360
 //
 // Keeps id, name, version and eyes from the existing file. Writes only if the result passes validateAvatar.
 
@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { validateAvatar } from "open-bot-avatar";
 
-const file = fileURLToPath(new URL("../public/avatar/definition.json", import.meta.url));
+const file = fileURLToPath(new URL("../public/mascot/definition.json", import.meta.url));
 
 const options = { lobes: 7, amp: 1.5, base: 36, points: 360, cx: 50, cy: 50 };
 

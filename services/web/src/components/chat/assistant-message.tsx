@@ -6,7 +6,7 @@ import { useMemo, useState, type FC } from "react";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { StoppedRun } from "@/components/assistant-ui/elements/stopped-run";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
-import { BotAvatar } from "@/components/avatar/bot-avatar";
+import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "./code-block";
 import { MessageDebugMenu } from "./message-debug-menu";
@@ -67,7 +67,7 @@ export const AssistantMessage: FC = () => {
       <div className="flex w-7 shrink-0 justify-center pt-1">
         {isLast && (
           <div className="animate-in fade-in duration-300">
-            <BotAvatar thinking={isRunning} size={28} />
+            <Mascot thinking={isRunning} size={28} />
           </div>
         )}
       </div>

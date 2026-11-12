@@ -1,13 +1,13 @@
-# Avatar body
+  Avatar body
 
-The avatar's silhouette is one SVG path, stored as `body.path` in `definition.json`. `scripts/avatar-body.mjs` generates it.
+The mascot's silhouette is one SVG path, stored as `body.path` in `definition.json`. `scripts/mascot-body.mjs` generates it.
 
 The body is a circle whose radius wobbles with a cosine. The script writes that path into `definition.json`:
 
 ```sh
 cd services/web
-node scripts/avatar-body.mjs                                  # current defaults
-node scripts/avatar-body.mjs --lobes 7 --amp 1.5 --base 36 --points 360
+node scripts/mascot-body.mjs                                    current defaults
+node scripts/mascot-body.mjs --lobes 7 --amp 1.5 --base 36 --points 360
 ```
 
 Options:

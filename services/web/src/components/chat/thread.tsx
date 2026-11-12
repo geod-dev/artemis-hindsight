@@ -5,7 +5,7 @@ import { ArrowDownIcon } from "lucide-react";
 import { useContext, type CSSProperties, type FC } from "react";
 import { SelectionToolbar } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
-import { BotAvatar } from "@/components/avatar/bot-avatar";
+import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
 import { AssistantMessage } from "./assistant-message";
 import { Composer } from "./composer";
@@ -56,7 +56,7 @@ export const Thread: FC = () => {
             <ThreadScrollToBottom />
             {isEmpty && (
               <div className="animate-in fade-in zoom-in-95 flex justify-center duration-300">
-                <BotAvatar size={96} label="Assistant" />
+                <Mascot size={96} label="Assistant" />
               </div>
             )}
             <Composer autoFocus typeToFocus modelPicker />
