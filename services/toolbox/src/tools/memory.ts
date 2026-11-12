@@ -33,7 +33,8 @@ export function createMemoryTools(hindsight: HindsightClient): Tool<z.ZodType>[]
     description:
       "Save something to the user's long-term memory, so you still know it in later conversations. " +
       "Use it for facts the user shares about themselves, their family, their projects or their preferences. " +
-      "Memories are extracted in the background, so they can take a moment to show up in recall.",
+      "Memories are extracted in the background, so they can take a moment to show up in recall. " +
+      "Refer to the person you are talking with as \"user\". Use a name only for other people.",
     input: retainInput,
     async run({ content, context }, ctx) {
       await hindsight.retain(bankOf(ctx), content, context);
