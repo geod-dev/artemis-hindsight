@@ -67,7 +67,7 @@ services:
       - hindsight-data:/home/hindsight/.pg0
     ports:
       - "127.0.0.1:8888:8888"  # API
-      - "127.0.0.1:9999:9999"  # Control Plane (web UI)
+      - "127.0.0.1:9998:9999"  # Control Plane (web UI); 9999 is the Artemis dev server
     healthcheck:
       # /health/ready answers 200 once the API reaches its database (503 before that). The image has no curl.
       test: ["CMD", "/app/api/.venv/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/health/ready', timeout=5)"]
