@@ -41,6 +41,23 @@ services:
       HINDSIGHT_API_WORKER_ID: artemis-hindsight
       # No consolidation after each retain: duplicates copies of each fact. The daily job in the web app runs it instead.
       HINDSIGHT_API_ENABLE_AUTO_CONSOLIDATION: "false"
+      HINDSIGHT_API_RECALL_PREFER_OBSERVATIONS: "true"
+      # Per-operation LLM: LiteLLM applies the reasoning effort as Claude thinking. The native Anthropic provider has
+      # no effort control, so it would ignore these settings.
+      HINDSIGHT_API_RETAIN_LLM_PROVIDER: litellm
+      HINDSIGHT_API_RETAIN_LLM_MODEL: anthropic/claude-haiku-5-5
+      HINDSIGHT_API_RETAIN_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      HINDSIGHT_API_RETAIN_LLM_REASONING_EFFORT: "low"
+      HINDSIGHT_API_REFLECT_LLM_PROVIDER: litellm
+      HINDSIGHT_API_REFLECT_LLM_MODEL: anthropic/claude-haiku-5-5
+      HINDSIGHT_API_REFLECT_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      HINDSIGHT_API_REFLECT_LLM_REASONING_EFFORT: "medium"
+      HINDSIGHT_API_CONSOLIDATION_LLM_PROVIDER: litellm
+      HINDSIGHT_API_CONSOLIDATION_LLM_MODEL: anthropic/claude-haiku-5-5
+      HINDSIGHT_API_CONSOLIDATION_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      HINDSIGHT_API_CONSOLIDATION_LLM_REASONING_EFFORT: "medium"
+      # Retain instruction for every bank: what counts as new information, so repeated facts are not stored again.
+      HINDSIGHT_API_RETAIN_MISSION: "If user_message contains information inside a <memory> tag, consider that information already stored in memory. Do not extract or recreate facts that are merely repeated, referenced, or discussed from within the <memory> tag. Only extract genuinely new information that adds to, corrects, or meaningfully updates existing knowledge. Avoid creating duplicate facts."
     volumes:
       - hindsight-data:/home/hindsight/.pg0
     ports:
@@ -86,6 +103,7 @@ services:
     environment:
       SANDBOX_URL: http://sandbox:8080
       HINDSIGHT_URL: http://hindsight:8888  # the memory tools: retain, recall, reflect
+      MEMORY_TOOL_RECALL_BUDGET: mid  # the agent's recall tool searches at medium effort (the automatic recall is low)
       EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
     depends_on:
       sandbox:
