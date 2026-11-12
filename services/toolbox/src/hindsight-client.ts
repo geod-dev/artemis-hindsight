@@ -4,22 +4,25 @@ import { z } from "zod";
 // Each user has one bank, named after their username. The web app has its own client for the automatic recall
 // and for the flush of conversations.
 
+export type RecallBudget = "low" | "mid" | "high";
+
 export interface HindsightConfig {
   url: string;
   apiKey?: string;
-  recallBudget: "low" | "mid" | "high";
+  /** The search effort of the agent's recall tool. The web app's automatic recall has its own budget. */
+  toolRecallBudget: RecallBudget;
   recallMaxTokens: number;
 }
 
 export function hindsightFromEnv(env: NodeJS.ProcessEnv): HindsightConfig {
-  const budget = env.MEMORY_RECALL_BUDGET ?? "low";
+  const budget = env.MEMORY_TOOL_RECALL_BUDGET ?? "mid";
   if (budget !== "low" && budget !== "mid" && budget !== "high") {
-    throw new Error(`MEMORY_RECALL_BUDGET must be low, mid or high, got ${budget}`);
+    throw new Error(`MEMORY_TOOL_RECALL_BUDGET must be low, mid or high, got ${budget}`);
   }
   return {
     url: env.HINDSIGHT_URL ?? "http://hindsight:8888",
     apiKey: env.HINDSIGHT_API_KEY || undefined,
-    recallBudget: budget,
+    toolRecallBudget: budget,
     recallMaxTokens: Number(env.MEMORY_RECALL_MAX_TOKENS ?? 1024),
   };
 }
@@ -52,7 +55,7 @@ export class HindsightClient {
   async recall(bank: string, query: string): Promise<RecalledFact[]> {
     const res = await this.send("POST", bank, "/memories/recall", {
       query,
-      budget: this.config.recallBudget,
+      budget: this.config.toolRecallBudget,
       max_tokens: this.config.recallMaxTokens,
     }, 30_000);
     return recallResponse.parse(res).results;
