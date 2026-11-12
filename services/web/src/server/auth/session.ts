@@ -14,6 +14,8 @@ export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export interface CurrentUser {
   id: string;
   username: string;
+  displayName: string | null;
+  avatarColor: string | null;
 }
 
 function signingKey(): Uint8Array {
@@ -44,12 +46,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!userId) return null;
 
   const [row] = await getDb()
-    .select({ id: users.id, username: users.username, status: users.status })
+    .select({
+      id: users.id,
+      username: users.username,
+      status: users.status,
+      displayName: users.displayName,
+      avatarColor: users.avatarColor,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   if (!row || row.status !== "active") return null;
-  return { id: row.id, username: row.username };
+  return { id: row.id, username: row.username, displayName: row.displayName, avatarColor: row.avatarColor };
 }
 
 export async function setSessionCookie(token: string, secure: boolean): Promise<void> {

@@ -32,6 +32,18 @@ export async function updatePasswordHash(username: string, passwordHash: string)
   return updated.length > 0;
 }
 
+export async function updateProfile(
+  userId: string,
+  profile: { displayName: string; avatarColor: string },
+): Promise<UserRow | undefined> {
+  const [row] = await getDb()
+    .update(users)
+    .set({ ...profile, updatedAt: sql`now()` })
+    .where(eq(users.id, userId))
+    .returning();
+  return row;
+}
+
 export async function updateStatus(username: string, status: UserStatus): Promise<boolean> {
   const updated = await getDb()
     .update(users)

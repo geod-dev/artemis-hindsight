@@ -1,10 +1,11 @@
 "use client";
 
-import { LogOut, MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useConversationTitles } from "@/components/conversation-titles";
+import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,7 +45,17 @@ export interface SidebarConversation {
   updatedAt: string;
 }
 
-export function AppSidebar({ username, conversations }: { username: string; conversations: SidebarConversation[] }) {
+export function AppSidebar({
+  username,
+  displayName,
+  avatarColor,
+  conversations,
+}: {
+  username: string;
+  displayName: string | null;
+  avatarColor: string | null;
+  conversations: SidebarConversation[];
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { renamed } = useConversationTitles();
@@ -52,15 +63,6 @@ export function AppSidebar({ username, conversations }: { username: string; conv
   const [deleting, setDeleting] = useState(false);
   // A name received in this session wins over the title the server rendered.
   const titleOf = (conversation: SidebarConversation) => renamed[conversation.id] ?? conversation.title;
-
-  async function signOut() {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } finally {
-      router.push("/login");
-      router.refresh();
-    }
-  }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -135,16 +137,14 @@ export function AppSidebar({ username, conversations }: { username: string; conv
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 p-3">
-        <div className="flex items-center justify-between gap-2 px-1">
-          <span className="truncate text-sm text-muted-foreground" title="Signed in as">
-            {username}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => void signOut()} className="gap-2">
-            <LogOut className="size-4" />
-            Sign out
-          </Button>
-        </div>
+      <SidebarFooter className="p-2">
+        <Link
+          href="/settings"
+          className="flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ProfileAvatar name={displayName} username={username} color={avatarColor} size={32} />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{displayName || username}</span>
+        </Link>
       </SidebarFooter>
 
       <SidebarRail />

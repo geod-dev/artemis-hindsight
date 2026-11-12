@@ -19,12 +19,24 @@ export function latestModelInput(modelHistory: UIMessage[]): StoredModelInput | 
 }
 
 /**
- * The user metadata tag: who the user is and where their workspace is. It goes at the top of the first user
- * message of each conversation, so the model knows the workspace path without it being in the tool descriptions.
+ * The user metadata tag: who the user is (username, display name, avatar color) and where their workspace is. It goes
+ * at the top of the first user message of each conversation.
  */
-export function renderUserMetadata(username: string): string {
-  const workspacePath = `${getConfig().SANDBOX_WORKSPACE_ROOT}/${username}`;
-  return `<user_metadata username="${escapeAttr(username)}" workspace_path="${escapeAttr(workspacePath)}" />`;
+export function renderUserMetadata(user: ModelUser): string {
+  const workspacePath = `${getConfig().SANDBOX_WORKSPACE_ROOT}/${user.username}`;
+  const attributes = [
+    `username="${escapeAttr(user.username)}"`,
+    ...(user.displayName ? [`display_name="${escapeAttr(user.displayName)}"`] : []),
+    ...(user.avatarColor ? [`avatar_color="${escapeAttr(user.avatarColor)}"`] : []),
+    `workspace_path="${escapeAttr(workspacePath)}"`,
+  ];
+  return `<user_metadata ${attributes.join(" ")} />`;
+}
+
+export interface ModelUser {
+  username: string;
+  displayName: string | null;
+  avatarColor: string | null;
 }
 
 /**
@@ -36,7 +48,7 @@ export async function toModelHistory(
   conversationId: string,
   history: UIMessage[],
   lookup: MemoryLookup,
-  username: string,
+  user: ModelUser,
 ): Promise<UIMessage[]> {
   let first = -1;
   let latest = -1;
@@ -61,7 +73,7 @@ export async function toModelHistory(
       i === latest
         ? renderUserPrompt(text, lookup, notice)
         : [notice, text].filter(Boolean).join("\n");
-    const content = i === first ? [renderUserMetadata(username), body].join("\n") : body;
+    const content = i === first ? [renderUserMetadata(user), body].join("\n") : body;
     const files = await modelFileParts(conversationId, message.parts);
 
     out.push({ ...message, parts: [{ type: "text", text: content }, ...files] });

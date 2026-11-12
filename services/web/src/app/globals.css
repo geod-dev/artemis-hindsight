@@ -5,7 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* shadcn "neutral" theme, shared by assistant-ui elements. Light is the default; .dark switches. */
-:root {
+/* .light repeats the light tokens so a preview can show light inside a dark page. */
+:root,
+.light {
   /* Shiki's light-dark() code colors follow this, so highlighted code matches the theme. */
   color-scheme: light;
   --radius: 0.625rem;
@@ -15,7 +17,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* Google blue in light mode. The chat avatar's body uses this too. */
+  /* Google blue in light mode. The mascot's body uses this too. */
   --primary: #2f6ce6;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
@@ -36,6 +38,28 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Memory fact types, in the memory graph. */
+  --memory-world: #2f6ce6;
+  --memory-experience: #d97706;
+  --memory-observation: #059669;
+  --memory-mental-model: #9333ea;
+  /* The 16 avatar colors a user can pick. The same in both themes. */
+  --avatar-rose: #f43f5e;
+  --avatar-pink: #ec4899;
+  --avatar-fuchsia: #d946ef;
+  --avatar-purple: #a855f7;
+  --avatar-violet: #8b5cf6;
+  --avatar-indigo: #6366f1;
+  --avatar-blue: #3b82f6;
+  --avatar-sky: #0ea5e9;
+  --avatar-cyan: #06b6d4;
+  --avatar-teal: #14b8a6;
+  --avatar-emerald: #10b981;
+  --avatar-green: #22c55e;
+  --avatar-lime: #84cc16;
+  --avatar-yellow: #eab308;
+  --avatar-orange: #f97316;
+  --avatar-red: #ef4444;
 }
 
 .dark {
@@ -46,7 +70,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  /* The foreground color in dark mode. The chat avatar's body uses this too. */
+  /* The foreground color in dark mode. The mascot's body uses this too. */
   --primary: var(--foreground);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
@@ -56,6 +80,10 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --memory-world: #60a5fa;
+  --memory-experience: #fbbf24;
+  --memory-observation: #34d399;
+  --memory-mental-model: #c084fc;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);

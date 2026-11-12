@@ -18,7 +18,12 @@ export async function POST(req: Request): Promise<Response> {
   if (!row) return Response.json({ error: "wrong username or password" }, { status: 401 });
   if (row.status !== "active") return Response.json({ error: "this account is archived" }, { status: 403 });
 
-  const user: CurrentUser = { id: row.id, username: row.username };
+  const user: CurrentUser = {
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    avatarColor: row.avatarColor,
+  };
   await setSessionCookie(await issueSessionToken(user), new URL(req.url).protocol === "https:");
   return Response.json({ username: user.username });
 }

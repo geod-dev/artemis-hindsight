@@ -34,7 +34,7 @@ export const UserMessage: FC = () => {
       className="group fade-in slide-in-from-bottom-1 animate-in flex flex-col items-end gap-1 duration-150"
     >
       <UserMessageAttachments />
-      <div className="bg-muted text-foreground max-w-[80%] rounded-(--composer-radius) px-4 py-2 wrap-break-word">
+      <div className="max-w-[80%] rounded-(--composer-radius) bg-primary px-4 py-2 text-primary-foreground wrap-break-word dark:bg-muted dark:text-foreground">
         <MessagePrimitive.Quote>{(quote) => <QuoteBlock {...quote} />}</MessagePrimitive.Quote>
         <MessagePrimitive.Parts />
       </div>

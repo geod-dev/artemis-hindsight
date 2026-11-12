@@ -8,10 +8,12 @@ import {
   findUserByUsername,
   insertUser,
   updatePasswordHash,
+  updateProfile,
   updateStatus,
   type UserRow,
 } from "../repositories/user-repository";
 import { stopTurn } from "../agent/turn-registry";
+import { isAvatarColorId } from "@/lib/avatar-colors";
 
 /** A rule the caller broke. The message is safe to show to the admin or the user. */
 export class UserServiceError extends Error {
@@ -61,6 +63,28 @@ export async function authenticate(usernameInput: unknown, passwordInput: unknow
   const row = await findUserByUsername(usernameInput.trim().toLowerCase());
   if (!row) return null;
   return (await verifyPassword(passwordInput, row.passwordHash)) ? row : null;
+}
+
+const DISPLAY_NAME_MAX = 40;
+
+/**
+ * Saves the user's display name and avatar color. Both are required together: the profile is complete only when
+ * both are set, and the app asks for the missing ones.
+ */
+export async function updateOwnProfile(
+  userId: string,
+  input: { displayName: unknown; avatarColor: unknown },
+): Promise<UserRow> {
+  const displayName = typeof input.displayName === "string" ? input.displayName.trim() : "";
+  if (displayName.length === 0) throw new UserServiceError("display name is required", 400);
+  if (displayName.length > DISPLAY_NAME_MAX) {
+    throw new UserServiceError(`display name must be ${DISPLAY_NAME_MAX} characters or fewer`, 400);
+  }
+  if (!isAvatarColorId(input.avatarColor)) throw new UserServiceError("choose one of the palette colors", 400);
+
+  const row = await updateProfile(userId, { displayName, avatarColor: input.avatarColor });
+  if (!row) throw new UserServiceError("no such user", 404);
+  return row;
 }
 
 export async function resetPassword(username: string, passwordInput: unknown): Promise<void> {

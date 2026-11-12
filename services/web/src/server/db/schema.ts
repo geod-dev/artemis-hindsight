@@ -24,6 +24,10 @@ export const users = pgTable("users", {
   }),
   /** When the active conversation last received a user message. */
   activeConversationAt: timestamp("active_conversation_at", { withTimezone: true }),
+  /** The name shown in the app and given to the agent. Set by the admin; until it is set the user cannot use the app. */
+  displayName: text("display_name"),
+  /** One of the palette colors in lib/avatar-colors.ts. Null until the user picks one: the app derives one from the username. */
+  avatarColor: text("avatar_color"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

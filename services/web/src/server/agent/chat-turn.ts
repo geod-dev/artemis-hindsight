@@ -100,7 +100,7 @@ export async function runChatTurn(params: {
   await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
-  const modelHistory = await toModelHistory(conversationId, history, lookup, user.username);
+  const modelHistory = await toModelHistory(conversationId, history, lookup, user);
   // A quoted message reaches the model as a blockquote in front of its text.
   const quotedHistory = injectQuoteContext(modelHistory);
   // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.
