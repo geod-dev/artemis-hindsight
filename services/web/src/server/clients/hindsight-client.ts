@@ -131,3 +131,85 @@ export async function consolidateBank(bankId: string): Promise<string> {
   const body = z.object({ operation_id: z.string() }).parse(await res.json());
   return body.operation_id;
 }
+
+export interface MemoryGraph {
+  nodes: {
+    id: string;
+    label: string;
+    text: string;
+    date: string;
+    context: string;
+    factType: string | null;
+    color: string | null;
+  }[];
+  edges: { id: string; source: string; target: string; weight: number; linkType: string; color: string | null }[];
+}
+
+const graphSchema = z.object({
+  nodes: z.array(
+    z.object({
+      data: z.object({
+        id: z.string(),
+        label: z.string().nullish(),
+        text: z.string().nullish(),
+        date: z.string().nullish(),
+        context: z.string().nullish(),
+        color: z.unknown().optional(),
+      }),
+    }),
+  ),
+  edges: z.array(
+    z.object({
+      data: z.object({
+        id: z.string(),
+        source: z.string(),
+        target: z.string(),
+        weight: z.number().nullish(),
+        linkType: z.string().nullish(),
+        color: z.unknown().optional(),
+      }),
+    }),
+  ),
+});
+
+/** Each memory's fact type (world, experience, observation). The graph does not carry it, so it comes from the list. */
+async function factTypesOf(bankId: string, limit: number): Promise<Map<string, string>> {
+  const url = bankUrl(bankId, "/memories/list");
+  url.searchParams.set("limit", String(limit));
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`hindsight memory list failed with HTTP ${res.status}`);
+  const body = z.object({ items: z.array(z.object({ id: z.string(), fact_type: z.string().nullish() })) }).parse(await res.json());
+  return new Map(body.items.flatMap((item) => (item.fact_type ? [[item.id, item.fact_type] as const] : [])));
+}
+
+/** The bank's memory graph: facts and entities as nodes, the links between them as edges. */
+export async function getMemoryGraph(bankId: string, limit = 400): Promise<MemoryGraph> {
+  const url = bankUrl(bankId, "/graph");
+  url.searchParams.set("limit", String(limit));
+  const [res, factTypes] = await Promise.all([
+    fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) }),
+    factTypesOf(bankId, limit),
+  ]);
+  if (!res.ok) throw new Error(`hindsight graph failed with HTTP ${res.status}`);
+  const body = graphSchema.parse(await res.json());
+  const colorOf = (value: unknown) => (typeof value === "string" ? value : null);
+  return {
+    nodes: body.nodes.map(({ data }) => ({
+      id: data.id,
+      label: data.label ?? "",
+      text: data.text ?? "",
+      date: data.date ?? "",
+      context: data.context ?? "",
+      factType: factTypes.get(data.id) ?? null,
+      color: colorOf(data.color),
+    })),
+    edges: body.edges.map(({ data }) => ({
+      id: data.id,
+      source: data.source,
+      target: data.target,
+      weight: data.weight ?? 1,
+      linkType: data.linkType ?? "",
+      color: colorOf(data.color),
+    })),
+  };
+}
