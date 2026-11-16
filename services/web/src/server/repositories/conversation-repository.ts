@@ -110,3 +110,11 @@ function titleFrom(text: string): string {
   if (!normalized) return DEFAULT_TITLE;
   return normalized.length > 60 ? `${normalized.slice(0, 57)}...` : normalized;
 }
+
+/**
+ * Sets the unread flag. Callers have already checked that the conversation belongs to the user: this only writes.
+ * Unread means a reply finished while nobody was connected to read it; opening the conversation clears it.
+ */
+export async function setConversationUnread(id: string, unread: boolean): Promise<void> {
+  await getDb().update(conversations).set({ unread }).where(eq(conversations.id, id));
+}

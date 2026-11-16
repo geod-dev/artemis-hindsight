@@ -9,7 +9,10 @@ const bodySchema = z.object({
   password: z.string().min(1).max(256),
 });
 
-/** Checks the username and password and starts a 30-day session in an httpOnly cookie. */
+/**
+ * Checks the username and password and starts a 30-day session in an httpOnly cookie.
+ * The same token is returned in the body for native clients, which send it back as a bearer token.
+ */
 export async function POST(req: Request): Promise<Response> {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "username and password are required" }, { status: 400 });
@@ -24,6 +27,7 @@ export async function POST(req: Request): Promise<Response> {
     displayName: row.displayName,
     avatarColor: row.avatarColor,
   };
-  await setSessionCookie(await issueSessionToken(user), new URL(req.url).protocol === "https:");
-  return Response.json({ username: user.username });
+  const token = await issueSessionToken(user);
+  await setSessionCookie(token, new URL(req.url).protocol === "https:");
+  return Response.json({ username: user.username, token });
 }

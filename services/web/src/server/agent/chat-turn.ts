@@ -21,6 +21,7 @@ import {
   canUseConversation,
   ConversationOwnershipError,
   ensureConversation,
+  setConversationUnread,
   touchConversation,
 } from "../repositories/conversation-repository";
 import { listMessages, saveMessage, setModelInput, type MessageRow } from "../repositories/message-repository";
@@ -32,7 +33,7 @@ import { textOf, type MemoryLookup } from "./memory-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
 import { createTurnTiming, observeTurnTiming, snapshotTiming } from "./turn-timing";
-import { endTurn, resumable, startTurn } from "./turn-registry";
+import { acquireTurn, endTurn, hasViewers, resumable, startTurn, watchViewers } from "./turn-registry";
 
 /**
  * Handles one user message in a conversation. The turn is owned by the server: it keeps running when
@@ -62,6 +63,25 @@ export async function runChatTurn(params: {
   reasoningEffort?: "low" | "medium" | "high";
   user: CurrentUser;
 }): Promise<Response> {
+  // A message sent while a reply runs in this conversation waits for that reply to end, then starts its own turn.
+  const release = await acquireTurn(params.conversationId);
+  try {
+    return await startChatTurn(params, release);
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+async function startChatTurn(
+  params: {
+    conversationId: string;
+    incoming: UIMessage;
+    reasoningEffort?: "low" | "medium" | "high";
+    user: CurrentUser;
+  },
+  release: () => void,
+): Promise<Response> {
   const { conversationId, incoming, user } = params;
   // The composer's Low / Medium / High choice. Medium when the browser sends none.
   const reasoningEffort = params.reasoningEffort ?? "medium";
@@ -73,6 +93,8 @@ export async function runChatTurn(params: {
   }
   const parts = await checkAttachments(conversationId, incoming.parts);
   const conversation = await ensureConversation(conversationId, user.id, userText);
+  // Sending from a client means the user is looking at this conversation: it is read.
+  await setConversationUnread(conversationId, false);
 
   const [lookup, skills] = await Promise.all([lookupMemory(user.username, userText), loadUsableSkills(user.username)]);
 
@@ -171,7 +193,11 @@ export async function runChatTurn(params: {
       timing.endedAt ??= Date.now();
       await persistLatestAssistant(conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
       await touchConversation(conversationId);
+      // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
+      const delivered = hasViewers(streamId);
+      await setConversationUnread(conversationId, !delivered);
       endTurn(conversationId, streamId);
+      release();
       // Not awaited. If another conversation took over while this turn streamed, its messages reach memory now.
       void flushIfInactive(user.id, user.username, conversationId);
     },
@@ -183,7 +209,7 @@ export async function runChatTurn(params: {
 
   // The producer writes the stream into the resumable store; the response reads it back from there.
   const bytes = uiStream.pipeThrough(new JsonToSseTransformStream()).pipeThrough(new TextEncoderStream());
-  const body = await resumable.run(streamId, () => bytes);
+  const body = watchViewers(streamId, await resumable.run(streamId, () => bytes));
   return new Response(body, {
     headers: { ...UI_MESSAGE_STREAM_HEADERS, [RESUMABLE_STREAM_ID_HEADER]: streamId },
   });

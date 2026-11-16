@@ -43,6 +43,13 @@
       "when": 1794796212769,
       "tag": "0005_skill_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794825871218,
+      "tag": "0006_conversation_unread",
+      "breakpoints": true
     }
   ]
 }

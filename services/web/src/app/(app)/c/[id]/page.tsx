@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ChatSession } from "@/components/chat/chat-session";
 import { getCurrentUser } from "@/server/auth/session";
-import { findConversation } from "@/server/repositories/conversation-repository";
+import { findConversation, setConversationUnread } from "@/server/repositories/conversation-repository";
 import { listMessages } from "@/server/repositories/message-repository";
+import { activeStreamOf } from "@/server/agent/turn-registry";
+import { toUiMessages } from "@/lib/stored-messages";
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,18 +18,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const conversation = await findConversation(id, user.id);
   if (!conversation) notFound();
 
-  const rows = await listMessages(id);
-  const initialMessages: UIMessage[] = rows.map((row) => ({
-    id: row.id,
-    role: row.role,
-    parts: row.parts,
-    metadata: {
-      createdAt: row.createdAt.toISOString(),
-      ...(row.metadata?.custom ? { custom: row.metadata.custom } : {}),
-      // The turn's timing: the UI reads it from metadata.custom.turnTiming, where assistant-ui puts extra metadata.
-      ...(row.metadata?.turnTiming ? { turnTiming: row.metadata.turnTiming } : {}),
-    },
-  }));
+  // Opening the conversation reads it.
+  if (conversation.unread) await setConversationUnread(id, false);
+
+  const initialMessages: UIMessage[] = toUiMessages(await listMessages(id));
 
   return (
     <ChatSession
@@ -36,6 +30,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       initialMessages={initialMessages}
       isNewConversation={false}
       initialTitle={conversation.title}
+      activeStreamId={activeStreamOf(id)}
     />
   );
 }

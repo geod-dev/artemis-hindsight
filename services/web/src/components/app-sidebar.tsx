@@ -3,7 +3,7 @@
 import { MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConversationTitles } from "@/components/conversation-titles";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,8 @@ export interface SidebarConversation {
   id: string;
   title: string;
   updatedAt: string;
+  /** A reply finished here while nobody was watching: shown with a dot until the conversation is opened. */
+  unread: boolean;
 }
 
 export function AppSidebar({
@@ -59,6 +61,12 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { renamed } = useConversationTitles();
+
+  // A reply can finish while the user is in another conversation: the list (and its unread dots) is refreshed.
+  useEffect(() => {
+    const timer = setInterval(() => router.refresh(), 15_000);
+    return () => clearInterval(timer);
+  }, [router]);
   const [pendingDelete, setPendingDelete] = useState<SidebarConversation | null>(null);
   const [deleting, setDeleting] = useState(false);
   // A name received in this session wins over the title the server rendered.
@@ -109,11 +117,19 @@ export function AppSidebar({
               {conversations.map((conversation) => {
                 const href = `/c/${conversation.id}`;
                 const title = titleOf(conversation);
+                const showUnread = conversation.unread && pathname !== href;
                 return (
                   <SidebarMenuItem key={conversation.id}>
                     <SidebarMenuButton asChild isActive={pathname === href} tooltip={title}>
                       <Link href={href}>
                         <span className="truncate">{title}</span>
+                        {showUnread && (
+                          <span
+                            role="status"
+                            aria-label="Unread reply"
+                            className="ml-auto size-2 shrink-0 rounded-full bg-primary"
+                          />
+                        )}
                       </Link>
                     </SidebarMenuButton>
                     <DropdownMenu>

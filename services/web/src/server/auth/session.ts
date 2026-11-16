@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { getConfig } from "../config";
@@ -31,9 +31,19 @@ export function issueSessionToken(user: CurrentUser): Promise<string> {
     .sign(signingKey());
 }
 
+/**
+ * The session token of the request: a bearer token for native clients (the mobile app),
+ * otherwise the httpOnly cookie used by the web app.
+ */
+async function sessionTokenOf(): Promise<string | undefined> {
+  const authorization = (await headers()).get("authorization");
+  const bearer = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  return bearer ?? (await cookies()).get(SESSION_COOKIE)?.value;
+}
+
 /** The signed-in user of the current request, or null. Archived and deleted users are not signed in. */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const token = await sessionTokenOf();
   if (!token) return null;
 
   let userId: string | undefined;

@@ -1,0 +1,1 @@
+ALTER TABLE "conversations" ADD COLUMN "unread" boolean DEFAULT false NOT NULL;

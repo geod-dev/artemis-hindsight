@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { index, integer, jsonb, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // Users, their conversations and their messages. Messages store the AI SDK UIMessage parts as JSON,
 // so every step (text, reasoning, tool calls and their results) is kept as it streamed.
@@ -44,6 +44,9 @@ export const conversations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    // True when a reply finished while no client was connected to receive it. Cleared when a client opens the
+    // conversation or sends a message. Drives the unread badge in the conversation list.
+    unread: boolean("unread").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

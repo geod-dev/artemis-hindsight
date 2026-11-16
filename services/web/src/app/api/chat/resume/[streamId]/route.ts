@@ -1,6 +1,6 @@
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
 import { getCurrentUser, unauthorized } from "@/server/auth/session";
-import { resumable, streamOwner } from "@/server/agent/turn-registry";
+import { resumable, streamOwner, watchViewers } from "@/server/agent/turn-registry";
 
 export const runtime = "nodejs";
 
@@ -18,5 +18,6 @@ export async function GET(_req: Request, context: { params: Promise<{ streamId: 
 
   const body = await resumable.resume(streamId);
   if (!body) return Response.json({ error: "no such turn" }, { status: 404 });
-  return new Response(body, { headers: UI_MESSAGE_STREAM_HEADERS });
+  // Counted as a viewer while it reads, so a reply that ends during the replay is delivered, not left unread.
+  return new Response(watchViewers(streamId, body), { headers: UI_MESSAGE_STREAM_HEADERS });
 }

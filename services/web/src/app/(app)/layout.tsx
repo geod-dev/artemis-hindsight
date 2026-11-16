@@ -34,7 +34,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           username={user.username}
           displayName={user.displayName}
           avatarColor={user.avatarColor}
-          conversations={conversations.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.toISOString() }))}
+          conversations={conversations.map((c) => ({
+            id: c.id,
+            title: c.title,
+            updatedAt: c.updatedAt.toISOString(),
+            unread: c.unread,
+          }))}
         />
         <SidebarInset className="h-svh min-h-0 overflow-hidden">{children}</SidebarInset>
       </SidebarProvider>
