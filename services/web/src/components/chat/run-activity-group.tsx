@@ -70,8 +70,9 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
         {
           id: `thinking-${index}`,
           kind: "commentary",
-          label: thinkingText(durationMs, live),
-          content: <ThinkingLabel durationMs={durationMs} live={live} />,
+          // The label is the line shown under the collapsed run, so it counts up with the group's clock.
+          label: thinkingText(live && timing ? Math.max(0, now - timing.startedAt) : durationMs, live),
+          content: <ThinkingLabel durationMs={durationMs} live={live} startedAt={timing?.startedAt} />,
         },
       ];
     }

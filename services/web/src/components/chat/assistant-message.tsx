@@ -93,7 +93,7 @@ export const AssistantMessage: FC = () => {
                   const timing = reasoningTiming(turnTiming, reasoningOrdinal(parts, index));
                   const durationMs = reasoningDuration(timing);
                   const live = isRunning && timing !== undefined && timing.endedAt === undefined;
-                  return <ThinkingLabel durationMs={durationMs} live={live} />;
+                  return <ThinkingLabel durationMs={durationMs} live={live} startedAt={timing?.startedAt} />;
                 }
                 case "text":
                   // StoppedRun shows the same words itself, so the markdown text is not rendered twice.
@@ -111,7 +111,7 @@ export const AssistantMessage: FC = () => {
             }}
           </MessagePrimitive.GroupedParts>
           {/* Running with nothing yet: the model is starting, so show that it is thinking. */}
-          {isRunning && !hasContent && <ThinkingLabel live />}
+          {isRunning && !hasContent && <ThinkingLabel live startedAt={turnTiming?.startedAt} />}
         </div>
         {!isRunning && (
           // Hidden until the pointer is over the message (or a key focuses the action), so the thread stays uncluttered.
