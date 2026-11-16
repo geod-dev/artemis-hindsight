@@ -66,8 +66,6 @@ services:
       HINDSIGHT_API_CONSOLIDATION_LLM_MODEL: anthropic/claude-haiku-5-5
       HINDSIGHT_API_CONSOLIDATION_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       HINDSIGHT_API_CONSOLIDATION_LLM_REASONING_EFFORT: "medium"
-      # Retain instruction for every bank: what counts as new information, so repeated facts are not stored again.
-      HINDSIGHT_API_RETAIN_MISSION: "If user_message contains information inside a <memory> tag, consider that information already stored in memory. Do not extract or recreate facts that are merely repeated, referenced, or discussed from within the <memory> tag. Only extract genuinely new information that adds to, corrects, or meaningfully updates existing knowledge. Avoid creating duplicate facts."
     volumes:
       - hindsight-data:/home/hindsight/.pg0
     ports:

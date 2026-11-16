@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-o
 import { getDb } from "../db/client";
 import { messages, users } from "../db/schema";
 import { retainTranscript } from "../clients/hindsight-client";
+import { loadConversationRetainPrompt } from "./conversation-retain-prompt";
 
 // Moving a user's conversation messages into their Hindsight bank.
 //
@@ -95,6 +96,7 @@ async function flushNow(conversationId: string, username: string): Promise<void>
       documentId: conversationId,
       content: lines.join("\n"),
       operationId: operationIdFor(conversationId, rows.map((row) => row.id)),
+      mission: loadConversationRetainPrompt(),
     });
   }
   await getDb()

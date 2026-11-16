@@ -66,15 +66,31 @@ export async function createBank(bankId: string): Promise<void> {
   if (!res.ok) throw new Error(`hindsight could not create bank ${bankId}: HTTP ${res.status}`);
 }
 
+/** The bank's retain strategy for conversation transcripts. Retains made by the agent's tool don't use it. */
+const CONVERSATION_STRATEGY = "conversation";
+
 /**
  * Retains a transcript in the bank. The items go into the document named by `documentId` (one per conversation) and are
  * appended to it, so each call only adds what is new. Async with a caller-chosen operation id: a retry of the same batch
  * returns the original operation instead of extracting the memories twice.
+ *
+ * `mission` is the extraction instruction for this transcript. It is written to the bank as the retain mission of the
+ * "conversation" strategy before each retain, so every bank, old or new, always has the current text.
  */
 export async function retainTranscript(
   bankId: string,
-  input: { documentId: string; content: string; operationId: string },
+  input: { documentId: string; content: string; operationId: string; mission: string },
 ): Promise<void> {
+  const configRes = await fetch(bankUrl(bankId, "/config"), {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      updates: { retain_strategies: { [CONVERSATION_STRATEGY]: { retain_mission: input.mission } } },
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!configRes.ok) throw new Error(`hindsight could not set the retain strategy: HTTP ${configRes.status}`);
+
   const res = await fetch(bankUrl(bankId, "/memories"), {
     method: "POST",
     headers: headers(),
@@ -85,6 +101,7 @@ export async function retainTranscript(
           document_id: input.documentId,
           update_mode: "append",
           context: "chat conversation",
+          strategy: CONVERSATION_STRATEGY,
         },
       ],
       async: true,
