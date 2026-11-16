@@ -128,7 +128,7 @@ services:
     build:
       context: .
       dockerfile: services/web/Dockerfile
-    command: ["npm", "run", "db:migrate", "-w", "@artemis/web"]
+      target: migrate  # a small image: the bundled migration script and the SQL files
     environment:
       DATABASE_URL: postgres://artemis:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Coolify}@postgres:5432/artemis
     depends_on:
@@ -145,6 +145,7 @@ services:
     build:
       context: .
       dockerfile: services/web/Dockerfile
+      target: runtime
     environment:
       SERVICE_URL_WEB_3000:
       DATABASE_URL: postgres://artemis:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Coolify}@postgres:5432/artemis

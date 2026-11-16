@@ -130,7 +130,7 @@ services:
     build:
       context: .
       dockerfile: services/web/Dockerfile
-    command: ["npm", "run", "db:migrate", "-w", "@artemis/web"]
+      target: migrate  # a small image: the bundled migration script and the SQL files
     environment:
       DATABASE_URL: postgres://artemis:artemis@postgres:5432/artemis
     depends_on:
@@ -146,6 +146,7 @@ services:
     build:
       context: .
       dockerfile: services/web/Dockerfile
+      target: runtime
     env_file: .env
     environment:
       DATABASE_URL: postgres://artemis:artemis@postgres:5432/artemis

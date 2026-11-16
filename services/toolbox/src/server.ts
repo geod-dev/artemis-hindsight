@@ -133,6 +133,15 @@ app.delete("/sessions/:sessionId", async (c) => {
   }
 });
 
-serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`toolbox listening on :${info.port}, sandbox at ${sandboxUrl}`);
 });
+
+// Node runs as PID 1 in the container, which ignores SIGTERM unless a handler is set: without this, `docker stop`
+// waits its whole timeout (30 s on each redeploy) before it kills the process. Finish the open requests, then exit.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 20_000).unref();
+  });
+}

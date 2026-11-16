@@ -1,0 +1,26 @@
+# Type checks every workspace. `next build` skips its own type check (services/web/next.config.ts) to keep deploys
+# fast, so this is where type errors are caught.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The other workspaces import @artemis/contracts through its built type declarations (dist/).
+      - run: npm run build -w @artemis/contracts
+      - run: npm run typecheck
