@@ -110,8 +110,11 @@ Rules:
   its user message, composer, and layout internal, so it can't be customized through slots. The other three either
   can't drop props or buttons, or don't fit our runtime. Our thread, composer, and message rows are our own code.
   The mobile app follows the same rule: it builds its thread and composer from the primitives.
-- Open question: `@assistant-ui/react-native` ships a native composer element. It is excluded by the rule above.
-  Ask the owner before making an exception.
+- The mobile composer element (`assistant-ui.com/elements/mobile-composer`) is web-only: shadcn, DOM, `<form>`.
+  There is no React Native registry item for it (`r.assistant-ui.com/native/elements-mobile-composer` returns 404),
+  and the native page only lists primitives. The mobile composer is therefore built from `ComposerPrimitive`, modeled on
+  the web element's behaviour (quick actions that fold away with the keyboard, attach, single-line input, send that
+  becomes stop). It is our own code.
 
 ## Database
 
