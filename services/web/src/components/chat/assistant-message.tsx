@@ -9,14 +9,23 @@ import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "./code-block";
+import { MarkdownDataTable } from "./markdown-data-table";
+import { withSourceBadges } from "./source-link";
 import { MessageDebugMenu } from "./message-debug-menu";
 import { sandboxMarkdownComponents } from "./sandbox-file-link";
 import { RunActivityGroup } from "./run-activity-group";
+import { visualComponentsByLanguage } from "./visuals";
 import { ThinkingLabel } from "./thinking-label";
 import { asTurnTiming, reasoningDuration, reasoningOrdinal, reasoningTiming } from "./turn-timing-view";
 
 // Fenced code blocks highlight by their fence language; the rest of the markdown keeps the sandbox links.
-const markdownComponents = { ...sandboxMarkdownComponents, SyntaxHighlighter: CodeBlock };
+// Markdown tables render as the registry DataTable; #source: links as source badges.
+const markdownComponents = {
+  ...sandboxMarkdownComponents,
+  a: withSourceBadges(sandboxMarkdownComponents.a),
+  table: MarkdownDataTable,
+  SyntaxHighlighter: CodeBlock,
+};
 
 // One run per turn: every part before the final answer shares the "group-run" group, whatever its type.
 // Grouping only some types split the run: a data part (such as "custom") between two tool calls
@@ -93,7 +102,7 @@ export const AssistantMessage: FC = () => {
                   ) : (
                     // Only the message text can be quoted; tool cards are outside this region.
                     <div data-aui-quote-selectable="">
-                      <MarkdownText components={markdownComponents} />
+                      <MarkdownText components={markdownComponents} componentsByLanguage={visualComponentsByLanguage} />
                     </div>
                   );
                 default:

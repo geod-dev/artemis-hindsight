@@ -10,6 +10,10 @@ const envSchema = z.object({
    * An empty value (as in .env.example, or a compose variable that is not set) counts as unset.
    */
   GROQ_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  /** Brave Search API key for the image groups in replies. Optional: without it an image group shows an error card. */
+  BRAVE_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  /** Brave's rate limit for the API key's plan: 1 on the free plan. Image searches are spaced to stay under it. */
+  BRAVE_REQUESTS_PER_SECOND: z.coerce.number().positive().default(1),
   CHAT_MODEL: z.string().default("claude-haiku-5-5"),
   /** Names a new conversation from its first message, in the background. Its prompt is prompts/conversation-title.md. */
   TITLE_MODEL: z.string().default("claude-haiku-5-5"),

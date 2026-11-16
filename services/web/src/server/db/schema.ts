@@ -119,3 +119,26 @@ export const messages = pgTable(
     index("messages_conversation_position_idx").on(table.conversationId, table.position),
   ],
 );
+
+/** One image result of a Brave image search, as the image groups in replies show it. */
+export interface StoredImageResult {
+  /** Brave's proxied thumbnail: always loads, about 500 px wide. */
+  thumbnailUrl: string;
+  /** The full image on its origin site. Some sites block hotlinking, so the thumbnail is the fallback. */
+  imageUrl: string;
+  /** The page the image comes from. */
+  pageUrl: string | null;
+  title: string;
+  source: string;
+}
+
+/**
+ * The answer Brave gave for each image group query. A reply is shown again on every reload, so a query is searched
+ * once and then read from here: the same reply keeps the same images, and Brave is not called again.
+ */
+export const imageSearches = pgTable("image_searches", {
+  /** The query as the agent wrote it, with whitespace collapsed and lowercased. */
+  query: text("query").primaryKey(),
+  results: jsonb("results").$type<StoredImageResult[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

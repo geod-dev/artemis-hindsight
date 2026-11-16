@@ -9,7 +9,7 @@
 #
 # Required: POSTGRES_PASSWORD, ANTHROPIC_API_KEY, AUTH_SECRET (32+ chars), ADMIN_ACCESS_KEY (16+ chars).
 # POSTGRES_PASSWORD goes inside DATABASE_URL: use letters and digits only (e.g. openssl rand -hex 32).
-# Optional: GROQ_API_KEY (dictation), CHAT_MODEL, TITLE_MODEL, MAX_AGENT_STEPS, MEMORY_RECALL_BUDGET,
+# Optional: GROQ_API_KEY (dictation), BRAVE_API_KEY and BRAVE_REQUESTS_PER_SECOND (image groups), CHAT_MODEL, TITLE_MODEL, MAX_AGENT_STEPS, MEMORY_RECALL_BUDGET,
 # MEMORY_RECALL_MAX_TOKENS. The agent's recall tool budget is fixed in this file (MEMORY_TOOL_RECALL_BUDGET: mid).
 
 services:
@@ -154,6 +154,8 @@ services:
       TOOLBOX_URL: http://toolbox:8080
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in Coolify}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      BRAVE_REQUESTS_PER_SECOND: ${BRAVE_REQUESTS_PER_SECOND:-1}
       CHAT_MODEL: ${CHAT_MODEL:-claude-haiku-5-5}
       TITLE_MODEL: ${TITLE_MODEL:-claude-haiku-5-5}
       MAX_AGENT_STEPS: ${MAX_AGENT_STEPS:-12}
