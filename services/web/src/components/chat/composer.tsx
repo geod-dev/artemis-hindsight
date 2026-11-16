@@ -79,6 +79,21 @@ function useTypeToFocus(inputRef: RefObject<HTMLTextAreaElement | null>, enabled
 }
 
 /**
+ * When a quote is set (the Quote button of the selection toolbar), focus moves to the input, so the user can type the
+ * message about the quote right away. A new quote replaces the old one and focuses again.
+ */
+function useFocusOnQuote(inputRef: RefObject<HTMLTextAreaElement | null>) {
+  const quote = useAuiState((s) => s.composer.quote);
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!quote || !input || input.disabled) return;
+    input.focus();
+    // At the end of any draft already typed, not at its start.
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [quote, inputRef]);
+}
+
+/**
  * The message input box. Same shell and input styling as the Thread bundle's composer.
  * Files are added with the attach button (left) and uploaded to the conversation's sandbox when the message is sent.
  * Dictation turns the bottom bar into: cancel (left), live waveform, stop (transcribe), send (transcribe and send).
@@ -91,6 +106,7 @@ export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean; modelPic
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useTypeToFocus(inputRef, typeToFocus);
+  useFocusOnQuote(inputRef);
   const dictation = useDictation(inputRef);
   const dictating = dictation.phase !== "idle";
   const busy = dictation.phase === "transcribing";
