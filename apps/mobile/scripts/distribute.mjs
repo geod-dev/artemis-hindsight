@@ -7,16 +7,15 @@
 //   npm run distribute -- ./app.apk    a local APK instead
 //   npm run distribute -- --dry-run    print what would be sent, send nothing
 //
-// Testers: ARTEMIS_TESTERS="a@example.com,b@example.com", or the file .firebase-testers next to package.json
-// (one address per line, gitignored). Sending needs a Firebase login: npx firebase-tools login.
+// Testers are the members of a tester group managed in the Firebase console (App Distribution > Testers & groups).
+// ARTEMIS_TESTER_GROUP is that group's alias. Sending needs a Firebase login: npx firebase-tools login.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const FIREBASE_APP_ID = "1:853637432481:android:c3ab479246394ef1ed5ce0";
 const FIREBASE_PROJECT = "artemis-5498f";
-const TESTERS_FILE = new URL("../.firebase-testers", import.meta.url);
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -42,12 +41,11 @@ async function latestPreviewApk() {
   return { apk, commit: build.gitCommitHash, subject: (build.gitCommitMessage ?? "").split("\n")[0] };
 }
 
-function testers() {
-  const fromEnv = process.env.ARTEMIS_TESTERS;
-  const fromFile = existsSync(TESTERS_FILE) ? readFileSync(TESTERS_FILE, "utf8") : "";
-  const list = (fromEnv ?? fromFile).split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-  if (list.length === 0) throw new Error("No testers: set ARTEMIS_TESTERS or create apps/mobile/.firebase-testers");
-  return list;
+/** The tester group's alias, as shown in the Firebase console. */
+function testerGroup() {
+  const group = process.env.ARTEMIS_TESTER_GROUP?.trim();
+  if (!group) throw new Error("No tester group: set ARTEMIS_TESTER_GROUP to the group's alias from the Firebase console");
+  return group;
 }
 
 const { apk, commit, subject } = localApk
@@ -63,8 +61,8 @@ const distributeArgs = [
   FIREBASE_APP_ID,
   "--project",
   FIREBASE_PROJECT,
-  "--testers",
-  testers().join(","),
+  "--groups",
+  testerGroup(),
   "--release-notes",
   `"${notes}"`,
 ];
@@ -73,5 +71,5 @@ if (dryRun) {
   console.log(`would run: npx ${distributeArgs.join(" ")}`);
   process.exit(0);
 }
-console.log(`sending ${apk} (${notes}) to ${testers().length} tester(s)`);
+console.log(`sending ${apk} (${notes}) to the group "${testerGroup()}"`);
 console.log(run("npx", distributeArgs));
