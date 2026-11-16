@@ -117,6 +117,13 @@ app.delete("/workspaces/:username", async (c) => {
   }
 });
 
+// A user's skills: list, install and remove, passed through to the sandbox with its status and body.
+app.on(["GET", "PUT", "DELETE"], ["/workspaces/:username/skills", "/workspaces/:username/skills/:folder"], async (c) => {
+  const body = c.req.method === "PUT" ? await c.req.text() : undefined;
+  const res = await sandbox.forward(c.req.method, new URL(c.req.url).pathname, body);
+  return c.body(await res.arrayBuffer(), res.status as 200, { "content-type": res.headers.get("content-type") ?? "application/json" });
+});
+
 app.delete("/sessions/:sessionId", async (c) => {
   try {
     await sandbox.removeSession(c.req.param("sessionId"));

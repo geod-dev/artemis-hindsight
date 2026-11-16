@@ -1,8 +1,10 @@
+import type { InstalledSkill } from "@artemis/contracts";
 import type { UIMessage } from "ai";
+import { listSkills } from "../clients/toolbox-client";
 import { getConfig } from "../config";
 import type { StoredModelInput } from "../db/schema";
 import { attachmentNotice, modelFileParts } from "./attachments";
-import { escapeAttr, renderUserPrompt, textOf, type MemoryLookup } from "./memory-context";
+import { escapeAttr, escapeText, renderUserPrompt, textOf, type MemoryLookup } from "./memory-context";
 
 /**
  * What the model reads for the latest user message, as built by toModelHistory: the text with the memory and
@@ -33,6 +35,39 @@ export function renderUserMetadata(user: ModelUser): string {
   return `<user_metadata ${attributes.join(" ")} />`;
 }
 
+/** Longest description shown per skill: Claude's format caps a description at 1024 characters. */
+const MAX_SKILL_DESCRIPTION = 1024;
+
+/**
+ * The user's skills the agent can use: those whose SKILL.md has a description. Best effort: when the sandbox does not
+ * answer, the turn goes on without skills.
+ */
+export async function loadUsableSkills(username: string): Promise<InstalledSkill[]> {
+  try {
+    return (await listSkills(username, 3_000)).filter((skill) => !skill.error);
+  } catch (error) {
+    console.warn("listing the skills failed", { reason: error instanceof Error ? error.message : String(error) });
+    return [];
+  }
+}
+
+/**
+ * The skills tag: each skill's name, description and SKILL.md path. The agent reads a SKILL.md when a task matches its
+ * description. It goes in the first user message, after the user metadata, and is left out when the user has no skill.
+ * It is rebuilt every turn, so a skill added or removed shows up on the next message.
+ */
+export function renderAvailableSkills(skills: InstalledSkill[]): string {
+  if (skills.length === 0) return "";
+  const rows = skills.map((skill) => {
+    const description =
+      skill.description.length > MAX_SKILL_DESCRIPTION
+        ? `${skill.description.slice(0, MAX_SKILL_DESCRIPTION - 1)}…`
+        : skill.description;
+    return `  <skill name="${escapeAttr(skill.name)}" path="${escapeAttr(skill.path)}">${escapeText(description)}</skill>`;
+  });
+  return ["<available_skills>", ...rows, "</available_skills>"].join("\n");
+}
+
 /** The household's timezone: the date and time the agent is given are local to it. */
 const TIMEZONE = "Europe/Paris";
 
@@ -57,8 +92,8 @@ export interface ModelUser {
 
 /**
  * The history as the model reads it. Each user message gets its attachment notice and its images and PDFs.
- * The first user message also gets the user metadata tag, and only the latest user message gets the current time and
- * the memory block.
+ * The first user message also gets the user metadata and skills tags, and only the latest user message gets the
+ * current time and the memory block.
  * The stored messages are not changed.
  */
 export async function toModelHistory(
@@ -66,6 +101,7 @@ export async function toModelHistory(
   history: UIMessage[],
   lookup: MemoryLookup,
   user: ModelUser,
+  skills: InstalledSkill[] = [],
 ): Promise<UIMessage[]> {
   let first = -1;
   let latest = -1;
@@ -90,7 +126,8 @@ export async function toModelHistory(
       i === latest
         ? [renderCurrentTime(), renderUserPrompt(text, lookup, notice)].join("\n")
         : [notice, text].filter(Boolean).join("\n");
-    const content = i === first ? [renderUserMetadata(user), body].join("\n") : body;
+    const content =
+      i === first ? [renderUserMetadata(user), renderAvailableSkills(skills), body].filter(Boolean).join("\n") : body;
     const files = await modelFileParts(conversationId, message.parts);
 
     out.push({ ...message, parts: [{ type: "text", text: content }, ...files] });

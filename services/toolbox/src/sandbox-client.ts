@@ -76,6 +76,15 @@ export class SandboxClient {
     await this.send("DELETE", `/sessions/${encodeURIComponent(sessionId)}`);
   }
 
+  /** Sends a request as it is and returns the sandbox's response, whatever its status. */
+  async forward(method: string, path: string, body?: string): Promise<Response> {
+    return fetch(new URL(path, this.baseUrl), {
+      method,
+      ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body }),
+      signal: AbortSignal.timeout(120_000),
+    });
+  }
+
   private async send(method: "PUT" | "DELETE", path: string): Promise<void> {
     const res = await fetch(new URL(path, this.baseUrl), { method, signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(await this.errorMessage(res));

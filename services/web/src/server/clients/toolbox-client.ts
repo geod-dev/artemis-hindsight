@@ -1,8 +1,12 @@
 import {
   attachmentSavedSchema,
+  installedSkillListSchema,
+  installedSkillSchema,
   toolDefinitionSchema,
   toolInvokeResponseSchema,
   type AttachmentSaved,
+  type InstalledSkill,
+  type SkillInstallRequest,
   type ToolDefinition,
 } from "@artemis/contracts";
 import { z } from "zod";
@@ -95,6 +99,40 @@ export async function removeWorkspace(username: string): Promise<void> {
 /** Removes a conversation's session folder: its files and attachments. */
 export async function removeSession(sessionId: string): Promise<void> {
   await sendFolderRequest("DELETE", `/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+/** A user's skills: the folders in <workspace>/<username>/skills. */
+export async function listSkills(username: string, timeoutMs = 10_000): Promise<InstalledSkill[]> {
+  const res = await fetch(skillsUrl(username), { signal: AbortSignal.timeout(timeoutMs) });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  return installedSkillListSchema.parse(body).skills;
+}
+
+/** Writes a skill folder, replacing the one with the same name. */
+export async function installSkill(username: string, folder: string, request: SkillInstallRequest): Promise<InstalledSkill> {
+  const res = await fetch(skillsUrl(username, folder), {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  return installedSkillSchema.parse(body);
+}
+
+/** Removes a skill folder. Returns false when there was no such skill. */
+export async function removeSkill(username: string, folder: string): Promise<boolean> {
+  const res = await fetch(skillsUrl(username, folder), { method: "DELETE", signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new Error(errorMessage(await res.json().catch(() => null), res.status));
+  return true;
+}
+
+function skillsUrl(username: string, folder?: string): URL {
+  const base = `/workspaces/${encodeURIComponent(username)}/skills`;
+  return new URL(folder ? `${base}/${encodeURIComponent(folder)}` : base, getConfig().TOOLBOX_URL);
 }
 
 async function sendFolderRequest(method: "PUT" | "DELETE", path: string): Promise<void> {

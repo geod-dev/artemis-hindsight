@@ -12,11 +12,16 @@ RUN npm run build -w @artemis/contracts && npm run build -w @artemis/sandbox
 
 FROM node:22-bookworm-slim AS runtime
 # The tools the agent is likely to need. Keep this list short; add more in the image, not at runtime.
+# pandoc and poppler-utils (pdftotext, pdftoppm) are used by the document skills (docx, pdf). LibreOffice, which they
+# use to convert and recalculate files, is left out: it is large and needs more than the sandbox's memory limit.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends bash ca-certificates curl git jq python3 python3-venv ripgrep \
+ && apt-get install -y --no-install-recommends bash ca-certificates curl git jq pandoc poppler-utils python3 python3-venv ripgrep \
  && rm -rf /var/lib/apt/lists/*
 # Default Python environment: `python3` and `pip` resolve here. Owned by the runtime user so the agent can install into it.
-RUN python3 -m venv /opt/venv && chown -R node:node /opt/venv
+# The packages are the ones the document skills (pdf, docx, pptx, xlsx) import.
+RUN python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --no-cache-dir openpyxl pandas pdfplumber pypdf python-docx python-pptx reportlab \
+ && chown -R node:node /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV NODE_ENV=production PORT=8080 DATA_ROOT=/data WORKSPACE_ROOT=/workspace
 WORKDIR /app

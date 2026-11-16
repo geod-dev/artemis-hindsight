@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Brain, LogOut, Palette, UserRound } from "lucide-react";
+import { ArrowLeft, Brain, LogOut, Palette, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ const SECTIONS = [
   { href: "/settings/profile", label: "Profile", icon: UserRound },
   { href: "/settings/appearance", label: "Appearance", icon: Palette },
   { href: "/settings/memory", label: "Memory", icon: Brain },
+  { href: "/settings/skills", label: "Skills", icon: Sparkles },
 ] as const;
 
 export function SettingsSidebar() {

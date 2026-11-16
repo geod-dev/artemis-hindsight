@@ -44,6 +44,16 @@ export async function updateProfile(
   return row;
 }
 
+/** The skill marketplaces the user added ("owner/repo"). */
+export async function getSkillSources(userId: string): Promise<string[]> {
+  const [row] = await getDb().select({ skillSources: users.skillSources }).from(users).where(eq(users.id, userId)).limit(1);
+  return row?.skillSources ?? [];
+}
+
+export async function setSkillSources(userId: string, skillSources: string[]): Promise<void> {
+  await getDb().update(users).set({ skillSources, updatedAt: sql`now()` }).where(eq(users.id, userId));
+}
+
 export async function updateStatus(username: string, status: UserStatus): Promise<boolean> {
   const updated = await getDb()
     .update(users)

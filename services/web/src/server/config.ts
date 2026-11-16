@@ -14,6 +14,11 @@ const envSchema = z.object({
   BRAVE_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
   /** Brave's rate limit for the API key's plan: 1 on the free plan. Image searches are spaced to stay under it. */
   BRAVE_REQUESTS_PER_SECOND: z.coerce.number().positive().default(1),
+  /**
+   * GitHub token for the skill marketplaces. Optional: without it GitHub allows 60 repository listings an hour per IP,
+   * which the hour-long cache keeps well within. Any token works, with no scope.
+   */
+  GITHUB_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
   CHAT_MODEL: z.string().default("claude-haiku-5-5"),
   /** Names a new conversation from its first message, in the background. Its prompt is prompts/conversation-title.md. */
   TITLE_MODEL: z.string().default("claude-haiku-5-5"),

@@ -7,8 +7,11 @@ import {
   fsReadRequestSchema,
   fsWriteRequestSchema,
   sessionIdSchema,
+  skillFolderSchema,
+  skillInstallRequestSchema,
   usernameSchema,
 } from "@artemis/contracts";
+import { SkillError, installSkill, listSkills, removeSkill } from "./skills.js";
 import { saveAttachment, AttachmentError } from "./attachments.js";
 import { runCommand } from "./exec.js";
 import { FileError, editForAgent, readForAgent, serveFile, writeForAgent } from "./files.js";
@@ -129,6 +132,38 @@ app.delete("/workspaces/:username", async (c) => {
   const username = usernameSchema.safeParse(c.req.param("username"));
   if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
   await removeWorkspace(roots, username.data);
+  return c.json({ ok: true });
+});
+
+// A user's skills (<workspace>/<username>/skills/<folder>/SKILL.md): listed for the agent's context and the settings
+// page, installed from a marketplace and removed by the web app.
+app.get("/workspaces/:username/skills", async (c) => {
+  const username = usernameSchema.safeParse(c.req.param("username"));
+  if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
+  return c.json({ skills: await listSkills(roots, username.data) });
+});
+
+app.put("/workspaces/:username/skills/:folder", async (c) => {
+  const username = usernameSchema.safeParse(c.req.param("username"));
+  if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
+  const folder = skillFolderSchema.safeParse(c.req.param("folder"));
+  if (!folder.success) return c.json({ error: folder.error.issues[0]?.message ?? "invalid skill name" }, 400);
+  const parsed = skillInstallRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.issues.map((i) => i.message).join("; ") }, 400);
+  try {
+    return c.json(await installSkill(roots, username.data, folder.data, parsed.data));
+  } catch (error) {
+    if (error instanceof SkillError) return c.json({ error: error.message }, 422);
+    throw error;
+  }
+});
+
+app.delete("/workspaces/:username/skills/:folder", async (c) => {
+  const username = usernameSchema.safeParse(c.req.param("username"));
+  if (!username.success) return c.json({ error: username.error.issues[0]?.message ?? "invalid username" }, 400);
+  const folder = skillFolderSchema.safeParse(c.req.param("folder"));
+  if (!folder.success) return c.json({ error: folder.error.issues[0]?.message ?? "invalid skill name" }, 400);
+  if (!(await removeSkill(roots, username.data, folder.data))) return c.json({ error: "no such skill" }, 404);
   return c.json({ ok: true });
 });
 

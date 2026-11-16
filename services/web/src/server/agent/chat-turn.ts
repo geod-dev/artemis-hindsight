@@ -27,7 +27,7 @@ import { listMessages, saveMessage, setModelInput, type MessageRow } from "../re
 import { activateConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
 import { nameConversation } from "./conversation-title";
-import { latestModelInput, toModelHistory } from "./model-history";
+import { latestModelInput, loadUsableSkills, toModelHistory } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
@@ -74,7 +74,7 @@ export async function runChatTurn(params: {
   const parts = await checkAttachments(conversationId, incoming.parts);
   const conversation = await ensureConversation(conversationId, user.id, userText);
 
-  const lookup = await lookupMemory(user.username, userText);
+  const [lookup, skills] = await Promise.all([lookupMemory(user.username, userText), loadUsableSkills(user.username)]);
 
   const custom = (incoming.metadata as { custom?: StoredMessageMetadata["custom"] } | undefined)?.custom;
 
@@ -100,7 +100,7 @@ export async function runChatTurn(params: {
   await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
-  const modelHistory = await toModelHistory(conversationId, history, lookup, user);
+  const modelHistory = await toModelHistory(conversationId, history, lookup, user, skills);
   // A quoted message reaches the model as a blockquote in front of its text.
   const quotedHistory = injectQuoteContext(modelHistory);
   // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.

@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   displayName: text("display_name"),
   /** One of the palette colors in lib/avatar-colors.ts. Null until the user picks one: the app derives one from the username. */
   avatarColor: text("avatar_color"),
+  /** The GitHub repositories ("owner/repo") the user added as skill marketplaces, next to the built-in ones. */
+  skillSources: jsonb("skill_sources").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

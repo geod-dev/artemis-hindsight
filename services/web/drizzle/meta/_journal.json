@@ -36,6 +36,13 @@
       "when": 1794775629355,
       "tag": "0004_image_searches",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794796212769,
+      "tag": "0005_skill_sources",
+      "breakpoints": true
     }
   ]
 }

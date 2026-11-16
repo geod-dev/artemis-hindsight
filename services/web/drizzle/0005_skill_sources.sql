@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "skill_sources" jsonb DEFAULT '[]'::jsonb NOT NULL;
