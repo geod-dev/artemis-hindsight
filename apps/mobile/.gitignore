@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# family tester emails for `npm run distribute`
+.firebase-testers
+
 # typescript
 *.tsbuildinfo
 
