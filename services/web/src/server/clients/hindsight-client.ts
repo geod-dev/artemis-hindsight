@@ -122,6 +122,33 @@ export async function deleteBank(bankId: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`hindsight could not delete bank ${bankId}: HTTP ${res.status}`);
 }
 
+/**
+ * Forgets one memory. Hindsight has no hard delete for a single memory, so it is invalidated: it stays in the bank for
+ * audit but leaves recall, the graph, the list and consolidation, and a later append to its conversation does not
+ * bring it back. Only facts (world, experience) can be invalidated; observations are derived from them.
+ * Returns false when the bank has no such memory.
+ */
+export async function forgetMemory(bankId: string, memoryId: string): Promise<boolean> {
+  const res = await fetch(bankUrl(bankId, `/memories/${encodeURIComponent(memoryId)}`), {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ state: "invalidated", reason: "deleted by the user in the memory settings" }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new Error(`hindsight could not forget memory ${memoryId}: HTTP ${res.status}`);
+  return true;
+}
+
+/**
+ * Empties the user's memory: the bank is deleted and created again. Hindsight's own "clear memories" keeps the
+ * conversation documents, so the next append to a conversation would extract the cleared facts again.
+ */
+export async function clearMemory(bankId: string): Promise<void> {
+  await deleteBank(bankId);
+  await createBank(bankId);
+}
+
 /** The id of every bank on the server. */
 export async function listBankIds(): Promise<string[]> {
   const res = await fetch(new URL("/v1/default/banks", getConfig().HINDSIGHT_URL), {

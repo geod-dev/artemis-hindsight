@@ -4,7 +4,9 @@ import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import ForceGraph3D from "react-force-graph-3d";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface GraphNode {
@@ -146,6 +148,21 @@ export function MemoryGraph() {
     return () => controller.abort();
   }, []);
 
+  /** Drops a deleted memory and its links from the graph. The graph library replaces link ends with node objects. */
+  function removeNode(id: string) {
+    const endId = (end: unknown) => (typeof end === "object" && end !== null ? (end as GraphNode).id : end);
+    setLoad((current) =>
+      current.status === "ready"
+        ? {
+            status: "ready",
+            nodes: current.nodes.filter((node) => node.id !== id),
+            links: current.links.filter((link) => endId(link.source) !== id && endId(link.target) !== id),
+          }
+        : current,
+    );
+    setSelected(null);
+  }
+
   return (
     <div ref={container} className="absolute inset-0">
       {load.status === "loading" && <Skeleton className="h-full w-full" />}
@@ -179,7 +196,7 @@ export function MemoryGraph() {
             onNodeClick={(node: object) => setSelected(node as GraphNode)}
             onBackgroundClick={() => setSelected(null)}
           />
-          {selected && <MemoryCard node={selected} />}
+          {selected && <MemoryCard key={selected.id} node={selected} onDeleted={removeNode} />}
         </>
       )}
     </div>
@@ -199,8 +216,62 @@ function CopyId({ id }: { id: string }) {
   );
 }
 
-function MemoryCard({ node }: { node: GraphNode }) {
+/** Facts can be deleted. Observations and mental models are derived from them, so they cannot be deleted one by one. */
+const DELETABLE_TYPES = new Set(["world", "experience"]);
+
+function DeleteMemory({ id, onDeleted }: { id: string; onDeleted: (id: string) => void }) {
+  const [step, setStep] = useState<"idle" | "confirm" | "deleting">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setStep("deleting");
+    setError(null);
+    try {
+      const res = await fetch(`/api/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
+      onDeleted(id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setStep("confirm");
+    }
+  }
+
+  if (step === "idle") {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 px-2 text-destructive hover:text-destructive"
+        onClick={() => setStep("confirm")}
+      >
+        <Trash2 />
+        Delete
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-2 border-t pt-3">
+      <p className="text-xs text-muted-foreground">Artemis will forget this memory. This cannot be undone.</p>
+      {error && <p className="text-xs text-destructive">It could not be deleted: {error}.</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" disabled={step === "deleting"} onClick={() => setStep("idle")}>
+          Cancel
+        </Button>
+        <Button variant="destructive" size="sm" disabled={step === "deleting"} onClick={() => void remove()}>
+          {step === "deleting" ? "Deleting…" : "Delete memory"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MemoryCard({ node, onDeleted }: { node: GraphNode; onDeleted: (id: string) => void }) {
   const { sentences, tags } = splitMemory(node.text || node.label);
+  const deletable = node.factType !== null && DELETABLE_TYPES.has(node.factType);
   return (
     <aside className="absolute left-4 top-4 max-w-sm space-y-3 rounded-xl border bg-popover/95 p-4 text-sm text-popover-foreground shadow-lg backdrop-blur">
       {(node.factType || node.context) && (
@@ -231,6 +302,7 @@ function MemoryCard({ node }: { node: GraphNode }) {
           {node.id && <CopyId id={node.id} />}
         </p>
       )}
+      {deletable && <DeleteMemory id={node.id} onDeleted={onDeleted} />}
     </aside>
   );
 }
