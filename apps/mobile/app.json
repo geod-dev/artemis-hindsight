@@ -11,10 +11,10 @@
       "policy": "appVersion"
     },
     "ios": {
-      "bundleIdentifier": "com.artemis.hindsight"
+      "bundleIdentifier": "com.artemis.mobile"
     },
     "android": {
-      "package": "com.artemis.hindsight",
+      "package": "com.artemis.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
