@@ -7,8 +7,8 @@
 //   npm run distribute -- ./app.apk    a local APK instead
 //   npm run distribute -- --dry-run    print what would be sent, send nothing
 //
-// Testers are the members of a tester group managed in the Firebase console (App Distribution > Testers & groups).
-// ARTEMIS_TESTER_GROUP is that group's alias. Sending needs a Firebase login: npx firebase-tools login.
+// Testers are every tester of the Firebase project (App Distribution > Testers & groups), managed in the console.
+// Sending needs a Firebase login: npx firebase-tools login.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,17 +41,19 @@ async function latestPreviewApk() {
   return { apk, commit: build.gitCommitHash, subject: (build.gitCommitMessage ?? "").split("\n")[0] };
 }
 
-/** The tester group's alias, as shown in the Firebase console. */
-function testerGroup() {
-  const group = process.env.ARTEMIS_TESTER_GROUP?.trim();
-  if (!group) throw new Error("No tester group: set ARTEMIS_TESTER_GROUP to the group's alias from the Firebase console");
-  return group;
+/** Every tester of the Firebase project, read from the CLI's table (one row per tester). */
+function testers() {
+  const output = run("npx", ["--yes", "firebase-tools", "appdistribution:testers:list", "--project", FIREBASE_PROJECT]);
+  const emails = [...new Set(output.match(/[\w.+-]+@[\w.-]+\.\w+/g) ?? [])];
+  if (emails.length === 0) throw new Error("No testers in the Firebase project: add them in App Distribution > Testers & groups");
+  return emails;
 }
 
 const { apk, commit, subject } = localApk
   ? { apk: localApk, commit: "local", subject: "local APK" }
   : await latestPreviewApk();
 const notes = `${commit.slice(0, 7)}: ${subject}`.replace(/"/g, "'");
+const emails = testers();
 const distributeArgs = [
   "--yes",
   "firebase-tools",
@@ -61,8 +63,8 @@ const distributeArgs = [
   FIREBASE_APP_ID,
   "--project",
   FIREBASE_PROJECT,
-  "--groups",
-  testerGroup(),
+  "--testers",
+  emails.join(","),
   "--release-notes",
   `"${notes}"`,
 ];
@@ -71,5 +73,5 @@ if (dryRun) {
   console.log(`would run: npx ${distributeArgs.join(" ")}`);
   process.exit(0);
 }
-console.log(`sending ${apk} (${notes}) to the group "${testerGroup()}"`);
+console.log(`sending ${apk} (${notes}) to ${emails.length} tester(s)`);
 console.log(run("npx", distributeArgs));
