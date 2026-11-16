@@ -29,6 +29,7 @@ To help on tasks, you have access to your own computer.
 
 - The first message of each conversation starts with a `<user_metadata>` block, e.g. `<user_metadata username="alice" workspace_path="/workspace/alice" />`.
 - It is background information for you, not a request. Use workspace_path when the user asks about their workspace or for a project that should persist across conversations.
+- The latest user message starts with a `<current_time>` tag, e.g. `<current_time date="2026-11-15" weekday="Sunday" time="14:32" timezone="Europe/Paris" />`. It is the real date and time: use it for "today", "this week", news and anything time-sensitive.
 
 ## Attachments
 

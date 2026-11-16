@@ -33,6 +33,22 @@ export function renderUserMetadata(user: ModelUser): string {
   return `<user_metadata ${attributes.join(" ")} />`;
 }
 
+/** The household's timezone: the date and time the agent is given are local to it. */
+const TIMEZONE = "Europe/Paris";
+
+/**
+ * The current time tag, e.g. <current_time date="2026-11-15" weekday="Sunday" time="14:32" timezone="Europe/Paris" />.
+ * It goes at the top of the latest user message, so the model knows "today" without guessing it from memory or search.
+ */
+export function renderCurrentTime(now: Date = new Date()): string {
+  const format = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE, ...options }).format(now);
+  const date = format({ year: "numeric", month: "2-digit", day: "2-digit" });
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TIMEZONE, weekday: "long" }).format(now);
+  const time = format({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return `<current_time date="${date}" weekday="${weekday}" time="${time}" timezone="${TIMEZONE}" />`;
+}
+
 export interface ModelUser {
   username: string;
   displayName: string | null;
@@ -41,7 +57,8 @@ export interface ModelUser {
 
 /**
  * The history as the model reads it. Each user message gets its attachment notice and its images and PDFs.
- * The first user message also gets the user metadata tag, and only the latest user message gets the memory block.
+ * The first user message also gets the user metadata tag, and only the latest user message gets the current time and
+ * the memory block.
  * The stored messages are not changed.
  */
 export async function toModelHistory(
@@ -71,7 +88,7 @@ export async function toModelHistory(
     const text = textOf(message);
     const body =
       i === latest
-        ? renderUserPrompt(text, lookup, notice)
+        ? [renderCurrentTime(), renderUserPrompt(text, lookup, notice)].join("\n")
         : [notice, text].filter(Boolean).join("\n");
     const content = i === first ? [renderUserMetadata(user), body].join("\n") : body;
     const files = await modelFileParts(conversationId, message.parts);
