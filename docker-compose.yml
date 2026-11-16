@@ -47,6 +47,11 @@ services:
       HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL: https://api.voyageai.com/v1
       HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL: voyage-4-lite
       HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
+      # Reranking at Voyage too. The default reranker is a local cross-encoder on the CPU, which took ~6 s per recall on
+      # the VPS. LiteLLM's SDK calls Voyage's /rerank directly (no proxy).
+      HINDSIGHT_API_RERANKER_PROVIDER: litellm-sdk
+      HINDSIGHT_API_RERANKER_LITELLM_SDK_MODEL: voyage/rerank-2.5-lite
+      HINDSIGHT_API_RERANKER_LITELLM_SDK_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
       # Per-operation LLM: LiteLLM applies the reasoning effort as Claude thinking. The native Anthropic provider has
       # no effort control, so it would ignore these settings.
       HINDSIGHT_API_RETAIN_LLM_PROVIDER: litellm
