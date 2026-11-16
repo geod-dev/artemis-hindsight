@@ -1,0 +1,96 @@
+import { Redirect, useRouter } from "expo-router";
+import { useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BrandMark } from "@/components/brand-mark";
+import { useAuth } from "@/auth";
+import { ApiError } from "@/lib/api";
+import { usePreferences } from "@/preferences";
+
+/** Sign-in with the Artemis account. The server is fixed (lib/config.ts), so there is no address field. */
+export default function LoginScreen() {
+  const { state, signIn } = useAuth();
+  const { colors } = usePreferences();
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (state.status === "signedIn") return <Redirect href="/" />;
+
+  const canSubmit = username.trim().length > 0 && password.length > 0 && !busy;
+
+  async function submit() {
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(username, password);
+      router.replace("/");
+    } catch (cause) {
+      if (cause instanceof ApiError || cause instanceof Error) setError(cause.message);
+      else setError("Server unreachable. Try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = [styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }];
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <View style={{ alignItems: "center", marginBottom: 8 }}>
+          <BrandMark size={96} />
+        </View>
+        <Text style={[styles.hint, { color: colors.muted }]}>Sign in with your account.</Text>
+
+        <Text style={[styles.label, { color: colors.muted }]}>Username</Text>
+        {/* The autofill hints let Proton Pass and other password managers fill these fields: textContentType (iOS),
+            autoComplete and importantForAutofill (Android). */}
+        <TextInput
+          value={username}
+          onChangeText={setUsername}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="username"
+          autoComplete="username"
+          importantForAutofill="yes"
+          style={field}
+        />
+        <Text style={[styles.label, { color: colors.muted }]}>Password</Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          textContentType="password"
+          autoComplete="password"
+          importantForAutofill="yes"
+          onSubmitEditing={() => void submit()}
+          style={field}
+        />
+
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+
+        <Pressable
+          onPress={() => void submit()}
+          disabled={!canSubmit}
+          style={[styles.button, { backgroundColor: colors.accent, opacity: canSubmit ? 1 : 0.4 }]}
+        >
+          {busy ? <ActivityIndicator color={colors.accentText} /> : <Text style={[styles.buttonText, { color: colors.accentText }]}>Sign in</Text>}
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 24, gap: 8, flexGrow: 1, justifyContent: "center" },
+  title: { fontSize: 32, fontWeight: "700", textAlign: "center" },
+  hint: { fontSize: 15, textAlign: "center", marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "500", marginTop: 8 },
+  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  error: { fontSize: 14, marginTop: 8 },
+  button: { marginTop: 20, borderRadius: 999, paddingVertical: 14, alignItems: "center" },
+  buttonText: { fontSize: 16, fontWeight: "600" },
+});

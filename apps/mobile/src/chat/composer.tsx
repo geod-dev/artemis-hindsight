@@ -1,0 +1,327 @@
+import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react-native";
+import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
+import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
+import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
+import { fileKind } from "@/lib/file-icons";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
+import { Alert, Animated, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ApiError, apiFetch, apiUpload } from "@/lib/api";
+import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
+import { usePreferences } from "@/preferences";
+
+// Quick actions: they fill the input, fold away while the keyboard is up, and show only on a new chat (no messages yet).
+const QUICK_ACTIONS = ["Summarize", "Translate", "Explain"];
+
+const ICON_SIZE = 18;
+const BARS = Array.from({ length: 14 }, (_, i) => i);
+
+// The same wave as the web composer's voice bar (services/web/src/components/assistant-ui/elements/composer.tsx).
+function barHeight(bar: number, tick: number): number {
+  return 5 + Math.abs(Math.sin(bar * 1.35 + tick * 0.55)) * 13;
+}
+
+type Voice = "idle" | "recording" | "transcribing";
+
+/**
+ * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath
+ * (attach and dictate on the left, send or stop on the right). While dictating, the input is replaced by the voice bar, as
+ * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The transcript is
+ * added to the input. It sits above the keyboard (KeyboardStickyView). Icons are lucide, the same set as the web app.
+ */
+export function Composer({ conversationId }: { conversationId: string }) {
+  const { colors } = usePreferences();
+  const aui = useAui();
+  const running = useAuiState((s) => s.thread.isRunning);
+  const text = useAuiState((s) => s.composer.text);
+  const attachmentCount = useAuiState((s) => s.composer.attachments.length);
+  const canSend = text.trim().length > 0 || attachmentCount > 0;
+  const keyboardOpen = useKeyboardState((state) => state.isVisible);
+  // Same empty-state test as the web thread (thread.messages.length === 0): true only on a new chat.
+  const isNewChat = useAuiState((s) => s.thread.messages.length === 0);
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder, 100);
+  const [voice, setVoice] = useState<Voice>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const addFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset) return;
+    if ((asset.size ?? 0) > MAX_ATTACHMENT_MB * 1024 * 1024) {
+      Alert.alert("File too large", `${asset.name} is larger than ${MAX_ATTACHMENT_MB} MB.`);
+      return;
+    }
+    const picked: PickedFile = { uri: asset.uri, name: asset.name, type: asset.mimeType ?? "application/octet-stream", size: asset.size };
+    try {
+      await aui.composer().addAttachment(picked as unknown as File);
+    } catch (cause) {
+      Alert.alert("Attachment rejected", cause instanceof Error ? cause.message : "This file cannot be added.");
+    }
+  };
+
+  const stop = () => {
+    // The turn runs on the server: stopping asks it to stop, and the local stream is cancelled at once.
+    void apiFetch(`/api/chat/${conversationId}/stop`, { method: "POST" }).catch(() => undefined);
+    aui.thread().cancelRun();
+  };
+
+  const startVoice = async () => {
+    setVoiceError(null);
+    const permission = await requestRecordingPermissionsAsync();
+    if (!permission.granted) {
+      setVoiceError("Allow microphone access in your phone settings to dictate.");
+      return;
+    }
+    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await recorder.prepareToRecordAsync();
+    recorder.record();
+    setVoice("recording");
+  };
+
+  // Stops the recording, sends it to the server, and adds the transcript to the input.
+  const finishVoice = async () => {
+    setVoice("transcribing");
+    try {
+      await recorder.stop();
+      const uri = recorder.uri;
+      if (!uri) throw new Error("The recording was not saved.");
+      const { text: transcript } = await apiUpload<{ text: string }>("/api/transcribe", "audio", {
+        uri,
+        name: "dictation.m4a",
+        type: "audio/mp4",
+      });
+      const dictated = transcript.trim();
+      if (dictated) aui.composer().setText(joinText(text, dictated));
+    } catch (cause) {
+      setVoiceError(cause instanceof ApiError ? cause.message : "Could not transcribe. Check the connection and try again.");
+    } finally {
+      setVoice("idle");
+    }
+  };
+
+  const cancelVoice = async () => {
+    await recorder.stop().catch(() => undefined);
+    setVoice("idle");
+  };
+
+  return (
+    <KeyboardStickyView>
+      <View style={styles.wrapper}>
+        {keyboardOpen || voice !== "idle" || !isNewChat ? null : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actions}>
+            {QUICK_ACTIONS.map((action) => (
+              <Pressable
+                key={action}
+                onPress={() => {
+                  // The word goes in with a trailing space and the input takes focus: the keyboard opens for the next word.
+                  aui.composer().setText(`${action} `);
+                  inputRef.current?.focus();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.action, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Text style={{ color: colors.muted, fontSize: 13 }}>{action}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        <ComposerPrimitive.Root style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
+
+          {voice === "idle" ? (
+            <TextInput
+              ref={inputRef}
+              value={text}
+              onChangeText={(value) => aui.composer().setText(value)}
+              placeholder="Message Artemis"
+              placeholderTextColor={colors.muted}
+              multiline
+              style={[styles.input, { color: colors.text }]}
+            />
+          ) : (
+            <VoiceBar voice={voice} seconds={Math.floor((recorderState.durationMillis ?? 0) / 1000)} />
+          )}
+
+          <View style={styles.toolbar}>
+            {voice === "idle" ? (
+              <View style={styles.toolbarGroup}>
+                <IconButton icon={Plus} label="Add a file" onPress={() => void addFile()} />
+                <IconButton icon={Mic} label="Dictate" onPress={() => void startVoice()} />
+              </View>
+            ) : (
+              <View style={styles.toolbarGroup}>
+                <IconButton icon={X} label="Cancel dictation" onPress={() => void cancelVoice()} disabled={voice === "transcribing"} />
+              </View>
+            )}
+
+            {voice === "recording" ? (
+              <Pressable
+                onPress={() => void finishVoice()}
+                accessibilityRole="button"
+                accessibilityLabel="Stop dictation"
+                style={[styles.send, { backgroundColor: colors.text }]}
+              >
+                <Square size={12} color={colors.background} fill={colors.background} />
+              </Pressable>
+            ) : voice === "transcribing" ? (
+              <View style={[styles.send, { backgroundColor: colors.surfaceStrong }]} />
+            ) : running ? (
+              <Pressable
+                onPress={stop}
+                accessibilityRole="button"
+                accessibilityLabel="Stop generating"
+                style={[styles.send, { backgroundColor: colors.text }]}
+              >
+                <Square size={12} color={colors.background} fill={colors.background} />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  // Sending closes the keyboard: the reply is read, not typed into.
+                  Keyboard.dismiss();
+                  aui.composer().send();
+                }}
+                disabled={!canSend}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                // The web's send button: the primary colour, dimmed (half opacity) while there is nothing to send.
+                style={[styles.send, { backgroundColor: colors.accent, opacity: canSend ? 1 : 0.5 }]}
+              >
+                <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+              </Pressable>
+            )}
+          </View>
+        </ComposerPrimitive.Root>
+
+        {voiceError ? <Text style={[styles.error, { color: colors.danger }]}>{voiceError}</Text> : null}
+      </View>
+    </KeyboardStickyView>
+  );
+}
+
+function joinText(current: string, addition: string): string {
+  if (!current.trim()) return addition;
+  return `${current.trimEnd()} ${addition}`;
+}
+
+/** The voice bar: a pulsing dot, 14 waves and a timer while recording; "Transcribing" with a pulse while it runs. */
+function VoiceBar({ voice, seconds }: { voice: Voice; seconds: number }) {
+  const { colors } = usePreferences();
+  const [tick, setTick] = useState(0);
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    if (voice !== "recording") return undefined;
+    const id = setInterval(() => setTick((value) => value + 1), 100);
+    return () => clearInterval(id);
+  }, [voice]);
+
+  useEffect(() => {
+    if (voice === "idle") return undefined;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [voice, pulse]);
+
+  if (voice === "transcribing") {
+    return (
+      <View style={styles.voiceRow}>
+        <Animated.Text style={[styles.transcribing, { color: colors.muted, opacity: pulse }]}>Transcribing</Animated.Text>
+      </View>
+    );
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  return (
+    <View style={styles.voiceRow}>
+      <View style={[styles.recDot, { backgroundColor: colors.danger }]} />
+      <View style={styles.bars}>
+        {BARS.map((bar) => (
+          <View
+            key={bar}
+            style={{ width: 2, borderRadius: 1, height: barHeight(bar, tick), backgroundColor: colors.text, opacity: 0.5 }}
+          />
+        ))}
+      </View>
+      <Text style={[styles.timer, { color: colors.muted }]}>
+        {minutes}:{rest}
+      </Text>
+    </View>
+  );
+}
+
+function AttachmentChip() {
+  const { colors } = usePreferences();
+  const name = useAuiState((s) => s.attachment.name);
+  const { Icon, tint } = fileKind(name);
+  return (
+    <AttachmentPrimitive.Root style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.chipIcon, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
+        <Icon size={16} color={tint ?? colors.muted} />
+      </View>
+      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: "500", maxWidth: 160 }}>
+        {name}
+      </Text>
+      <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "file"}`} style={styles.chipRemove}>
+        <X size={14} color={colors.muted} />
+      </AttachmentPrimitive.Remove>
+    </AttachmentPrimitive.Root>
+  );
+}
+
+function IconButton({
+  icon: Icon,
+  label,
+  onPress,
+  disabled,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const { colors } = usePreferences();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.iconButton, disabled && { opacity: 0.35 }]}
+    >
+      <Icon size={ICON_SIZE} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
+  actions: { gap: 6, paddingHorizontal: 4 },
+  action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
+  input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
+  voiceRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8 },
+  recDot: { width: 8, height: 8, borderRadius: 4 },
+  bars: { flex: 1, height: 24, flexDirection: "row", alignItems: "center", gap: 3 },
+  timer: { fontFamily: "monospace", fontSize: 13, fontVariant: ["tabular-nums"] },
+  transcribing: { fontSize: 14 },
+  toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  toolbarGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  send: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  error: { fontSize: 13, paddingHorizontal: 12 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingLeft: 6, paddingRight: 8, paddingVertical: 6 },
+  chipIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  chipRemove: { paddingLeft: 4, paddingVertical: 2 },
+});
