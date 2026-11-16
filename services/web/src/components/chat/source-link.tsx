@@ -1,19 +1,69 @@
 "use client";
 
-import { useState, type AnchorHTMLAttributes, type FC } from "react";
+import { TextMessagePartProvider, useMessagePartText } from "@assistant-ui/react";
+import { useMemo, useState, type AnchorHTMLAttributes, type FC, type PropsWithChildren } from "react";
 import { SourceGlyph } from "@/components/assistant-ui/elements/sources";
 import { fieldInteractive } from "@/components/assistant-ui/elements/surfaces";
 import { hostOf, safeHref } from "@/components/assistant-ui/utils/href";
 import { cn } from "@/lib/utils";
 
-// A source the agent cites, written as a markdown link whose target starts with #source: followed by the URL:
+// The agent cites sources as one or more web links between parentheses, separated by commas:
 //
-//   The bill passed on Tuesday [Le Monde](<#source:https://www.lemonde.fr/politique/article/...>).
+//   The bill passed on Tuesday ([Le Monde](https://www.lemonde.fr/...), [BBC](https://www.bbc.com/...)).
 //
-// It shows as a small muted badge in the text: the site's favicon and the link text (the domain when the text is
-// empty), opening the page in a new tab. The look is the registry Sources trigger's pill, at text size.
+// groupSourceLinks rewrites such a group, before the markdown is parsed, into links whose target is #source: followed
+// by the URL, without the parentheses and commas. Each one shows as a small muted badge in the text: the site's
+// favicon and the link text (the domain when the text is empty), opening the page in a new tab. The look is the
+// registry Sources trigger's pill, at text size. A link outside parentheses stays a plain link.
 
 const PREFIX = "#source:";
+
+// One markdown link: [label](url) or [label](<url>). A bare URL may hold balanced parentheses (Wikipedia pages).
+const LINK = String.raw`\[([^\]\n]*)\]\(\s*(<[^>\n]+>|[^\s()<>]+(?:\([^\s()]*\)[^\s()<>]*)*)\s*\)`;
+const GROUP = new RegExp(String.raw`\(\s*(${LINK}(?:\s*[,;]?\s*${LINK})*)\s*\)`, "g");
+const LINK_IN_GROUP = new RegExp(LINK, "g");
+// Fenced code blocks and inline code: left as written.
+const CODE = /(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]+`)/;
+
+/** Rewrites every parenthesised group of web links in the markdown into #source: links (see the top of the file). */
+export function groupSourceLinks(markdown: string): string {
+  return markdown
+    .split(CODE)
+    .map((piece, index) => (index % 2 === 1 ? piece : piece.replace(GROUP, rewriteGroup)))
+    .join("");
+}
+
+function rewriteGroup(group: string, inner: string): string {
+  const links = [...inner.matchAll(LINK_IN_GROUP)].map(([, label = "", target = ""]) => ({
+    label,
+    url: target.replace(/^<|>$/g, "").trim(),
+  }));
+  // A group with a link that is not a web page (a sandbox file, an anchor) is not a source group.
+  if (!links.every(({ url }) => isWebUrl(url))) return group;
+  return links.map(({ label, url }) => `[${label}](<${PREFIX}${url}>)`).join(" ");
+}
+
+function isWebUrl(url: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The text part's markdown with its source groups rewritten (groupSourceLinks), for the MarkdownText inside.
+ * The message keeps the text as the agent wrote it, so copying the reply copies the plain links.
+ */
+export const SourceGroups: FC<PropsWithChildren> = ({ children }) => {
+  const { text, status } = useMessagePartText();
+  const grouped = useMemo(() => groupSourceLinks(text), [text]);
+  return (
+    <TextMessagePartProvider text={grouped} isRunning={status.type === "running"}>
+      {children}
+    </TextMessagePartProvider>
+  );
+};
 
 /** The cited URL of a #source: link, or null for any other link (or a URL that is not http or https). */
 export function parseSourceHref(href: string | undefined): string | null {

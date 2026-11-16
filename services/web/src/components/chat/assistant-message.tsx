@@ -10,7 +10,7 @@ import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "./code-block";
 import { MarkdownDataTable } from "./markdown-data-table";
-import { withSourceBadges } from "./source-link";
+import { SourceGroups, withSourceBadges } from "./source-link";
 import { MessageDebugMenu } from "./message-debug-menu";
 import { sandboxMarkdownComponents } from "./sandbox-file-link";
 import { RunActivityGroup } from "./run-activity-group";
@@ -19,7 +19,7 @@ import { ThinkingLabel } from "./thinking-label";
 import { asTurnTiming, reasoningDuration, reasoningOrdinal, reasoningTiming } from "./turn-timing-view";
 
 // Fenced code blocks highlight by their fence language; the rest of the markdown keeps the sandbox links.
-// Markdown tables render as the registry DataTable; #source: links as source badges.
+// Markdown tables render as the registry DataTable; web links in parentheses as source badges (SourceGroups).
 const markdownComponents = {
   ...sandboxMarkdownComponents,
   a: withSourceBadges(sandboxMarkdownComponents.a),
@@ -102,7 +102,9 @@ export const AssistantMessage: FC = () => {
                   ) : (
                     // Only the message text can be quoted; tool cards are outside this region.
                     <div data-aui-quote-selectable="">
-                      <MarkdownText components={markdownComponents} componentsByLanguage={visualComponentsByLanguage} />
+                      <SourceGroups>
+                        <MarkdownText components={markdownComponents} componentsByLanguage={visualComponentsByLanguage} />
+                      </SourceGroups>
                     </div>
                   );
                 default:
