@@ -3,9 +3,10 @@
 import { AuiIf, ComposerPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowUpIcon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { useContext, useEffect, useRef, type FC, type RefObject } from "react";
-import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/elements/attachment.aui";
+import { ComposerAddAttachment } from "@/components/assistant-ui/elements/attachment.aui";
 import { ComposerQuotePreview } from "@/components/assistant-ui/elements/quote.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
+import { ComposerAttachments } from "./composer-attachments";
 import { ConversationIdContext } from "./conversation-context";
 import { EffortPicker } from "./effort-picker";
 import { DictationWaveform } from "./dictation-waveform";

@@ -12,6 +12,7 @@ import { Composer } from "./composer";
 import { DayHeader, dayOf, MessageTimesContext } from "./day-header";
 import { UserEditMessage } from "./user-edit-message";
 import { UserMessage } from "./user-message";
+import { WindowFileDrop } from "./window-file-drop";
 
 /**
  * The conversation view. Empty: the composer sits centered. With messages: the thread scrolls and the
@@ -64,6 +65,7 @@ export const Thread: FC = () => {
         </div>
       </ThreadPrimitive.Viewport>
       <SelectionToolbar />
+      <WindowFileDrop />
     </ThreadPrimitive.Root>
   );
 };

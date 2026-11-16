@@ -11,6 +11,7 @@ import {
   type FC,
   type ReactNode,
 } from "react";
+import { DownloadIcon, EyeIcon, Loader2Icon } from "lucide-react";
 import { File } from "@/components/assistant-ui/elements/file";
 import {
   absoluteUrl,
@@ -21,6 +22,88 @@ import {
 } from "@/lib/sandbox-files";
 import { cn } from "@/lib/utils";
 import { ConversationIdContext } from "./conversation-context";
+import { FileThumb, ImagePreview, fileKind, fileMeta, isImageFile } from "./file-kind";
+
+/**
+ * Fetches the file and saves it, so the card knows when the bytes have arrived (a plain download link
+ * gives no signal). If the fetch fails, the browser follows the link itself.
+ */
+async function downloadFile(url: string, name: string): Promise<void> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = name;
+    link.click();
+    // The click starts the save synchronously; give the browser a moment before freeing the blob.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+  } catch {
+    window.location.assign(url);
+  }
+}
+
+/**
+ * A file in a reply, drawn like the composer's chips: type tile (or thumbnail), name, type. The whole card
+ * is the action: an image opens the preview, any other file downloads (with a spinner until it is saved).
+ */
+const FileCard: FC<{ name: string; mimeType: string; url: string }> = ({ name, mimeType, url }) => {
+  const kind = fileKind(name, mimeType);
+  const isImage = isImageFile(name, mimeType);
+  const [downloading, setDownloading] = useState(false);
+  const ActionIcon = isImage ? EyeIcon : downloading ? Loader2Icon : DownloadIcon;
+  const className =
+    "[--tile-radius:0.375rem] bg-muted/50 hover:bg-muted border-foreground/10 not-prose my-1 flex w-fit max-w-72 items-center gap-2.5 rounded-xl border p-1.5 pr-2.5 text-left no-underline transition-colors active:scale-[0.99]";
+  const body = (
+    <>
+      <FileThumb src={isImage ? url : undefined} kind={kind} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-foreground truncate text-xs font-medium" title={name}>
+          {name}
+        </span>
+        <span className="text-muted-foreground truncate text-[11px]">{fileMeta(name, mimeType, undefined)}</span>
+      </span>
+      <ActionIcon
+        className={cn(
+          "text-muted-foreground size-4 shrink-0",
+          downloading && "animate-spin motion-reduce:animate-none",
+        )}
+        aria-hidden
+      />
+    </>
+  );
+
+  if (isImage) {
+    return (
+      <ImagePreview src={url} name={name}>
+        <button type="button" aria-label={`Preview ${name}`} className={cn(className, "cursor-zoom-in")}>
+          {body}
+        </button>
+      </ImagePreview>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      download={name}
+      aria-label={downloading ? `Downloading ${name}` : `Download ${name}`}
+      aria-busy={downloading}
+      className={cn(className, downloading && "cursor-progress")}
+      onClick={(event) => {
+        // Modified clicks (new tab, save as) stay with the browser.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (downloading) return;
+        setDownloading(true);
+        void downloadFile(url, name).finally(() => setDownloading(false));
+      }}
+    >
+      {body}
+    </a>
+  );
+};
 
 /**
  * Renders a link the agent wrote as a file: [label](#sandbox-file:<path>). The path is absolute or
@@ -44,16 +127,16 @@ export const SandboxFileLink: FC<AnchorHTMLAttributes<HTMLAnchorElement>> = ({ h
   }
 
   const name = baseName(filePath);
-  return (
-    <File
-      type="file"
-      status={{ type: "complete" }}
-      filename={name}
-      mimeType={mediaTypeOf(name)}
-      data={absoluteUrl(sandboxFileUrl(conversationId, filePath))}
-      sourceType="url"
-    />
-  );
+  const mimeType = mediaTypeOf(name);
+  const url = absoluteUrl(sandboxFileUrl(conversationId, filePath));
+  const type = mimeType.toLowerCase();
+
+  // Audio and video keep the registry's player.
+  if (type.startsWith("audio/") || type.startsWith("video/")) {
+    return <File type="file" status={{ type: "complete" }} filename={name} mimeType={mimeType} data={url} sourceType="url" />;
+  }
+
+  return <FileCard name={name} mimeType={mimeType} url={url} />;
 };
 
 /** True when a sandbox file link sits anywhere inside these children. */
