@@ -1,61 +1,55 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
-import { useEffect, useRef, type ComponentRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
-import { useKeyboardState, useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
 import { Composer } from "./composer";
 import { MessageView } from "./message-view";
 
-/** The messages of the conversation (virtualized) above the composer. */
+/**
+ * The messages of the conversation (virtualized) above the composer. When the keyboard opens, the whole chat (messages and
+ * composer) moves up by the keyboard's height, frame by frame with the keyboard's own animation. The composer rises with the
+ * keyboard and the conversation scrolls by the same amount; nothing else changes. The window does not resize on Android
+ * (edge-to-edge), so the chat moves itself; the parent clips what goes above the header.
+ */
 export function ThreadView({ conversationId }: { conversationId: string }) {
   const { colors } = usePreferences();
-  // The keyboard's own animation, frame by frame: its height is negative while it is open. The chat's bottom padding
-  // follows it, so the messages shrink and the composer rises with the keyboard, as the keyboard moves. The window does
-  // not resize on Android (edge-to-edge), so the view has to make room itself.
+  // Negative while the keyboard is open (the keyboard controller's convention, as in its examples).
   const { height } = useReanimatedKeyboardAnimation();
-  const keyboardPadding = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, -height.value) }));
-
-  // When the keyboard opens, the conversation stays at its last message.
-  const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const list = useRef<ComponentRef<typeof ThreadPrimitive.MessagesFlatList>>(null);
-  useEffect(() => {
-    if (!keyboardVisible) return undefined;
-    // After the keyboard's animation has made room (about the animation's length).
-    const id = setTimeout(() => list.current?.scrollToEnd({ animated: true }), 300);
-    return () => clearTimeout(id);
-  }, [keyboardVisible]);
+  const lift = useAnimatedStyle(() => ({ transform: [{ translateY: height.value }] }));
 
   return (
-    <Animated.View style={[styles.root, { backgroundColor: colors.background }, keyboardPadding]}>
-      <ThreadPrimitive.Root style={styles.root}>
-        <ThreadPrimitive.Empty>
-          <View style={styles.empty}>
-            <BrandMark size={72} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>What do you want to know?</Text>
-            <Text style={[styles.emptyBody, { color: colors.muted }]}>Ask a question, add a file, or dictate your message.</Text>
-          </View>
-        </ThreadPrimitive.Empty>
-        <ThreadPrimitive.MessagesFlatList
-          ref={list}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          autoScroll
-          scrollToBottomOnInitialize
-          scrollToBottomOnRunStart
-          scrollToBottomOnThreadSwitch
-          keyboardShouldPersistTaps="handled"
-        >
-          {() => <MessageView />}
-        </ThreadPrimitive.MessagesFlatList>
-        <Composer conversationId={conversationId} />
-      </ThreadPrimitive.Root>
-    </Animated.View>
+    <View style={styles.clip}>
+      <Animated.View style={[styles.root, { backgroundColor: colors.background }, lift]}>
+        <ThreadPrimitive.Root style={styles.root}>
+          <ThreadPrimitive.Empty>
+            <View style={styles.empty}>
+              <BrandMark size={72} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>What do you want to know?</Text>
+              <Text style={[styles.emptyBody, { color: colors.muted }]}>Ask a question, add a file, or dictate your message.</Text>
+            </View>
+          </ThreadPrimitive.Empty>
+          <ThreadPrimitive.MessagesFlatList
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            autoScroll
+            scrollToBottomOnInitialize
+            scrollToBottomOnRunStart
+            scrollToBottomOnThreadSwitch
+            keyboardShouldPersistTaps="handled"
+          >
+            {() => <MessageView />}
+          </ThreadPrimitive.MessagesFlatList>
+          <Composer conversationId={conversationId} />
+        </ThreadPrimitive.Root>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  clip: { flex: 1, overflow: "hidden" },
   root: { flex: 1 },
   list: { flex: 1 },
   listContent: { padding: 16, gap: 16 },
