@@ -6,7 +6,7 @@ import { RunActivity, type ActivityEntry } from "./activity/run-activity";
 import { FilePart, ImagePart } from "./parts/file-part";
 import { ReasoningPart } from "./parts/reasoning-part";
 import { TextPart } from "./parts/text-part";
-import { ThinkingLabel, formatDuration, useElapsed } from "./parts/thinking-label";
+import { PendingSpinner, formatDuration, useElapsed } from "./parts/thinking-label";
 import { ToolPart } from "./parts/tool-part";
 
 // The parts of a message as the runtime and the server give them: the runtime uses data/mimeType, the server's AI SDK
@@ -46,7 +46,7 @@ export function MessageParts({ role }: { role: "user" | "assistant" }) {
 
   if (role === "user") return <>{parts.map((part, index) => renderPart(part, "user", index))}</>;
 
-  // From the send until the first part of the reply arrives, the message only says that it is thinking.
+  // From the send until the first part of the reply arrives, only a spinner: the request is sent, the thinking has not started.
   const hasContent = parts.some(
     (part) =>
       part.type === "reasoning" ||
@@ -55,7 +55,7 @@ export function MessageParts({ role }: { role: "user" | "assistant" }) {
       part.type === "image" ||
       (part.type === "text" && (part.text ?? "").trim() !== ""),
   );
-  if (running && !hasContent) return <ThinkingLabel startedAt={timing?.startedAt} />;
+  if (running && !hasContent) return <PendingSpinner />;
 
   // The n-th thinking block of the message has the n-th timing of the turn (the server counts them in stream order).
   const timingOf = (index: number): Timing | undefined => {

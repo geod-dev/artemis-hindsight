@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { usePreferences } from "@/preferences";
 
 // The words and the timing of a thinking block, as the web app shows them (services/web/src/components/chat/thinking-label.tsx
@@ -37,13 +37,19 @@ export function useElapsed(startedAt: number | undefined, live: boolean): number
   return Math.max(0, now - (startedAt ?? mountedAt));
 }
 
-/** A thinking line on its own, counting up: shown from the moment the message is sent, before any part arrives. */
-export function ThinkingLabel({ startedAt }: { startedAt?: number }) {
+/**
+ * Shown from the send until the model starts thinking (or answers): the request is on its way, and nothing else is known
+ * yet. The "Thinking Xs" line comes only with the thinking itself.
+ */
+export function PendingSpinner() {
   const { colors } = usePreferences();
-  const elapsed = useElapsed(startedAt, true);
-  return <Text style={[styles.label, { color: colors.muted }]}>{thinkingText(elapsed, true)}</Text>;
+  return (
+    <View style={styles.pending} accessibilityRole="progressbar" accessibilityLabel="Sending">
+      <ActivityIndicator size="small" color={colors.muted} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  label: { fontSize: 14, lineHeight: 20, fontVariant: ["tabular-nums"], paddingVertical: 4 },
+  pending: { alignSelf: "flex-start", paddingVertical: 6 },
 });
