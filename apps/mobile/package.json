@@ -49,7 +49,7 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "update": "eas update --branch production --message",
+    "update": "npx eas-cli update --branch production --environment preview --platform android --message",
     "distribute": "node scripts/distribute.mjs"
   },
   "private": true

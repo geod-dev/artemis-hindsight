@@ -40,7 +40,8 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 ## Mobile app (`apps/mobile`)
 
 - Expo SDK 58, Expo Router, TypeScript. It is **not** an npm workspace: its React version differs from the web's, so
-  it has its own `node_modules`. Run `npm install` inside `apps/mobile`.
+  it has its own `node_modules`. Run `npm install` inside `apps/mobile`. Keep `apps/mobile/.npmrc`
+  (`legacy-peer-deps`): `lucide-react-native` declares a React 18 peer, and EAS's clean install fails without it.
 - Chat: `@assistant-ui/react-native` primitives (`ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`, ...) with
   `@assistant-ui/ai-sdk` and the AI SDK transport. Install only `@assistant-ui/react-native` for the native side, never
   `@assistant-ui/react`.
@@ -48,20 +49,33 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
   (charts), `react-native-webview` (Mermaid, from the same CDN build the web uses), `expo-audio` (dictation),
   `expo-document-picker` and `expo-file-system` / `expo-sharing` (files), `expo-secure-store` (the session token),
   `@react-native-async-storage/async-storage` (preferences and the server address).
+- Keyboard: the app is edge-to-edge on Android, so the window never resizes. The chat and the login screen move with
+  `useReanimatedKeyboardAnimation` (react-native-keyboard-controller) through `translateY` or padding. Do not use React
+  Native's `KeyboardAvoidingView` there, and do not add `automaticOffset` or measured offsets.
 - The server address and the token are chosen at sign-in and stored on the device. Nothing secret is baked into the
   bundle; `EXPO_PUBLIC_SERVER_URL` only sets a default.
 - Type check: `npm run typecheck` inside `apps/mobile`.
 - Run on a phone: `npm run android` (development build, USB debugging) for native changes. JS changes can be tested
   with `npm run start`.
 
-### Updates for the family (over the air)
+### Shipping a mobile change
 
-- `runtimeVersion` is `appVersion`. A JavaScript-only change ships with EAS Update: `npm run update -- "message"`
-  (branch `production`). The phones pick it up on next launch. Nobody reinstalls.
-- A native change (a new native module, a change in `app.json` plugins or permissions, a new Expo SDK) needs a new
-  build: the family installs a new APK. Say so explicitly in the final message when it happens.
-- Expo project setup (`eas init`, `eas update:configure`) needs the owner's Expo account. Never log in on the owner's
-  behalf; ask them to run the login command.
+A push to `main` does not reach the phones by itself. After the push, publish:
+
+1. Typecheck `apps/mobile` and the root (`npm run typecheck`).
+2. JavaScript-only change: publish an over-the-air update with `npm run update -- "message"` (branch `production`). The
+   APK's `preview` channel points at that branch. Phones pick it up on their next launch, sometimes the second one.
+3. Native change (a new native module, `app.json` plugins or permissions, an Expo SDK upgrade): OTA cannot ship it.
+   Build an APK with `npx eas-cli build --platform android --profile preview --non-interactive` (EAS cloud; the free
+   queue can take an hour), then `npm run distribute`. It sends the newest finished preview APK to every tester of the
+   Firebase project. Tell the owner explicitly in the final message that a new APK was sent.
+
+Rules:
+
+- Keep `runtimeVersion` (`appVersion`) and the application id (`com.artemis.mobile`) stable. A different id is a
+  separate app on the phone; a different runtime version hides the OTA updates from the installed APK.
+- The tester list lives in the Firebase console (App Distribution, Testers & groups), not in the repo.
+- Expo and Firebase logins belong to the owner: never log in on their behalf, ask them to run the command.
 
 ## assistant-ui (web)
 
