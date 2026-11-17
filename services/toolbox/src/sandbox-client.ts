@@ -85,6 +85,15 @@ export class SandboxClient {
     });
   }
 
+  /** Like forward, for a raw body such as an image: its content type is passed on unchanged. */
+  async forwardRaw(method: string, path: string, body?: ArrayBuffer, contentType?: string): Promise<Response> {
+    return fetch(new URL(path, this.baseUrl), {
+      method,
+      ...(body === undefined ? {} : { headers: { "content-type": contentType ?? "application/octet-stream" }, body }),
+      signal: AbortSignal.timeout(120_000),
+    });
+  }
+
   private async send(method: "PUT" | "DELETE", path: string): Promise<void> {
     const res = await fetch(new URL(path, this.baseUrl), { method, signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(await this.errorMessage(res));

@@ -5,6 +5,7 @@ import path from "node:path";
  *   <dataRoot>/sessions/<sessionId>/              one conversation: default folder for bash, read, write and edit
  *   <dataRoot>/sessions/<sessionId>/attachments/  files the user uploaded in that conversation
  *   <workspaceRoot>/<username>/                   one user's workspace, shared by all of that user's conversations
+ *   <workspaceRoot>/<username>/projects/<id>/     one project's folder, shared by the conversations of that project
  */
 export interface Roots {
   dataRoot: string;
@@ -21,6 +22,11 @@ export function attachmentsDir(roots: Roots, sessionId: string): string {
 
 export function workspaceDir(roots: Roots, username: string): string {
   return path.join(roots.workspaceRoot, username);
+}
+
+/** A project's folder inside the user's workspace: <workspaceRoot>/<username>/projects/<projectId>. */
+export function projectDir(roots: Roots, username: string, projectId: string): string {
+  return path.join(workspaceDir(roots, username), "projects", projectId);
 }
 
 /**

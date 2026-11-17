@@ -6,6 +6,7 @@ import {
   fsEditRequestSchema,
   fsReadRequestSchema,
   fsWriteRequestSchema,
+  projectIdSchema,
   sessionIdSchema,
   skillFolderSchema,
   skillInstallRequestSchema,
@@ -15,6 +16,14 @@ import { SkillError, installSkill, listSkills, removeSkill } from "./skills.js";
 import { saveAttachment, AttachmentError } from "./attachments.js";
 import { runCommand } from "./exec.js";
 import { FileError, editForAgent, readForAgent, serveFile, writeForAgent } from "./files.js";
+import {
+  ProjectError,
+  ensureProject,
+  readProjectIcon,
+  removeProject,
+  removeProjectIcon,
+  saveProjectIcon,
+} from "./projects.js";
 import type { Roots } from "./paths.js";
 import { removeSession, removeWorkspace, ensureWorkspace } from "./workspaces.js";
 
@@ -166,6 +175,65 @@ app.delete("/workspaces/:username/skills/:folder", async (c) => {
   if (!(await removeSkill(roots, username.data, folder.data))) return c.json({ error: "no such skill" }, 404);
   return c.json({ ok: true });
 });
+
+// A project's folder in the user's workspace (<workspace>/<username>/projects/<id>) and its icon. The web app creates
+// the folder when a project is made, uploads its icon, and removes the folder when the project is deleted.
+app.put("/workspaces/:username/projects/:projectId", async (c) => {
+  const ids = projectRouteIds(c.req.param("username"), c.req.param("projectId"));
+  if (typeof ids === "string") return c.json({ error: ids }, 400);
+  await ensureProject(roots, ids.username, ids.projectId);
+  return c.json({ ok: true });
+});
+
+app.delete("/workspaces/:username/projects/:projectId", async (c) => {
+  const ids = projectRouteIds(c.req.param("username"), c.req.param("projectId"));
+  if (typeof ids === "string") return c.json({ error: ids }, 400);
+  await removeProject(roots, ids.username, ids.projectId);
+  return c.json({ ok: true });
+});
+
+// The body is the raw image; its content type decides the file's extension.
+app.put("/workspaces/:username/projects/:projectId/icon", async (c) => {
+  const ids = projectRouteIds(c.req.param("username"), c.req.param("projectId"));
+  if (typeof ids === "string") return c.json({ error: ids }, 400);
+  const bytes = Buffer.from(await c.req.arrayBuffer());
+  try {
+    const file = await saveProjectIcon(roots, ids.username, ids.projectId, bytes, c.req.header("content-type") ?? "");
+    return c.json({ file });
+  } catch (error) {
+    if (error instanceof ProjectError) return c.json({ error: error.message }, 422);
+    throw error;
+  }
+});
+
+app.get("/workspaces/:username/projects/:projectId/icon", async (c) => {
+  const ids = projectRouteIds(c.req.param("username"), c.req.param("projectId"));
+  if (typeof ids === "string") return c.json({ error: ids }, 400);
+  const icon = await readProjectIcon(roots, ids.username, ids.projectId);
+  if (!icon) return c.json({ error: "no such icon" }, 404);
+  return c.body(new Uint8Array(icon.bytes), 200, {
+    "content-type": icon.mediaType,
+    "content-length": String(icon.bytes.byteLength),
+    "x-content-type-options": "nosniff",
+    "cache-control": "private, no-cache",
+  });
+});
+
+app.delete("/workspaces/:username/projects/:projectId/icon", async (c) => {
+  const ids = projectRouteIds(c.req.param("username"), c.req.param("projectId"));
+  if (typeof ids === "string") return c.json({ error: ids }, 400);
+  await removeProjectIcon(roots, ids.username, ids.projectId);
+  return c.json({ ok: true });
+});
+
+/** The validated username and project id of a project route, or the error message to answer with. */
+function projectRouteIds(rawUsername: string, rawProjectId: string): { username: string; projectId: string } | string {
+  const username = usernameSchema.safeParse(rawUsername);
+  if (!username.success) return username.error.issues[0]?.message ?? "invalid username";
+  const projectId = projectIdSchema.safeParse(rawProjectId);
+  if (!projectId.success) return "invalid project id";
+  return { username: username.data, projectId: projectId.data };
+}
 
 app.delete("/sessions/:sessionId", async (c) => {
   const sessionId = sessionIdSchema.safeParse(c.req.param("sessionId"));

@@ -124,6 +124,19 @@ app.on(["GET", "PUT", "DELETE"], ["/workspaces/:username/skills", "/workspaces/:
   return c.body(await res.arrayBuffer(), res.status as 200, { "content-type": res.headers.get("content-type") ?? "application/json" });
 });
 
+// A project's folder and icon, passed through to the sandbox. The icon is a raw image body, sent and returned as it is.
+app.on(
+  ["GET", "PUT", "DELETE"],
+  ["/workspaces/:username/projects/:projectId", "/workspaces/:username/projects/:projectId/icon"],
+  async (c) => {
+    const body = c.req.method === "PUT" ? await c.req.arrayBuffer() : undefined;
+    const res = await sandbox.forwardRaw(c.req.method, new URL(c.req.url).pathname, body, c.req.header("content-type"));
+    return c.body(await res.arrayBuffer(), res.status as 200, {
+      "content-type": res.headers.get("content-type") ?? "application/json",
+    });
+  },
+);
+
 app.delete("/sessions/:sessionId", async (c) => {
   try {
     await sandbox.removeSession(c.req.param("sessionId"));
