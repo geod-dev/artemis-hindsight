@@ -4,7 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
-import { Alert, Animated, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
 import { usePreferences } from "@/preferences";
@@ -243,22 +243,49 @@ function VoiceBar({ voice, seconds }: { voice: Voice; seconds: number }) {
   );
 }
 
+/**
+ * One attachment above the input. An image shows its picture; another file shows an icon and its name. When the send
+ * failed, the reason is shown under it (the attachment stays, so it can be removed or sent again).
+ */
 function AttachmentChip() {
   const { colors } = usePreferences();
   const name = useAuiState((s) => s.attachment.name);
+  const type = useAuiState((s) => s.attachment.type);
+  const file = useAuiState((s) => s.attachment.file);
+  const status = useAuiState((s) => s.attachment.status);
+  const failure = status.type === "incomplete" ? (status.message ?? "The file could not be sent.") : null;
+  const uri = (file as unknown as { uri?: string } | undefined)?.uri;
+
+  if (type === "image" && uri) {
+    return (
+      <View style={styles.failureGroup}>
+        <AttachmentPrimitive.Root style={styles.preview}>
+          <Image source={{ uri }} accessibilityLabel={name} style={styles.previewImage} />
+          <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "image"}`} style={[styles.previewRemove, { backgroundColor: colors.background }]}>
+            <X size={14} color={colors.text} />
+          </AttachmentPrimitive.Remove>
+        </AttachmentPrimitive.Root>
+        {failure ? <Text style={[styles.failure, { color: colors.danger }]}>{failure}</Text> : null}
+      </View>
+    );
+  }
+
   const { Icon, tint } = fileKind(name);
   return (
-    <AttachmentPrimitive.Root style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
-      <View style={[styles.chipIcon, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
-        <Icon size={16} color={tint ?? colors.muted} />
-      </View>
-      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: "500", maxWidth: 160 }}>
-        {name}
-      </Text>
-      <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "file"}`} style={styles.chipRemove}>
-        <X size={14} color={colors.muted} />
-      </AttachmentPrimitive.Remove>
-    </AttachmentPrimitive.Root>
+    <View style={styles.failureGroup}>
+      <AttachmentPrimitive.Root style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <View style={[styles.chipIcon, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
+          <Icon size={16} color={tint ?? colors.muted} />
+        </View>
+        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: "500", maxWidth: 160 }}>
+          {name}
+        </Text>
+        <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "file"}`} style={styles.chipRemove}>
+          <X size={14} color={colors.muted} />
+        </AttachmentPrimitive.Remove>
+      </AttachmentPrimitive.Root>
+      {failure ? <Text style={[styles.failure, { color: colors.danger }]}>{failure}</Text> : null}
+    </View>
   );
 }
 
@@ -304,4 +331,9 @@ const styles = StyleSheet.create({
   chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingLeft: 6, paddingRight: 8, paddingVertical: 6 },
   chipIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   chipRemove: { paddingLeft: 4, paddingVertical: 2 },
+  failureGroup: { alignSelf: "flex-start", gap: 4 },
+  failure: { fontSize: 12, paddingHorizontal: 4 },
+  preview: { width: 64, height: 64, borderRadius: 12, overflow: "hidden" },
+  previewImage: { width: 64, height: 64 },
+  previewRemove: { position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
 });
