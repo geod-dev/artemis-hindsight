@@ -38,8 +38,10 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const aui = useAui();
   const running = useAuiState((s) => s.thread.isRunning);
   const text = useAuiState((s) => s.composer.text);
-  const attachmentCount = useAuiState((s) => s.composer.attachments.length);
-  const canSend = text.trim().length > 0 || attachmentCount > 0;
+  // Images sit inline, other files one per line, so the two are counted apart.
+  const imageCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type === "image").length);
+  const fileCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type !== "image").length);
+  const canSend = text.trim().length > 0 || imageCount + fileCount > 0;
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -115,9 +117,14 @@ export function Composer({ conversationId }: { conversationId: string }) {
       <View style={styles.wrapper}>
         <ComposerPrimitive.Root style={[styles.card, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}>
           {/* Attachments side by side, wrapping onto a new row: square image previews sit inline. */}
-          {attachmentCount > 0 ? (
-            <View style={styles.attachments}>
-              <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
+          {imageCount > 0 ? (
+            <View style={styles.imageRow}>
+              <ComposerPrimitive.Attachments>{() => <AttachmentChip kind="image" />}</ComposerPrimitive.Attachments>
+            </View>
+          ) : null}
+          {fileCount > 0 ? (
+            <View style={styles.fileList}>
+              <ComposerPrimitive.Attachments>{() => <AttachmentChip kind="file" />}</ComposerPrimitive.Attachments>
             </View>
           ) : null}
 
@@ -253,7 +260,7 @@ function VoiceBar({ voice, seconds }: { voice: Voice; seconds: number }) {
  * One attachment above the input. An image shows its picture; another file shows an icon and its name. When the send
  * failed, the reason is shown under it (the attachment stays, so it can be removed or sent again).
  */
-function AttachmentChip() {
+function AttachmentChip({ kind }: { kind: "image" | "file" }) {
   const { colors } = usePreferences();
   const name = useAuiState((s) => s.attachment.name);
   const type = useAuiState((s) => s.attachment.type);
@@ -262,7 +269,11 @@ function AttachmentChip() {
   const failure = status.type === "incomplete" ? (status.message ?? "The file could not be sent.") : null;
   const uri = (file as unknown as { uri?: string } | undefined)?.uri;
 
-  if (type === "image" && uri) {
+  const isImage = type === "image" && Boolean(uri);
+  // Each attachment renders in the container of its kind only.
+  if (isImage !== (kind === "image")) return null;
+
+  if (isImage) {
     return (
       <View style={styles.failureGroup}>
         <AttachmentPrimitive.Root style={styles.preview}>
@@ -323,7 +334,8 @@ function IconButton({
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
-  attachments: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  fileList: { gap: 6 },
   input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
   voiceRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8 },
   recDot: { width: 8, height: 8, borderRadius: 4 },

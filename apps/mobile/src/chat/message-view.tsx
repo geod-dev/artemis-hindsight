@@ -25,10 +25,13 @@ export function MessageView() {
     (s) => (s.message as unknown as { attachments?: { content?: unknown[] }[] }).attachments,
   );
   const attachments = storedAttachments ?? NO_ATTACHMENTS;
-  type FilePart = { type: string; mediaType?: string; mimeType?: string; url?: string; data?: string; filename?: string; image?: string };
-  const partFiles = (parts as unknown as FilePart[]).filter((part) => part.type === "file" || part.type === "image");
-  const attachedFiles = attachments.flatMap((attachment) => (attachment.content ?? []) as FilePart[]);
+  type MessageFile = { type: string; mediaType?: string; mimeType?: string; url?: string; data?: string; filename?: string; image?: string };
+  const partFiles = (parts as unknown as MessageFile[]).filter((part) => part.type === "file" || part.type === "image");
+  const attachedFiles = attachments.flatMap((attachment) => (attachment.content ?? []) as MessageFile[]);
   const files = isUser ? [...partFiles, ...attachedFiles.filter((part) => part.type === "file" || part.type === "image")] : [];
+  const mediaTypeOf = (file: MessageFile) => file.mediaType ?? file.mimeType ?? "";
+  const isImageFile = (file: MessageFile) => mediaTypeOf(file).startsWith("image/") || file.type === "image";
+  const urlOf = (file: MessageFile) => file.url ?? file.data ?? file.image ?? "";
   // A reply the user stopped says so, as on the web.
   const stopped = useAuiState((s) => s.message.status?.type === "incomplete" && (s.message.status as { reason?: string }).reason === "cancelled");
 
@@ -36,15 +39,16 @@ export function MessageView() {
     <MessagePrimitive.Root style={isUser ? styles.userRow : styles.assistantRow}>
       {files.length > 0 ? (
         <View style={styles.userFiles}>
-          {files.map((file, index) => {
-            const mediaType = file.mediaType ?? file.mimeType ?? "";
-            const url = file.url ?? file.data ?? file.image ?? "";
-            return mediaType.startsWith("image/") || file.type === "image" ? (
-              <ImagePart key={`${url}-${index}`} url={url} />
-            ) : (
-              <FilePart key={`${url}-${index}`} url={url} filename={file.filename} mimeType={mediaType} />
-            );
-          })}
+          {files.some(isImageFile) ? (
+            <View style={styles.imageRow}>
+              {files.filter(isImageFile).map((file, index) => (
+                <ImagePart key={`image-${index}`} url={urlOf(file)} />
+              ))}
+            </View>
+          ) : null}
+          {files.filter((file) => !isImageFile(file)).map((file, index) => (
+            <FilePart key={`file-${index}`} url={urlOf(file)} filename={file.filename} mimeType={mediaTypeOf(file)} />
+          ))}
         </View>
       ) : null}
       <Pressable
@@ -110,8 +114,9 @@ function MessageSheet({ visible, onClose, isUser }: { visible: boolean; onClose:
 
 const styles = StyleSheet.create({
   userRow: { alignItems: "flex-end", gap: 6 },
-  // The picture files sit on the left, side by side, wrapping onto a new row.
-  userFiles: { maxWidth: "85%", flexDirection: "row", flexWrap: "wrap", gap: 6, alignSelf: "flex-start" },
+  // The files sit above the bubble, on the right like it: the pictures side by side, the other files one per line.
+  userFiles: { maxWidth: "85%", gap: 6, alignItems: "flex-end" },
+  imageRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 },
   stopped: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   userBubble: { maxWidth: "85%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   assistantRow: { gap: 6 },
