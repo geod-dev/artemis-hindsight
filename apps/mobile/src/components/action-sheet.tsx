@@ -7,7 +7,7 @@ import {
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check } from "lucide-react-native";
+import { Check, type LucideIcon } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 
 /**
@@ -62,12 +62,14 @@ export function ActionSheet({
 /** One option of a sheet. `selected` shows a picker's current choice in the accent color; `checked` makes it a switch. */
 export function ActionSheetOption({
   label,
+  icon: Icon,
   onPress,
   destructive = false,
   selected = false,
   checked,
 }: {
   label: string;
+  icon?: LucideIcon;
   onPress: () => void;
   destructive?: boolean;
   selected?: boolean;
@@ -86,6 +88,7 @@ export function ActionSheetOption({
         Platform.OS === "ios" && pressed && { backgroundColor: colors.surfaceStrong },
       ]}
     >
+      {Icon ? <Icon size={20} color={tint} /> : null}
       <Text style={[styles.optionText, { color: tint }]}>{label}</Text>
       {checked !== undefined ? (
         <Check style={styles.check} size={18} color={checked ? colors.accent : "transparent"} />
@@ -98,7 +101,7 @@ const styles = StyleSheet.create({
   background: { borderTopLeftRadius: 28, borderTopRightRadius: 28 },
   content: { paddingHorizontal: 8, paddingTop: 4, gap: 2 },
   title: { fontSize: 14, fontWeight: "500", textAlign: "center", paddingVertical: 12 },
-  option: { height: 56, borderRadius: 16, justifyContent: "center", paddingHorizontal: 16 },
-  optionText: { fontSize: 16, textAlign: "center" },
+  option: { height: 56, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16 },
+  optionText: { flexShrink: 1, fontSize: 16 },
   check: { position: "absolute", right: 16, alignSelf: "center" },
 });

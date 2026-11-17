@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text } from "react-native";
 import { useRouter, type Href } from "expo-router";
+import { Archive, ArchiveRestore, ChevronLeft, FolderInput, FolderMinus, Plus, Trash2 } from "lucide-react-native";
 import { ApiError } from "@/lib/api";
 import {
   useDeleteConversation,
@@ -90,22 +91,24 @@ export function ConversationActionsSheet({
           ) : null}
           <ActionSheetOption
             label="New project"
+            icon={Plus}
             onPress={() => {
               // The form creates the project and moves this conversation into it.
               onClose();
               router.navigate(`/projects/form?moveConversation=${shown.id}` as Href);
             }}
           />
-          <ActionSheetOption label="Back" onPress={() => setView("menu")} />
+          <ActionSheetOption label="Back" icon={ChevronLeft} onPress={() => setView("menu")} />
         </>
       ) : shown ? (
         <>
-          <ActionSheetOption label="Move to project" onPress={() => setView("projects")} />
+          <ActionSheetOption label="Move to project" icon={FolderInput} onPress={() => setView("projects")} />
           {shown.project ? (
-            <ActionSheetOption label="Remove from project" onPress={() => move(shown, null)} />
+            <ActionSheetOption label="Remove from project" icon={FolderMinus} onPress={() => move(shown, null)} />
           ) : null}
           <ActionSheetOption
             label={archived ? "Restore" : "Archive"}
+            icon={archived ? ArchiveRestore : Archive}
             onPress={() => {
               onClose();
               setArchived.mutate({ id: shown.id, archived: !archived }, { onError: failed(archived ? "Restore failed" : "Archive failed") });
@@ -113,6 +116,7 @@ export function ConversationActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
+            icon={Trash2}
             destructive
             onPress={() => {
               onClose();
