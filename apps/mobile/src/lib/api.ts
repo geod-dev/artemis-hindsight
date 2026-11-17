@@ -1,4 +1,5 @@
 import { fetch as expoFetch } from "expo/fetch";
+import { File as ExpoFile } from "expo-file-system";
 
 /**
  * The HTTP client for the Artemis server. The server address and the session token are set by the auth
@@ -78,9 +79,11 @@ export async function apiFetch<T>(path: string, init: RequestInit & { json?: unk
 
 /** A multipart upload (attachments, dictation). The field name and file come from the caller. */
 export async function apiUpload<T>(path: string, field: string, file: { uri: string; name: string; type: string }): Promise<T> {
+  // The fetch of Expo reads each FormData entry as a string, a Blob, or an object with bytes(). A picked file is none of
+  // those, so its bytes are read here and sent with its name and type.
+  const bytes = await new ExpoFile(file.uri).bytes();
   const form = new FormData();
-  // React Native's FormData takes a file descriptor in place of a Blob.
-  form.append(field, file as unknown as Blob);
+  form.append(field, { name: file.name, type: file.type, bytes: async () => bytes } as unknown as Blob);
   const res = await fetch(absoluteUrl(path), { method: "POST", body: form, headers: requestHeaders() });
   const payload = (await res.json().catch(() => null)) as ({ error?: string } & T) | null;
   if (!res.ok) {
