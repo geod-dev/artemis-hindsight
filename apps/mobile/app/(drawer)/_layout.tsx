@@ -7,11 +7,14 @@ import { BackButton } from "@/components/back-button";
 import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
 import { getReturnTo } from "@/lib/return-to";
+import { usePushToTalkHeld } from "@/chat/push-to-talk";
 
 /** Everything after sign-in: the chat (with the conversation list as a drawer) and the settings. */
 export default function DrawerLayout() {
   const { state } = useAuth();
   const { colors } = usePreferences();
+  // While a push-to-talk press is held, the drawer's swipe is off: a slide towards cancel or send must not open it.
+  const pushToTalk = usePushToTalkHeld();
   const pathname = usePathname();
   const router = useRouter();
   // In the settings, the Android back button does what the header arrow does: a subpage goes to its section (the archived
@@ -41,6 +44,7 @@ export default function DrawerLayout() {
         headerTintColor: colors.text,
         sceneStyle: { backgroundColor: colors.background },
         drawerType: "front",
+        swipeEnabled: !pushToTalk,
         // A swipe to the right opens the drawer from anywhere on the screen, not only from the left edge.
         swipeEdgeWidth: Dimensions.get("window").width,
         drawerStyle: { backgroundColor: colors.surface, width: 300 },

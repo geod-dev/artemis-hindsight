@@ -3,11 +3,14 @@ import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecor
 import * as DocumentPicker from "expo-document-picker";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
-import { forwardRef, useEffect, useRef, useState, type ComponentRef } from "react";
-import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, Vibration, View, type GestureResponderEvent } from "react-native";
+import { forwardRef, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, Vibration, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { scheduleOnRN } from "react-native-worklets";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
 import { usePreferences } from "@/preferences";
+import { setPushToTalkHeld } from "./push-to-talk";
 
 const ICON_SIZE = 18;
 // A press shorter than this is a click: dictation keeps going after the finger lifts. Longer, it is push-to-talk.
@@ -54,8 +57,8 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
  * Attach on the left; dictate and send on the right. While dictating, the card turns inverted (its text colour becomes the
  * surface) and the toolbar reads: cancel (left), the live waveform, stop (transcribe into the input), send (transcribe and
  * send). Pressing the dictate button starts dictation at once. A tap leaves it running. Holding it dictates while the finger
- * is down: sliding onto cancel, stop or send (with a short buzz) and lifting there does that action; lifting anywhere else
- * stops, as the stop button does. Icons are lucide, the same set as the web app.
+ * is down: sliding onto cancel, stop or send buzzes and enlarges that button, and lifting there does its action. Lifting
+ * anywhere else stops, as the stop button does. Icons are lucide, the same set as the web app.
  */
 export function Composer({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
@@ -195,45 +198,42 @@ export function Composer({ conversationId }: { conversationId: string }) {
     return () => clearTimeout(id);
   }, [voice]);
 
-  const hitTest = (pageX: number, pageY: number): Target | null => {
+  // Window coordinates, the same space as the measured button rectangles.
+  const hitTest = (x: number, y: number): Target | null => {
     for (const key of ["cancel", "stop", "send"] as Target[]) {
       const rect = targetRects.current[key];
       if (!rect) continue;
-      if (
-        pageX >= rect.x - HIT_SLOP &&
-        pageX <= rect.x + rect.width + HIT_SLOP &&
-        pageY >= rect.y - HIT_SLOP &&
-        pageY <= rect.y + rect.height + HIT_SLOP
-      ) {
+      if (x >= rect.x - HIT_SLOP && x <= rect.x + rect.width + HIT_SLOP && y >= rect.y - HIT_SLOP && y <= rect.y + rect.height + HIT_SLOP) {
         return key;
       }
     }
     return null;
   };
 
-  // The dictate button. Its finger press starts dictation at once; see the Composer doc comment for the gesture.
-  const onPressGrant = (event: GestureResponderEvent) => {
-    const { pageX, pageY } = event.nativeEvent;
+  // The dictate button. A press starts dictation at once; see the Composer doc comment for the gesture.
+  const onPressDown = (x: number, y: number) => {
     if (voice === "recording") {
-      press.current = { x: pageX, y: pageY, held: false, onStop: true, hover: null };
+      press.current = { x, y, held: false, onStop: true, hover: null };
       return;
     }
-    const next: Press = { x: pageX, y: pageY, held: false, onStop: false, hover: null };
+    const next: Press = { x, y, held: false, onStop: false, hover: null };
     next.timer = setTimeout(() => {
-      if (press.current === next) next.held = true;
+      if (press.current === next) {
+        next.held = true;
+        setPushToTalkHeld(true);
+      }
     }, HOLD_MS);
     press.current = next;
     void startVoice();
   };
 
-  const onPressMove = (event: GestureResponderEvent) => {
+  const onPressMove = (x: number, y: number) => {
     const current = press.current;
     if (!current) return;
-    const { pageX, pageY } = event.nativeEvent;
-    current.x = pageX;
-    current.y = pageY;
+    current.x = x;
+    current.y = y;
     if (!current.held || current.onStop) return;
-    const target = hitTest(pageX, pageY);
+    const target = hitTest(x, y);
     if (target !== current.hover) {
       current.hover = target;
       setHover(target);
@@ -241,9 +241,10 @@ export function Composer({ conversationId }: { conversationId: string }) {
     }
   };
 
-  const onPressRelease = (event: GestureResponderEvent) => {
+  const onPressUp = (x: number, y: number) => {
     const current = press.current;
     press.current = null;
+    setPushToTalkHeld(false);
     if (!current) return;
     if (current.timer) clearTimeout(current.timer);
     setHover(null);
@@ -253,11 +254,30 @@ export function Composer({ conversationId }: { conversationId: string }) {
     }
     // A click: dictation keeps running until stop, cancel or send is pressed.
     if (!current.held) return;
-    const { pageX, pageY } = event.nativeEvent;
-    const target = hitTest(pageX, pageY);
+    const target = hitTest(x, y);
     if (voice === "recording") perform(target);
     else pendingEnd.current = { target };
   };
+
+  // The gesture is created once and calls the handlers of the latest render, so they always see the current state.
+  // A pan gesture (not the responder system) keeps reporting the finger while it slides across the buttons, and blocks
+  // the drawer's swipe, which would otherwise take a sideways slide and end the press.
+  const pressHandlers = useRef({ down: onPressDown, move: onPressMove, up: onPressUp });
+  pressHandlers.current = { down: onPressDown, move: onPressMove, up: onPressUp };
+  const pressGesture = useMemo(() => {
+    const call = (kind: "down" | "move" | "up", x: number, y: number) => pressHandlers.current[kind](x, y);
+    return Gesture.Pan()
+      .minDistance(0)
+      .onBegin((event) => {
+        scheduleOnRN(call, "down", event.absoluteX, event.absoluteY);
+      })
+      .onUpdate((event) => {
+        scheduleOnRN(call, "move", event.absoluteX, event.absoluteY);
+      })
+      .onFinalize((event) => {
+        scheduleOnRN(call, "up", event.absoluteX, event.absoluteY);
+      });
+  }, []);
 
   return (
     <View>
@@ -317,28 +337,23 @@ export function Composer({ conversationId }: { conversationId: string }) {
             </View>
 
             <View style={styles.toolbarGroup}>
-              {/* The dictate button: while dictating it is the stop button, in the same place. Its press is handled here
-                  (not by a Pressable) so a held finger keeps reporting its position while it slides over the other buttons. */}
-              <View
-                ref={stopRef}
-                collapsable={false}
-                accessibilityRole="button"
-                accessibilityLabel={voice === "idle" ? "Dictate" : "Stop dictation"}
-                accessibilityHint={voice === "idle" ? "Press and hold to dictate while holding" : undefined}
-                onStartShouldSetResponder={() => voice !== "transcribing"}
-                onResponderTerminationRequest={() => false}
-                onResponderGrant={onPressGrant}
-                onResponderMove={onPressMove}
-                onResponderRelease={onPressRelease}
-                onResponderTerminate={onPressRelease}
-                style={[styles.iconButton, hover === "stop" && styles.highlighted, voice === "transcribing" && { opacity: 0.35 }]}
-              >
-                {voice === "idle" ? (
-                  <Mic size={ICON_SIZE} color={colors.muted} />
-                ) : (
-                  <Square size={12} color={tone} fill={tone} />
-                )}
-              </View>
+              {/* The dictate button: while dictating it is the stop button, in the same place. */}
+              <GestureDetector gesture={pressGesture}>
+                <View
+                  accessibilityRole="button"
+                  accessibilityLabel={voice === "idle" ? "Dictate" : "Stop dictation"}
+                  accessibilityHint={voice === "idle" ? "Press and hold to dictate while holding" : undefined}
+                  style={[styles.iconButton, voice === "transcribing" && { opacity: 0.35 }]}
+                >
+                  <View ref={stopRef} collapsable={false} style={[styles.fill, hover === "stop" && styles.highlighted]}>
+                    {voice === "idle" ? (
+                      <Mic size={ICON_SIZE} color={colors.muted} />
+                    ) : (
+                      <Square size={12} color={tone} fill={tone} />
+                    )}
+                  </View>
+                </View>
+              </GestureDetector>
 
               {voice !== "idle" ? (
                 <Pressable
@@ -531,6 +546,7 @@ const styles = StyleSheet.create({
   bars: { flex: 1, minWidth: 0, height: 28, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, overflow: "hidden" },
   timer: { fontFamily: "monospace", fontSize: 13, fontVariant: ["tabular-nums"] },
   iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  fill: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   // The button a held finger is over: enlarged, so it reads as selected under the thumb.
   highlighted: { transform: [{ scale: 1.2 }] },
