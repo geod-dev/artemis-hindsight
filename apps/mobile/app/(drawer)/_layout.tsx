@@ -17,14 +17,12 @@ export default function DrawerLayout() {
   const pushToTalk = usePushToTalkHeld();
   const pathname = usePathname();
   const router = useRouter();
-  // In the settings, the Android back button does what the header arrow does: a subpage goes to its section (the archived
-  // chats go back to the danger zone, the other subpages to the settings main page), the main page goes back to the page
-  // the settings were opened from.
+  // On the settings' main page, the Android back button goes back to the page the settings were opened from. The subpages
+  // are a native stack (see settings/_layout.tsx), so their back is the system's own, with its predictive preview.
   useEffect(() => {
-    if (!pathname.startsWith("/settings")) return;
+    if (pathname !== "/settings") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      const parent = pathname === "/settings" ? getReturnTo() : pathname.startsWith("/settings/danger/") ? "/settings/danger" : "/settings";
-      router.navigate(parent);
+      router.navigate(getReturnTo());
       return true;
     });
     return () => subscription.remove();
@@ -53,15 +51,8 @@ export default function DrawerLayout() {
       {/* A project's full conversation list ("See more") and the create/edit form. Both go back to the project's new chat. */}
       <Drawer.Screen name="projects/[id]" options={{ title: "Project" }} />
       <Drawer.Screen name="projects/form" options={{ title: "Project", headerLeft: () => <BackButton to="/new" /> }} />
-      {/* Settings use the same drawer header as the conversations; a back arrow replaces the menu button. */}
-      <Drawer.Screen name="settings/index" options={{ title: "Settings", headerLeft: () => <BackButton /> }} />
-      <Drawer.Screen name="settings/profile" options={{ title: "Profile", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/appearance" options={{ title: "Appearance", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/memory" options={{ title: "Memory", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/skills" options={{ title: "Skills", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/admin" options={{ title: "Administration", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/danger/index" options={{ title: "Danger zone", headerLeft: () => <BackButton to="/settings" /> }} />
-      <Drawer.Screen name="settings/danger/archived" options={{ title: "Archived chats", headerLeft: () => <BackButton to="/settings/danger" /> }} />
+      {/* The settings are a native stack of their own (settings/_layout.tsx), so their headers and back come from the stack. */}
+      <Drawer.Screen name="settings" options={{ headerShown: false }} />
     </Drawer>
   );
 }

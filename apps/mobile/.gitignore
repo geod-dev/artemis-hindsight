@@ -13,6 +13,9 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+# EAS credentials downloaded for a local signed build: passwords and keystore copies, never committed.
+credentials.json
+credentials/
 *.p8
 *.p12
 *.key
