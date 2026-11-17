@@ -1,6 +1,7 @@
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { BrandMark } from "@/components/brand-mark";
 import { useAuth } from "@/auth";
 import { ApiError } from "@/lib/api";
@@ -38,7 +39,9 @@ export default function LoginScreen() {
   const field = [styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    // The keyboard controller's view, not React Native's: on Android the app is edge-to-edge, and there the native
+    // KeyboardAvoidingView does not move the content when the keyboard opens.
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior="padding">
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", marginBottom: 8 }}>
           <BrandMark size={96} />
