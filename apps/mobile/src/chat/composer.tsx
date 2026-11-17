@@ -1,17 +1,13 @@
 import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react-native";
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
-import { useKeyboardState } from "react-native-keyboard-controller";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
-import { Alert, Animated, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
 import { usePreferences } from "@/preferences";
-
-// Quick actions: they fill the input, fold away while the keyboard is up, and show only on a new chat (no messages yet).
-const QUICK_ACTIONS = ["Summarize", "Translate", "Explain"];
 
 const ICON_SIZE = 18;
 const BARS = Array.from({ length: 14 }, (_, i) => i);
@@ -24,12 +20,6 @@ function barHeight(bar: number, tick: number): number {
 type Voice = "idle" | "recording" | "transcribing";
 
 /**
- * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath
- * (attach and dictate on the left, send or stop on the right). While dictating, the input is replaced by the voice bar, as
- * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The transcript is
- * added to the input. It sits above the keyboard (KeyboardStickyView). Icons are lucide, the same set as the web app.
- */
-/**
  * The composer's surface, also used by the jump-to-latest button. In light mode the surface is the page's white, so the
  * composer gets the soft grey the web composer has (its muted tone over the page); dark mode keeps the card colour.
  */
@@ -37,6 +27,12 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
   return isDark ? colors.surface : colors.surfaceStrong;
 }
 
+/**
+ * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath
+ * (attach and dictate on the left, send or stop on the right). While dictating, the input is replaced by the voice bar, as
+ * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The transcript is
+ * added to the input. The chat moves it with the keyboard (thread-view.tsx). Icons are lucide, the same set as the web app.
+ */
 export function Composer({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
   const aui = useAui();
@@ -44,9 +40,6 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const text = useAuiState((s) => s.composer.text);
   const attachmentCount = useAuiState((s) => s.composer.attachments.length);
   const canSend = text.trim().length > 0 || attachmentCount > 0;
-  const keyboardOpen = useKeyboardState((state) => state.isVisible);
-  // Same empty-state test as the web thread (thread.messages.length === 0): true only on a new chat.
-  const isNewChat = useAuiState((s) => s.thread.messages.length === 0);
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -119,25 +112,6 @@ export function Composer({ conversationId }: { conversationId: string }) {
   return (
     <View>
       <View style={styles.wrapper}>
-        {keyboardOpen || voice !== "idle" || !isNewChat ? null : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsFloat} contentContainerStyle={styles.actions}>
-            {QUICK_ACTIONS.map((action) => (
-              <Pressable
-                key={action}
-                onPress={() => {
-                  // The word goes in with a trailing space and the input takes focus: the keyboard opens for the next word.
-                  aui.composer().setText(`${action} `);
-                  inputRef.current?.focus();
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.action, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
-              >
-                <Text style={{ color: colors.muted, fontSize: 13 }}>{action}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
         <ComposerPrimitive.Root style={[styles.card, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}>
           <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
 
@@ -315,10 +289,6 @@ function IconButton({
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
-  // Floats above the composer: it takes no room in the layout, so opening the keyboard (when it folds away) does not move the input.
-  actionsFloat: { position: "absolute", left: 0, right: 0, bottom: "100%", paddingBottom: 8 },
-  actions: { gap: 6, paddingHorizontal: 4 },
-  action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
   input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
   voiceRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8 },

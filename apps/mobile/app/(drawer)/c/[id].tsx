@@ -31,7 +31,6 @@ export default function ConversationScreen() {
     );
   }
 
-  // Keyed by id: opening another conversation starts a fresh runtime with its own messages.
   // Keyed by id: switching conversation, even while a reply runs, starts a fresh runtime with its own messages.
   // The reply that was running keeps running on the server; activeStreamId lets this screen join it.
   return (

@@ -11,21 +11,6 @@ import { createAttachmentAdapter } from "./attachment-adapter";
 import { createConversationResumableStorage } from "./resumable-storage";
 import { NativeChatTransport } from "./native-transport";
 
-// TEMP diagnostics (remove once the stream issue is found): each chat request's method, URL, status, and whether the
-// body is a stream, in the Metro log.
-const loggedStreamFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
-  console.log(`[artemis] ${init?.method ?? "GET"} ${url}`);
-  try {
-    const response = await authorizedStreamFetch(input, init);
-    console.log(`[artemis] ${response.status} ${url} body=${response.body ? "stream" : "none"}`);
-    return response;
-  } catch (error) {
-    console.warn(`[artemis] request failed ${url}`, error);
-    throw error;
-  }
-};
-
 export interface ArtemisRuntimeOptions {
   conversationId: string;
   initialMessages: UIMessage[];
@@ -33,7 +18,6 @@ export interface ArtemisRuntimeOptions {
   isNewConversation: boolean;
   /** The turn running in this conversation when it opened, if any: the app joins it. */
   activeStreamId?: string | null;
-  onFinished?: () => void;
   /** The conversation's name, as soon as the naming model answers on the turn's stream. */
   onTitle?: (title: string) => void;
 }
@@ -44,7 +28,7 @@ export interface ArtemisRuntimeOptions {
  * Switching conversations drops this runtime only: the turn keeps running on the server and is joined again
  * when its conversation is opened.
  */
-export function useArtemisRuntime({ conversationId, initialMessages, isNewConversation, activeStreamId = null, onFinished, onTitle }: ArtemisRuntimeOptions) {
+export function useArtemisRuntime({ conversationId, initialMessages, isNewConversation, activeStreamId = null, onTitle }: ArtemisRuntimeOptions) {
   const queryClient = useQueryClient();
   const { preferences } = usePreferences();
   // Chat screens only mount once the user is signed in, so the server address is known here.
@@ -60,7 +44,7 @@ export function useArtemisRuntime({ conversationId, initialMessages, isNewConver
     () =>
       new NativeChatTransport({
         api: `${base}/api/chat`,
-        fetch: loggedStreamFetch,
+        fetch: authorizedStreamFetch,
         prepareSendMessagesRequest: ({ messages, trigger, messageId }) => ({
           body: { id: conversationId, messages, trigger, messageId, config: { reasoningEffort: effort } },
         }),
@@ -93,15 +77,11 @@ export function useArtemisRuntime({ conversationId, initialMessages, isNewConver
         );
       }
     },
-    // TEMP diagnostics: the chat's own error, in the Metro log.
-    onError: (error) => console.warn("[artemis] chat error", error),
     onFinish: () => {
-      console.log("[artemis] turn finished");
       // The turn is over: nothing to reconnect to. A later open reads the server's state instead.
       resumable.clear();
       void queryClient.invalidateQueries({ queryKey: conversationsKey });
       if (isNewConversation) void queryClient.invalidateQueries({ queryKey: messagesKey(conversationId) });
-      onFinished?.();
     },
   });
 }
