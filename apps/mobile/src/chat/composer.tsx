@@ -29,8 +29,16 @@ type Voice = "idle" | "recording" | "transcribing";
  * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The transcript is
  * added to the input. It sits above the keyboard (KeyboardStickyView). Icons are lucide, the same set as the web app.
  */
+/**
+ * The composer's surface, also used by the jump-to-latest button. In light mode the surface is the page's white, so the
+ * composer gets the soft grey the web composer has (its muted tone over the page); dark mode keeps the card colour.
+ */
+export function composerSurface(colors: { surface: string; surfaceStrong: string }, isDark: boolean): string {
+  return isDark ? colors.surface : colors.surfaceStrong;
+}
+
 export function Composer({ conversationId }: { conversationId: string }) {
-  const { colors } = usePreferences();
+  const { colors, isDark } = usePreferences();
   const aui = useAui();
   const running = useAuiState((s) => s.thread.isRunning);
   const text = useAuiState((s) => s.composer.text);
@@ -130,7 +138,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
           </ScrollView>
         )}
 
-        <ComposerPrimitive.Root style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <ComposerPrimitive.Root style={[styles.card, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}>
           <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
 
           {voice === "idle" ? (
