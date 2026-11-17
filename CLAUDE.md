@@ -163,3 +163,24 @@ URL), not `localhost`.
 
 - Prefer libraries over hand-written UI, auth or protocol code. Use shadcn and popular packages.
 - When the owner is away, make the calls, keep them small and list them in the final message.
+
+## UI: match the design system, reuse components
+
+The product is meant to look premium, so new UI must look like the rest of the app, not like a new one.
+
+- Before writing a control, look for an existing one: `services/web/src/components/ui` (shadcn: Button, Badge,
+  Dialog, AlertDialog, DropdownMenu, Input, Textarea, Skeleton, Sheet, Tooltip) and the shared components of
+  `components/`. Use them, with className overrides when needed. Do not hand-build a button, badge, menu, dialog or
+  input that shadcn already provides. For a missing shadcn component, add it with the shadcn registry.
+- Surfaces come from the design system's tokens: `components/assistant-ui/elements/surfaces.ts` (`floating` for
+  popovers and dialogs, `field` for input backgrounds, `ghostButton` for icon buttons). Do not write a new background or
+  border colour when a token exists.
+- Radius and padding follow what is already on screen. The composer and dialogs use `rounded-2xl` (the composer's
+  `--composer-radius`, 1rem); containers, settings sections and the memory graph panel use `rounded-xl`; badges and
+  pills are `rounded-full`. Padding of a dialog or a section is `p-5`, not shadcn's default `p-6`. Check the nearest
+  existing screen (settings, memory, the composer) before picking a value.
+- Mobile: no shadcn there. Reuse the shared components of `apps/mobile/src/components` (ActionSheet, ColorSwatches,
+  ProjectIcon) and the palette of `preferences.tsx`. Before writing a new control, check `apps/mobile/package.json` for
+  a library that already provides it, and say in the final message when a control is hand-built and why.
+- Web and mobile share the same look: a feature that exists on both uses the same radius, surfaces and colours, and
+  the same component structure where the platforms allow it.
