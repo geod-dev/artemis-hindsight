@@ -1,7 +1,7 @@
 import { Redirect, useRouter } from "expo-router";
 import { useRef, useState, type ComponentRef } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { useKeyboardState } from "react-native-keyboard-controller";
 import { BrandMark } from "@/components/brand-mark";
 import { useAuth } from "@/auth";
 import { ApiError } from "@/lib/api";
@@ -19,6 +19,8 @@ export default function LoginScreen() {
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   // When a field takes focus, the form scrolls to its end, so the sign-in button stays above the keyboard.
   const scrollToEnd = () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250);
+  // The keyboard's height in screen coordinates, as a bottom padding of the screen: the form ends right above the keyboard.
+  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
 
   if (state.status === "signedIn") return <Redirect href="/" />;
 
@@ -42,9 +44,7 @@ export default function LoginScreen() {
   const field = [styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }];
 
   return (
-    // The keyboard controller's view, not React Native's: on Android the app is edge-to-edge, and there the native
-    // KeyboardAvoidingView does not move the content when the keyboard opens.
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior="padding" automaticOffset>
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
       <ScrollView ref={scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", marginBottom: 8 }}>
           <BrandMark size={96} />
@@ -88,7 +88,7 @@ export default function LoginScreen() {
           {busy ? <ActivityIndicator color={colors.accentText} /> : <Text style={[styles.buttonText, { color: colors.accentText }]}>Sign in</Text>}
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
