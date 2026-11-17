@@ -67,6 +67,7 @@ export function ProjectPicker({
           <ActionSheetOption
             key={project.id}
             label={project.name}
+            icon={<ProjectIcon project={project} size={20} />}
             onPress={() => {
               setOpen(false);
               onSelect(project.id);

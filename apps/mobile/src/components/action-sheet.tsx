@@ -7,7 +7,7 @@ import {
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, type LucideIcon } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 
 /**
@@ -62,14 +62,15 @@ export function ActionSheet({
 /** One option of a sheet. `selected` shows a picker's current choice in the accent color; `checked` makes it a switch. */
 export function ActionSheetOption({
   label,
-  icon: Icon,
+  icon,
   onPress,
   destructive = false,
   selected = false,
   checked,
 }: {
   label: string;
-  icon?: LucideIcon;
+  /** The leading icon, already sized and colored by the caller. */
+  icon?: ReactNode;
   onPress: () => void;
   destructive?: boolean;
   selected?: boolean;
@@ -88,7 +89,7 @@ export function ActionSheetOption({
         Platform.OS === "ios" && pressed && { backgroundColor: colors.surfaceStrong },
       ]}
     >
-      {Icon ? <Icon size={20} color={tint} /> : null}
+      {icon}
       <Text style={[styles.optionText, { color: tint }]}>{label}</Text>
       {checked !== undefined ? (
         <Check style={styles.check} size={18} color={checked ? colors.accent : "transparent"} />

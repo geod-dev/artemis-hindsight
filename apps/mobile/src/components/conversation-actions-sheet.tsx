@@ -91,24 +91,32 @@ export function ConversationActionsSheet({
           ) : null}
           <ActionSheetOption
             label="New project"
-            icon={Plus}
+            icon={<Plus size={20} color={colors.text} />}
             onPress={() => {
               // The form creates the project and moves this conversation into it.
               onClose();
               router.navigate(`/projects/form?moveConversation=${shown.id}` as Href);
             }}
           />
-          <ActionSheetOption label="Back" icon={ChevronLeft} onPress={() => setView("menu")} />
+          <ActionSheetOption label="Back" icon={<ChevronLeft size={20} color={colors.text} />} onPress={() => setView("menu")} />
         </>
       ) : shown ? (
         <>
-          <ActionSheetOption label="Move to project" icon={FolderInput} onPress={() => setView("projects")} />
+          <ActionSheetOption
+            label="Move to project"
+            icon={<FolderInput size={20} color={colors.text} />}
+            onPress={() => setView("projects")}
+          />
           {shown.project ? (
-            <ActionSheetOption label="Remove from project" icon={FolderMinus} onPress={() => move(shown, null)} />
+            <ActionSheetOption
+              label="Remove from project"
+              icon={<FolderMinus size={20} color={colors.text} />}
+              onPress={() => move(shown, null)}
+            />
           ) : null}
           <ActionSheetOption
             label={archived ? "Restore" : "Archive"}
-            icon={archived ? ArchiveRestore : Archive}
+            icon={archived ? <ArchiveRestore size={20} color={colors.text} /> : <Archive size={20} color={colors.text} />}
             onPress={() => {
               onClose();
               setArchived.mutate({ id: shown.id, archived: !archived }, { onError: failed(archived ? "Restore failed" : "Archive failed") });
@@ -116,7 +124,7 @@ export function ConversationActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
-            icon={Trash2}
+            icon={<Trash2 size={20} color={colors.danger} />}
             destructive
             onPress={() => {
               onClose();
