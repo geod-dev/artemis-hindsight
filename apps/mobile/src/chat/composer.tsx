@@ -1,7 +1,7 @@
 import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react-native";
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
-import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
+import { useKeyboardState } from "react-native-keyboard-controller";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
@@ -109,7 +109,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
   };
 
   return (
-    <KeyboardStickyView>
+    <View>
       <View style={styles.wrapper}>
         {keyboardOpen || voice !== "idle" || !isNewChat ? null : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actions}>
@@ -200,7 +200,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
 
         {voiceError ? <Text style={[styles.error, { color: colors.danger }]}>{voiceError}</Text> : null}
       </View>
-    </KeyboardStickyView>
+    </View>
   );
 }
 

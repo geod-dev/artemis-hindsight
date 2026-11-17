@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState, type ComponentRef } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { BrandMark } from "@/components/brand-mark";
@@ -16,6 +16,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  // When a field takes focus, the form scrolls to its end, so the sign-in button stays above the keyboard.
+  const scrollToEnd = () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250);
 
   if (state.status === "signedIn") return <Redirect href="/" />;
 
@@ -42,7 +45,7 @@ export default function LoginScreen() {
     // The keyboard controller's view, not React Native's: on Android the app is edge-to-edge, and there the native
     // KeyboardAvoidingView does not move the content when the keyboard opens.
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior="padding">
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", marginBottom: 8 }}>
           <BrandMark size={96} />
         </View>
@@ -58,6 +61,7 @@ export default function LoginScreen() {
           autoCorrect={false}
           textContentType="username"
           autoComplete="username"
+          onFocus={scrollToEnd}
           importantForAutofill="yes"
           style={field}
         />
@@ -68,6 +72,7 @@ export default function LoginScreen() {
           secureTextEntry
           textContentType="password"
           autoComplete="password"
+          onFocus={scrollToEnd}
           importantForAutofill="yes"
           onSubmitEditing={() => void submit()}
           style={field}

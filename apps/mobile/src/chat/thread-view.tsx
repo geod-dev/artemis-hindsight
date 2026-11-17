@@ -1,5 +1,6 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
 import { StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
 import { Composer } from "./composer";
@@ -8,7 +9,10 @@ import { MessageView } from "./message-view";
 /** The messages of the conversation (virtualized) above the composer. */
 export function ThreadView({ conversationId }: { conversationId: string }) {
   const { colors } = usePreferences();
+  // The whole chat is padded by the keyboard's height: the messages shrink and the composer rises with them. The window
+  // itself does not resize on Android (edge-to-edge), so the view has to.
   return (
+    <KeyboardAvoidingView style={styles.root} behavior="padding">
     <ThreadPrimitive.Root style={[styles.root, { backgroundColor: colors.background }]}>
       <ThreadPrimitive.Empty>
         <View style={styles.empty}>
@@ -30,6 +34,7 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
       </ThreadPrimitive.MessagesFlatList>
       <Composer conversationId={conversationId} />
     </ThreadPrimitive.Root>
+    </KeyboardAvoidingView>
   );
 }
 
