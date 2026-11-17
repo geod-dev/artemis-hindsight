@@ -1,7 +1,7 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
 import { useRef, useState, type ComponentRef } from "react";
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import { ChevronDown } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
@@ -13,16 +13,32 @@ import { MessageView } from "./message-view";
 const AT_BOTTOM_PX = 60;
 
 /**
- * The messages of the conversation (virtualized) above the composer. When the keyboard opens, the whole chat (messages and
- * composer) moves up by the keyboard's height, frame by frame with the keyboard's own animation. The composer rises with the
- * keyboard and the conversation scrolls by the same amount; nothing else changes. The window does not resize on Android
- * (edge-to-edge), so the chat moves itself; the parent clips what goes above the header.
+ * The messages of the conversation (virtualized) above the composer, and the composer. When the keyboard opens, the chat
+ * behaves like a classic chat: while the messages are shorter than the space above the composer, that space shrinks; once
+ * the messages fill it, the whole chat moves up by the rest, so the conversation scrolls with the composer. The keyboard's
+ * own animation drives both, frame by frame. The window does not resize on Android (edge-to-edge), so the chat moves itself.
  */
 export function ThreadView({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
-  // Negative while the keyboard is open (the keyboard controller's convention, as in its examples).
+
+  // The sizes that decide how much room the messages have: the chat's height, the composer's, and the messages' content.
+  const sizes = useRef({ chat: 0, composer: 0, content: 0 });
+  // Free space above the composer that the messages do not use (shared, so the animation can read it).
+  const freeSpace = useSharedValue(0);
+  const updateFreeSpace = () => {
+    const { chat, composer, content } = sizes.current;
+    freeSpace.value = Math.max(0, chat - composer - content);
+  };
+
+  // The keyboard's height, growing while it opens (its own animation is negative while open).
   const { height } = useReanimatedKeyboardAnimation();
-  const lift = useAnimatedStyle(() => ({ transform: [{ translateY: height.value }] }));
+  const keyboardHeight = useDerivedValue(() => Math.max(0, -height.value));
+  // Part of the keyboard's height that the free space absorbs (the chat shrinks), and the rest, which moves the chat up.
+  const shrink = useDerivedValue(() => Math.min(keyboardHeight.value, freeSpace.value));
+  const chatStyle = useAnimatedStyle(() => ({
+    paddingBottom: shrink.value,
+    transform: [{ translateY: -(keyboardHeight.value - shrink.value) }],
+  }));
 
   // A button above the composer returns to the newest message when the conversation is not scrolled to the bottom.
   const list = useRef<ComponentRef<typeof ThreadPrimitive.MessagesFlatList>>(null);
@@ -33,8 +49,14 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
   };
 
   return (
-    <View style={styles.clip}>
-      <Animated.View style={[styles.root, { backgroundColor: colors.background }, lift]}>
+    <View
+      style={styles.clip}
+      onLayout={(event) => {
+        sizes.current.chat = event.nativeEvent.layout.height;
+        updateFreeSpace();
+      }}
+    >
+      <Animated.View style={[styles.root, { backgroundColor: colors.background }, chatStyle]}>
         <ThreadPrimitive.Root style={styles.root}>
           <ThreadPrimitive.Empty>
             <View style={styles.empty}>
@@ -54,6 +76,10 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
               scrollToBottomOnThreadSwitch
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
+              onContentSizeChange={(_width, height) => {
+                sizes.current.content = height;
+                updateFreeSpace();
+              }}
             >
               {() => <MessageView />}
             </ThreadPrimitive.MessagesFlatList>
@@ -70,7 +96,14 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
               </View>
             )}
           </View>
-          <Composer conversationId={conversationId} />
+          <View
+            onLayout={(event) => {
+              sizes.current.composer = event.nativeEvent.layout.height;
+              updateFreeSpace();
+            }}
+          >
+            <Composer conversationId={conversationId} />
+          </View>
         </ThreadPrimitive.Root>
       </Animated.View>
     </View>
