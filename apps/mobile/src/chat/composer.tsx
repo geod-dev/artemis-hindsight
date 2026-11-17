@@ -4,7 +4,8 @@ import * as DocumentPicker from "expo-document-picker";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
 import { forwardRef, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, Vibration, View, type StyleProp, type ViewStyle } from "react-native";
+import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import * as Haptics from "expo-haptics";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
@@ -241,7 +242,8 @@ export function Composer({ conversationId }: { conversationId: string }) {
     if (target !== current.hover) {
       current.hover = target;
       setHover(target);
-      if (target) Vibration.vibrate(25);
+      // Haptics work with the phone on silent: they are the system's touch feedback, not the ringer's vibration.
+      if (target) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
 
@@ -259,6 +261,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
     // A click: dictation keeps running until stop, cancel or send is pressed.
     if (!current.held) return;
     const target = hitTest(x, y);
+    if (target) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (voice === "recording") perform(target);
     else pendingEnd.current = { target };
   };
