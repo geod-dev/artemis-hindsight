@@ -47,12 +47,17 @@ interface PreferencesValue {
   isDark: boolean;
   setAppearance: (appearance: Appearance) => void;
   setReasoningEffort: (effort: ReasoningEffort) => void;
+  setShowProjectConversations: (show: boolean) => void;
 }
 
 const PreferencesContext = createContext<PreferencesValue | null>(null);
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const [preferences, setPreferences] = useState<Preferences>({ appearance: "system", reasoningEffort: "medium" });
+  const [preferences, setPreferences] = useState<Preferences>({
+    appearance: "system",
+    reasoningEffort: "medium",
+    showProjectConversations: true,
+  });
   const systemScheme = useColorScheme();
 
   useEffect(() => {
@@ -77,6 +82,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       isDark,
       setAppearance: (appearance) => update({ appearance }),
       setReasoningEffort: (reasoningEffort) => update({ reasoningEffort }),
+      setShowProjectConversations: (showProjectConversations) => update({ showProjectConversations }),
     }),
     [preferences, isDark, update],
   );

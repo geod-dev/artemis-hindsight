@@ -1,5 +1,5 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
-import { useRef, useState, type ComponentRef } from "react";
+import { useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
@@ -8,6 +8,7 @@ import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
 import { Composer, composerSurface } from "./composer";
 import { MessageView } from "./message-view";
+import { ProjectRecents } from "./project-recents";
 
 /** Within this many pixels of the end, the conversation counts as scrolled to the bottom. */
 const AT_BOTTOM_PX = 60;
@@ -18,7 +19,20 @@ const AT_BOTTOM_PX = 60;
  * the messages fill it, the whole chat moves up by the rest, so the conversation scrolls with the composer. The keyboard's
  * own animation drives both, frame by frame. The window does not resize on Android (edge-to-edge), so the chat moves itself.
  */
-export function ThreadView({ conversationId }: { conversationId: string }) {
+export function ThreadView({
+  conversationId,
+  projectId = null,
+  mascotTint,
+  projectPicker,
+}: {
+  conversationId: string;
+  /** The new chat's project: its recent conversations show under the composer while the chat is empty. */
+  projectId?: string | null;
+  /** The mascot's color in the empty chat, when a project is selected. */
+  mascotTint?: string;
+  /** The project picker, shown under the mascot in the empty chat. */
+  projectPicker?: ReactNode;
+}) {
   const { colors, isDark } = usePreferences();
 
   // The sizes that decide how much room the messages have: the chat's height, the composer's, and the messages' content.
@@ -60,9 +74,10 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
         <ThreadPrimitive.Root style={styles.root}>
           <ThreadPrimitive.Empty>
             <View style={styles.empty}>
-              <BrandMark size={72} />
+              <BrandMark size={72} tint={mascotTint} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>What do you want to know?</Text>
               <Text style={[styles.emptyBody, { color: colors.muted }]}>Ask a question, add a file, or dictate your message.</Text>
+              {projectPicker}
             </View>
           </ThreadPrimitive.Empty>
           <View style={styles.list}>
@@ -103,6 +118,11 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
             }}
           >
             <Composer conversationId={conversationId} />
+            {projectId ? (
+              <ThreadPrimitive.Empty>
+                <ProjectRecents projectId={projectId} />
+              </ThreadPrimitive.Empty>
+            ) : null}
           </View>
         </ThreadPrimitive.Root>
       </Animated.View>

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import { ColorSwatches } from "@/components/color-swatches";
 import { apiFetch, ApiError } from "@/lib/api";
-import { AVATAR_COLOR_IDS, AVATAR_COLORS, isAvatarColorId, type AvatarColorId } from "@/lib/avatar";
+import { isAvatarColorId, type AvatarColorId } from "@/lib/avatar";
 import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
 
@@ -53,25 +54,7 @@ export function ProfileForm({ initialDisplayName, initialColor, submitLabel, onS
         style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
       />
       <Text style={[styles.label, { color: colors.muted }]}>Color</Text>
-      <View style={styles.swatches}>
-        {AVATAR_COLOR_IDS.map((id) => {
-          const selected = color === id;
-          return (
-            <Pressable
-              key={id}
-              accessibilityRole="button"
-              accessibilityLabel={id}
-              accessibilityState={{ selected }}
-              onPress={() => setColor(id)}
-              style={[
-                styles.swatch,
-                { backgroundColor: AVATAR_COLORS[id] },
-                selected && { borderWidth: 3, borderColor: colors.text },
-              ]}
-            />
-          );
-        })}
-      </View>
+      <ColorSwatches value={color} onChange={setColor} />
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <Pressable
         onPress={() => void save()}
@@ -92,8 +75,6 @@ const styles = StyleSheet.create({
   form: { gap: 10, padding: 16 },
   label: { fontSize: 13, fontWeight: "500", marginTop: 8 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  swatches: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  swatch: { width: 40, height: 40, borderRadius: 20 },
   error: { fontSize: 14, marginTop: 4 },
   button: { marginTop: 16, borderRadius: 999, paddingVertical: 14, alignItems: "center" },
   buttonText: { fontSize: 16, fontWeight: "600" },

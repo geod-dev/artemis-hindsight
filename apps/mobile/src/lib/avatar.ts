@@ -26,6 +26,16 @@ export function isAvatarColorId(value: unknown): value is AvatarColorId {
   return typeof value === "string" && value in AVATAR_COLORS;
 }
 
+/** The first palette color no project uses yet, so a new project starts with a color of its own when it can. */
+export function firstUnusedColor(usedColors: readonly string[]): AvatarColorId {
+  return AVATAR_COLOR_IDS.find((color) => !usedColors.includes(color)) ?? AVATAR_COLOR_IDS[0] ?? "blue";
+}
+
+/** The hex value of a project's color (a palette id). An unknown id falls back to blue (the web falls back to its primary color). */
+export function paletteHex(id: string | null | undefined): string {
+  return AVATAR_COLORS[isAvatarColorId(id) ? id : "blue"];
+}
+
 /** The color a user gets until they choose one: stable for a username. */
 export function fallbackAvatarColor(username: string): AvatarColorId {
   let hash = 0;

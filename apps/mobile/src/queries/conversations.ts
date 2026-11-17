@@ -2,16 +2,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { apiFetch } from "@/lib/api";
 
+// Mirrors services/web/src/server/conversations/conversation-json.ts (ConversationJson).
 export interface ConversationSummary {
   id: string;
   title: string;
   updatedAt: string;
   /** A reply finished here while nobody was watching: the drawer shows a dot until it is opened. */
   unread: boolean;
+  /** The project the conversation belongs to, or null outside any project. Its color is the bar before the title. */
+  project: { id: string; name: string; color: string } | null;
 }
 
 export interface ConversationPayload {
-  conversation: { id: string; title: string };
+  /** The project the conversation belongs to, shown as a badge after its title. Null outside any project. */
+  conversation: { id: string; title: string; project: { id: string; name: string; color: string } | null };
   messages: UIMessage[];
   /** The turn running in this conversation right now, if any. */
   activeStreamId: string | null;
@@ -61,6 +65,20 @@ export function useSetConversationArchived() {
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
       apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { archived } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  });
+}
+
+/** Moves one conversation into a project, or takes it out of its project (`projectId` null). */
+export function useSetConversationProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, projectId }: { id: string; projectId: string | null }) =>
+      apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { projectId } }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: conversationsKey }),
+      // The projects' own lists (their recents and counts) change too. Same key as queries/projects.ts's projectsKey.
+      queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    ]),
   });
 }
 

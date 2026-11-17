@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Check } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 
 /**
@@ -21,12 +22,36 @@ export function ActionSheet({ visible, onClose, children }: { visible: boolean; 
   );
 }
 
-/** A tappable option of an action sheet: the same row as the message menu's options. */
-export function ActionSheetOption({ label, onPress, destructive = false }: { label: string; onPress: () => void; destructive?: boolean }) {
+/**
+ * A tappable option of an action sheet: the same row as the message menu's options. `selected` marks the current choice
+ * of a picker (the new chat's project), with an accent label.
+ */
+export function ActionSheetOption({
+  label,
+  onPress,
+  destructive = false,
+  selected = false,
+  checked,
+}: {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  selected?: boolean;
+  /** A switch-like option: undefined for a plain action, true or false for an option that is on or off. */
+  checked?: boolean;
+}) {
   const { colors } = usePreferences();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={[styles.option, { borderColor: colors.border }]}>
-      <Text style={[styles.optionText, { color: destructive ? colors.danger : colors.text }]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={checked === undefined ? "button" : "checkbox"}
+      accessibilityState={checked === undefined ? { selected } : { checked }}
+      style={[styles.option, styles.optionRow, { borderColor: colors.border }]}
+    >
+      <Text style={[styles.optionText, { color: destructive ? colors.danger : selected ? colors.accent : colors.text }]}>
+        {label}
+      </Text>
+      {checked !== undefined ? <Check size={18} color={checked ? colors.accent : "transparent"} /> : null}
     </Pressable>
   );
 }
@@ -36,5 +61,6 @@ const styles = StyleSheet.create({
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 10, gap: 8 },
   grabber: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, marginBottom: 8 },
   option: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  optionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   optionText: { fontSize: 16 },
 });

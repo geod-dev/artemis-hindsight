@@ -52,6 +52,9 @@ export default function DrawerLayout() {
     >
       <Drawer.Screen name="new" options={{ title: "New conversation" }} />
       <Drawer.Screen name="c/[id]" options={{ title: "Conversation" }} />
+      {/* A project's full conversation list ("See more") and the create/edit form. Both go back to the project's new chat. */}
+      <Drawer.Screen name="projects/[id]" options={{ title: "Project" }} />
+      <Drawer.Screen name="projects/form" options={{ title: "Project", headerLeft: () => <BackButton to="/new" /> }} />
       {/* Settings use the same drawer header as the conversations; a back arrow replaces the menu button. */}
       <Drawer.Screen name="settings/index" options={{ title: "Settings", headerLeft: () => <BackButton /> }} />
       <Drawer.Screen name="settings/profile" options={{ title: "Profile", headerLeft: () => <BackButton to="/settings" /> }} />

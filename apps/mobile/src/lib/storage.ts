@@ -23,9 +23,11 @@ export type ReasoningEffort = "low" | "medium" | "high";
 export interface Preferences {
   appearance: Appearance;
   reasoningEffort: ReasoningEffort;
+  /** The drawer's Recents list shows the conversations of projects too (the web sidebar's sort menu). */
+  showProjectConversations: boolean;
 }
 
-const DEFAULT_PREFERENCES: Preferences = { appearance: "system", reasoningEffort: "medium" };
+const DEFAULT_PREFERENCES: Preferences = { appearance: "system", reasoningEffort: "medium", showProjectConversations: true };
 
 export async function loadPreferences(): Promise<Preferences> {
   const raw = await AsyncStorage.getItem(PREFERENCES_KEY);

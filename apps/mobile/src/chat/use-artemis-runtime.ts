@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useChatRuntime } from "@assistant-ui/ai-sdk";
 import type { UIMessage } from "ai";
 import { authorizedStreamFetch } from "@/lib/api";
 import { usePreferences } from "@/preferences";
 import { useAuth } from "@/auth";
 import { conversationsKey, messagesKey } from "@/queries/conversations";
+import { projectConversationsKey } from "@/queries/projects";
 import { useQueryClient } from "@tanstack/react-query";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "./title-part";
 import { createAttachmentAdapter } from "./attachment-adapter";
@@ -20,6 +21,8 @@ export interface ArtemisRuntimeOptions {
   activeStreamId?: string | null;
   /** The conversation's name, as soon as the naming model answers on the turn's stream. */
   onTitle?: (title: string) => void;
+  /** The project selected in a new chat, or null. Sent with the first message, which creates the conversation. */
+  projectId?: string | null;
 }
 
 /**
@@ -28,13 +31,26 @@ export interface ArtemisRuntimeOptions {
  * Switching conversations drops this runtime only: the turn keeps running on the server and is joined again
  * when its conversation is opened.
  */
-export function useArtemisRuntime({ conversationId, initialMessages, isNewConversation, activeStreamId = null, onTitle }: ArtemisRuntimeOptions) {
+export function useArtemisRuntime({
+  conversationId,
+  initialMessages,
+  isNewConversation,
+  activeStreamId = null,
+  onTitle,
+  projectId = null,
+}: ArtemisRuntimeOptions) {
   const queryClient = useQueryClient();
   const { preferences } = usePreferences();
   // Chat screens only mount once the user is signed in, so the server address is known here.
   const { state } = useAuth();
   const base = state.status === "signedIn" ? state.serverUrl : "";
   const effort = preferences.reasoningEffort;
+
+  // The transport is built once per conversation, so the selected project reaches it through a ref (as on the web).
+  const projectRef = useRef(projectId);
+  useEffect(() => {
+    projectRef.current = projectId;
+  }, [projectId]);
 
   // Built once per conversation: a later refresh must not reset the storage of a turn in progress.
   const resumable = useMemo(() => createConversationResumableStorage(activeStreamId), [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,7 +62,15 @@ export function useArtemisRuntime({ conversationId, initialMessages, isNewConver
         api: `${base}/api/chat`,
         fetch: authorizedStreamFetch,
         prepareSendMessagesRequest: ({ messages, trigger, messageId }) => ({
-          body: { id: conversationId, messages, trigger, messageId, config: { reasoningEffort: effort } },
+          // projectId only matters to the message that creates the conversation; the server ignores it otherwise.
+          body: {
+            id: conversationId,
+            messages,
+            trigger,
+            messageId,
+            config: { reasoningEffort: effort },
+            projectId: projectRef.current,
+          },
         }),
         resumable: {
           storage: resumable,
@@ -81,6 +105,8 @@ export function useArtemisRuntime({ conversationId, initialMessages, isNewConver
       // The turn is over: nothing to reconnect to. A later open reads the server's state instead.
       resumable.clear();
       void queryClient.invalidateQueries({ queryKey: conversationsKey });
+      // A reply can create a conversation in a project, or move one to the top of its project's recents.
+      void queryClient.invalidateQueries({ queryKey: projectConversationsKey });
       if (isNewConversation) void queryClient.invalidateQueries({ queryKey: messagesKey(conversationId) });
     },
   });

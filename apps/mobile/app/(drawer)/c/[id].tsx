@@ -2,6 +2,7 @@ import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { ChatScreen } from "@/chat/chat-screen";
+import { ConversationTitleBar } from "@/components/conversation-title-bar";
 import { useConversationMessages } from "@/queries/conversations";
 import { usePreferences } from "@/preferences";
 
@@ -12,8 +13,14 @@ export default function ConversationScreen() {
   const { colors } = usePreferences();
   const { data, isPending, isError } = useConversationMessages(id, Boolean(id));
 
+  // The top bar shows the title with the project's badge after it, when the conversation has a project.
   useLayoutEffect(() => {
-    if (data) navigation.setOptions({ title: data.conversation.title });
+    if (!data) return;
+    const { title, project } = data.conversation;
+    navigation.setOptions({
+      title,
+      headerTitle: () => <ConversationTitleBar title={title} project={project} />,
+    });
   }, [data, navigation]);
 
   if (isPending) {

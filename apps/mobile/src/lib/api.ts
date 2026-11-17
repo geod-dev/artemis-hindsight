@@ -77,6 +77,34 @@ export async function apiFetch<T>(path: string, init: RequestInit & { json?: unk
   return payload as T;
 }
 
+/**
+ * A multipart form with text fields and an optional picked file (a project's icon). Text fields are sent as they are;
+ * a field left `undefined` is not sent, so the server keeps its value.
+ */
+export async function apiForm<T>(
+  method: "POST" | "PATCH",
+  path: string,
+  fields: Record<string, string | undefined>,
+  file?: { field: string; file: { uri: string; name: string; type: string } },
+): Promise<T> {
+  const form = new FormData();
+  for (const [name, value] of Object.entries(fields)) {
+    if (value !== undefined) form.append(name, value);
+  }
+  if (file) {
+    // Same as apiUpload: the picked file's bytes are read here, as Expo's fetch needs them.
+    const bytes = await new ExpoFile(file.file.uri).bytes();
+    form.append(file.field, { name: file.file.name, type: file.file.type, bytes: async () => bytes } as unknown as Blob);
+  }
+  const res = await fetch(absoluteUrl(path), { method, body: form, headers: requestHeaders() });
+  const payload = (await res.json().catch(() => null)) as ({ error?: string } & T) | null;
+  if (!res.ok) {
+    if (res.status === 401) session.onUnauthorized?.();
+    throw new ApiError(payload?.error ?? `HTTP ${res.status}`, res.status);
+  }
+  return payload as T;
+}
+
 /** A multipart upload (attachments, dictation). The field name and file come from the caller. */
 export async function apiUpload<T>(path: string, field: string, file: { uri: string; name: string; type: string }): Promise<T> {
   // The fetch of Expo reads each FormData entry as a string, a Blob, or an object with bytes(). A picked file is none of
