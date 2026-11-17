@@ -4,7 +4,10 @@ import { ConversationTitlesProvider } from "@/components/conversation-titles";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ProfileSetupScreen } from "@/components/profile/profile-setup-screen";
 import { getCurrentUser } from "@/server/auth/session";
+import { conversationJson } from "@/server/conversations/conversation-json";
 import { listConversations } from "@/server/repositories/conversation-repository";
+import { listProjects } from "@/server/repositories/project-repository";
+import { projectJson } from "@/server/projects/project-service";
 import { isProfileComplete } from "@/lib/profile";
 
 // Reads the database and the session on every request; never prerendered at build time.
@@ -25,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const conversations = await listConversations(user.id);
+  const [conversations, projects] = await Promise.all([listConversations(user.id), listProjects(user.id)]);
 
   return (
     <ConversationTitlesProvider>
@@ -34,12 +37,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           username={user.username}
           displayName={user.displayName}
           avatarColor={user.avatarColor}
-          conversations={conversations.map((c) => ({
-            id: c.id,
-            title: c.title,
-            updatedAt: c.updatedAt.toISOString(),
-            unread: c.unread,
-          }))}
+          projects={projects.map(projectJson)}
+          conversations={conversations.map(conversationJson)}
         />
         <SidebarInset className="h-svh min-h-0 overflow-hidden">{children}</SidebarInset>
       </SidebarProvider>

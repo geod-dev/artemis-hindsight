@@ -30,6 +30,19 @@ export function fallbackAvatarColor(username: string): AvatarColorId {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length] ?? "blue";
 }
 
+/**
+ * The CSS color of a palette color id (a project's color, for instance), from the --avatar-* tokens in globals.css.
+ * An unknown id falls back to the primary color.
+ */
+export function paletteColorCss(id: string | null | undefined): string {
+  return isAvatarColorId(id) ? `var(--avatar-${id})` : "var(--primary)";
+}
+
+/** The first palette color no project uses yet, so a new project starts with a color of its own when it can. */
+export function firstUnusedColor(usedColors: readonly string[]): AvatarColorId {
+  return AVATAR_COLORS.find((color) => !usedColors.includes(color)) ?? AVATAR_COLORS[0] ?? "blue";
+}
+
 /** The CSS color of an avatar, from the --avatar-* tokens in globals.css. */
 export function avatarColorCss(id: string | null | undefined, username: string): string {
   const chosen = isAvatarColorId(id) ? id : fallbackAvatarColor(username);

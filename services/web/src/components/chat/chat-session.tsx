@@ -4,13 +4,17 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { AssistantChatTransport, createResumableSessionStorage, useChatRuntime } from "@assistant-ui/ai-sdk";
 import type { UIMessage } from "ai";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useConversationTitles } from "@/components/conversation-titles";
+import { ProjectPicker } from "@/components/projects/project-picker";
+import { ProjectRecents } from "@/components/projects/project-recents";
+import { paletteColorCss } from "@/lib/avatar-colors";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "@/lib/conversation-title-part";
+import type { ProjectRef, ProjectSummary } from "@/lib/projects";
 import { ChatPageFrame } from "./chat-page-frame";
 import { createAttachmentAdapter } from "./attachment-adapter";
 import { ConversationHeading } from "./conversation-heading";
-import { ConversationIdContext } from "./conversation-context";
+import { ConversationIdContext, ProjectColorContext } from "./conversation-context";
 import { MessageTimesContext } from "./day-header";
 import { dictationAdapter } from "./server-dictation-adapter";
 import { Thread } from "./thread";
@@ -25,6 +29,13 @@ export interface ChatSessionProps {
   initialTitle?: string;
   /** The turn running in this conversation when the page opened, if any: this page joins it instead of waiting. */
   activeStreamId?: string | null;
+  /** The new chat's projects, for its project picker. Only used on the new-chat page. */
+  projects?: ProjectSummary[];
+  /** The project selected in the picker, or null for none. Sent with the first message, which creates the conversation. */
+  projectId?: string | null;
+  onProjectChange?: (projectId: string | null) => void;
+  /** The conversation's project, shown as a badge after its name in the top bar. Null outside any project. */
+  project?: ProjectRef | null;
 }
 
 /**
@@ -57,9 +68,19 @@ export function ChatSession({
   isNewConversation,
   initialTitle = "",
   activeStreamId = null,
+  projects = [],
+  projectId = null,
+  onProjectChange = () => undefined,
+  project = null,
 }: ChatSessionProps) {
   const router = useRouter();
   const { setTitle } = useConversationTitles();
+
+  // The transport is built once per conversation, so the selected project reaches it through a ref.
+  const projectRef = useRef(projectId);
+  useEffect(() => {
+    projectRef.current = projectId;
+  }, [projectId]);
 
   // The body id must be our conversation UUID. assistant-ui may otherwise send its own thread id.
   // The turn runs on the server: the browser keeps the stream id of the running turn and reconnects to it through
@@ -71,7 +92,15 @@ export function ChatSession({
         api: "/api/chat",
         prepareSendMessagesRequest: ({ messages, trigger, messageId, body }) => ({
           // config holds the model context's settings, such as the reasoning effort chosen in the composer.
-          body: { id: conversationId, messages, trigger, messageId, config: body?.config },
+          // projectId only matters to the message that creates the conversation; the server ignores it otherwise.
+          body: {
+            id: conversationId,
+            messages,
+            trigger,
+            messageId,
+            config: body?.config,
+            projectId: projectRef.current,
+          },
         }),
         resumable: {
           storage,
@@ -108,16 +137,43 @@ export function ChatSession({
 
   const times = useMemo(() => messageTimesOf(initialMessages), [initialMessages]);
 
+  // Only the new chat has a project. Its picker sits under the mascot; with a project selected, the mascot takes the
+  // project's color and its recent conversations show under the composer.
+  const selectedProject = isNewConversation ? (projects.find((project) => project.id === projectId) ?? null) : null;
+  // The mascot takes the chat's project color, in the empty state and beside each reply.
+  const chatProject = isNewConversation ? selectedProject : project;
+  const mascotColor = chatProject ? paletteColorCss(chatProject.color) : undefined;
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ConversationIdContext.Provider value={conversationId}>
-        <MessageTimesContext.Provider value={times}>
-          <ChatPageFrame title={<ConversationHeading conversationId={conversationId} initialTitle={initialTitle} />}>
-            <div className="h-full min-h-0">
-              <Thread />
-            </div>
-          </ChatPageFrame>
-        </MessageTimesContext.Provider>
+        <ProjectColorContext.Provider value={mascotColor}>
+          <MessageTimesContext.Provider value={times}>
+            <ChatPageFrame
+              title={
+                <ConversationHeading
+                  conversationId={conversationId}
+                  initialTitle={initialTitle}
+                  project={isNewConversation ? selectedProject : project}
+                />
+              }
+            >
+              <div className="h-full min-h-0">
+                <Thread
+                  mascotColor={mascotColor}
+                  underMascot={
+                    isNewConversation ? (
+                      <ProjectPicker projects={projects} value={projectId} onChange={onProjectChange} />
+                    ) : undefined
+                  }
+                  belowComposer={
+                    selectedProject ? <ProjectRecents key={selectedProject.id} projectId={selectedProject.id} /> : undefined
+                  }
+                />
+              </div>
+            </ChatPageFrame>
+          </MessageTimesContext.Provider>
+        </ProjectColorContext.Provider>
       </ConversationIdContext.Provider>
     </AssistantRuntimeProvider>
   );

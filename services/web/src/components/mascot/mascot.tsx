@@ -20,6 +20,8 @@ export interface MascotProps {
   size: number;
   /** Accessible name. Empty (the default) marks the mascot decorative. */
   label?: string;
+  /** The body color, as any CSS color. Defaults to the theme's primary color; a project's color when it is in a project. */
+  color?: string;
   className?: string;
 }
 
@@ -28,10 +30,11 @@ export interface MascotProps {
  * mounts it into a square element that stays idle. The thinking motion is applied to that square by useThinkingMotion,
  * so the library never changes mood. The square stays empty until the shape has loaded.
  */
-export function Mascot({ thinking = false, size, label = "", className }: MascotProps) {
+export function Mascot({ thinking = false, size, label = "", color = BODY_COLOR, className }: MascotProps) {
   const host = useRef<HTMLDivElement>(null);
   const mascot = useRef<MountedAvatar | null>(null);
   const latestLabel = useRef(label);
+  const latestColor = useRef(color);
 
   useThinkingMotion(host, thinking);
 
@@ -42,7 +45,7 @@ export function Mascot({ thinking = false, size, label = "", className }: Mascot
         if (cancelled || !host.current) return;
         mascot.current = mountAvatar(host.current, {
           definition,
-          color: BODY_COLOR,
+          color: latestColor.current,
           eyeColor: EYE_COLOR,
           followPointer: true,
           label: latestLabel.current,
@@ -62,6 +65,12 @@ export function Mascot({ thinking = false, size, label = "", className }: Mascot
     latestLabel.current = label;
     mascot.current?.update({ label });
   }, [label]);
+
+  // A project switch recolors the mascot in place, without remounting the shape.
+  useEffect(() => {
+    latestColor.current = color;
+    mascot.current?.update({ color });
+  }, [color]);
 
   return (
     <div

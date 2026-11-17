@@ -2,12 +2,13 @@
 
 import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
-import { useMemo, useState, type FC } from "react";
+import { useContext, useMemo, useState, type FC } from "react";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { StoppedRun } from "@/components/assistant-ui/elements/stopped-run";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
+import { ProjectColorContext } from "./conversation-context";
 import { CodeBlock } from "./code-block";
 import { MarkdownDataTable } from "./markdown-data-table";
 import { SourceGroups, withSourceBadges } from "./source-link";
@@ -49,6 +50,7 @@ export const AssistantMessage: FC = () => {
   const messageId = useAuiState((s) => s.message.id);
   const isRunning = useAuiState((s) => s.message.status?.type === "running");
   const isLast = useAuiState((s) => s.message.isLast);
+  const projectColor = useContext(ProjectColorContext);
   const isCancelled = useAuiState(
     (s) => s.message.status?.type === "incomplete" && s.message.status.reason === "cancelled",
   );
@@ -76,7 +78,7 @@ export const AssistantMessage: FC = () => {
       <div className="flex w-7 shrink-0 justify-center pt-1">
         {isLast && (
           <div className="animate-in fade-in duration-300">
-            <Mascot thinking={isRunning} size={28} />
+            <Mascot thinking={isRunning} size={28} color={projectColor} />
           </div>
         )}
       </div>

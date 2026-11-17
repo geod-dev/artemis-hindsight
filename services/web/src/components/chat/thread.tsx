@@ -2,7 +2,7 @@
 
 import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowDownIcon } from "lucide-react";
-import { useContext, type CSSProperties, type FC } from "react";
+import { useContext, type CSSProperties, type FC, type ReactNode } from "react";
 import { SelectionToolbar } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { Mascot } from "@/components/mascot/mascot";
@@ -14,11 +14,20 @@ import { UserEditMessage } from "./user-edit-message";
 import { UserMessage } from "./user-message";
 import { WindowFileDrop } from "./window-file-drop";
 
+export interface ThreadProps {
+  /** The mascot's body color, when the new chat has a project selected. Defaults to the theme's color. */
+  mascotColor?: string;
+  /** Shown centered under the mascot while the thread is empty: the new chat's project picker. */
+  underMascot?: ReactNode;
+  /** Shown under the composer while the thread is empty, e.g. the selected project's recent conversations. */
+  belowComposer?: ReactNode;
+}
+
 /**
  * The conversation view. Empty: the composer sits centered. With messages: the thread scrolls and the
  * composer is docked at the bottom.
  */
-export const Thread: FC = () => {
+export const Thread: FC<ThreadProps> = ({ mascotColor, underMascot, belowComposer }) => {
   const isEmpty = useAuiState((s) => s.thread.messages.length === 0);
 
   return (
@@ -40,8 +49,7 @@ export const Thread: FC = () => {
         <div
           className={cn(
             "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
-            // Empty: avatar and composer are centered above the middle, so the pair sits higher on the page.
-            isEmpty && "justify-center pb-[20vh]",
+            isEmpty && "pt-[10vh]",
           )}
         >
           <div className="mb-14 flex flex-col gap-y-3 empty:hidden">
@@ -56,11 +64,13 @@ export const Thread: FC = () => {
           >
             <ThreadScrollToBottom />
             {isEmpty && (
-              <div className="animate-in fade-in zoom-in-95 flex justify-center duration-300">
-                <Mascot size={96} label="Assistant" />
+              <div className="animate-in fade-in zoom-in-95 flex flex-col items-center gap-3 duration-300">
+                <Mascot size={96} label="Assistant" color={mascotColor} />
+                {underMascot}
               </div>
             )}
             <Composer autoFocus typeToFocus modelPicker />
+            {isEmpty && belowComposer}
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
