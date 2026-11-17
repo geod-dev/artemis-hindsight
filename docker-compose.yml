@@ -110,7 +110,7 @@ services:
       dockerfile: services/toolbox/Dockerfile
     environment:
       SANDBOX_URL: http://sandbox:8080
-      HINDSIGHT_URL: http://hindsight:8888  # the memory tools: retain, recall, reflect
+      HINDSIGHT_URL: http://hindsight:8888  # the memory tools: recall, reflect
       MEMORY_TOOL_RECALL_BUDGET: mid  # the agent's recall tool searches at medium effort (the automatic recall is low)
       EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
     depends_on:

@@ -25,9 +25,10 @@ import {
   touchConversation,
 } from "../repositories/conversation-repository";
 import { listMessages, saveMessage, setModelInput, type MessageRow } from "../repositories/message-repository";
-import { activateConversation, flushIfInactive } from "../memory/memory-flush";
+import { activateConversation, flushConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
 import { nameConversation } from "./conversation-title";
+import { flushMemoryTool } from "./flush-memory-tool";
 import { latestModelInput, loadUsableSkills, toModelHistory } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
 import { loadSystemPrompt } from "./system-prompt";
@@ -137,7 +138,15 @@ async function startChatTurn(
   const modelMessages = await convertToModelMessages(quotedHistory);
 
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
-  const tools = await buildToolboxTools(conversationId, user.username);
+  const toolboxTools = await buildToolboxTools(conversationId, user.username);
+  // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd).
+  let memoryFlushRequested = false;
+  const tools = {
+    ...toolboxTools,
+    flush_memory: flushMemoryTool(() => {
+      memoryFlushRequested = true;
+    }),
+  };
 
   const streamId = crypto.randomUUID();
   const turn = startTurn(conversationId, streamId, user.id);
@@ -198,8 +207,10 @@ async function startChatTurn(
       await setConversationUnread(conversationId, !delivered);
       endTurn(conversationId, streamId);
       release();
-      // Not awaited. If another conversation took over while this turn streamed, its messages reach memory now.
-      void flushIfInactive(user.id, user.username, conversationId);
+      // Not awaited. A reply that called flush_memory saves its conversation now, the reply being stored above. Otherwise,
+      // if another conversation took over while this turn streamed, its messages reach memory now.
+      if (memoryFlushRequested) void flushConversation(conversationId, user.username);
+      else void flushIfInactive(user.id, user.username, conversationId);
     },
     onError: (error) => {
       console.error("chat turn failed", { conversationId, error });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Client for the Hindsight memory server, used by the memory tools (retain, recall, reflect).
+// Client for the Hindsight memory server, used by the memory tools (recall, reflect).
 // Each user has one bank, named after their username. The web app has its own client for the automatic recall
 // and for the flush of conversations.
 
@@ -59,14 +59,6 @@ export class HindsightClient {
       max_tokens: this.config.recallMaxTokens,
     }, 30_000);
     return recallResponse.parse(res).results;
-  }
-
-  /** Stores the text as a new document of the bank. Extraction runs in the background, so recall may lag a little. */
-  async retain(bank: string, content: string, context?: string): Promise<void> {
-    await this.send("POST", bank, "/memories", {
-      items: [{ content, ...(context ? { context } : {}) }],
-      async: true,
-    }, 30_000);
   }
 
   /** Answers a question from the bank's memories, with the memories it relied on. */

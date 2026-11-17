@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-// The extraction instruction for conversation retains lives in prompts/conversation-retain.md so it can be edited
-// without touching code. Same caching as the system prompt: read on every call in development, once per process in
-// production.
-const PROMPT_FILE = path.join(process.cwd(), "prompts", "conversation-retain.md");
+// The extraction instruction for conversation retains lives in prompts/retain.md so it can be edited without touching
+// code. Same caching as the system prompt: read on every call in development, once per process in production.
+const PROMPT_FILE = path.join(process.cwd(), "prompts", "retain.md");
 
 let cached: string | undefined;
 

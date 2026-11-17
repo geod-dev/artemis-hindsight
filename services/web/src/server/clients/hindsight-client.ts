@@ -66,7 +66,7 @@ export async function createBank(bankId: string): Promise<void> {
   if (!res.ok) throw new Error(`hindsight could not create bank ${bankId}: HTTP ${res.status}`);
 }
 
-/** The bank's retain strategy for conversation transcripts. Retains made by the agent's tool don't use it. */
+/** The bank's retain strategy for conversation transcripts. */
 const CONVERSATION_STRATEGY = "conversation";
 
 /**
