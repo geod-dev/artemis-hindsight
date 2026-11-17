@@ -38,6 +38,8 @@ export function ChartVisual({ value }: { value: ChartValue }) {
     ...(variant === "bars" ? { frontColor: colors.accent } : {}),
   }));
   const chartWidth = Math.max(width - 28, 60);
+  // The library's default axis grey is too dark on the dark card; the muted tone is used there only (light is unchanged).
+  const axisLabels = isDark ? { xAxisLabelTextStyle: { color: colors.muted }, yAxisTextStyle: { color: colors.muted } } : {};
 
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
@@ -68,6 +70,7 @@ export function ChartVisual({ value }: { value: ChartValue }) {
                 hideAxesAndRules
                 hideYAxisText
                 disableScroll
+                {...axisLabels}
               />
             ) : (
               <LineChart
@@ -87,6 +90,7 @@ export function ChartVisual({ value }: { value: ChartValue }) {
                 initialSpacing={0}
                 endSpacing={0}
                 disableScroll
+                {...axisLabels}
               />
             )}
           </View>
