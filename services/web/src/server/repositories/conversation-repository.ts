@@ -1,8 +1,17 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { conversations } from "../db/schema";
+import { conversations, projects } from "../db/schema";
 
 export type ConversationRow = typeof conversations.$inferSelect;
+
+/** The project a conversation belongs to, as the lists show it. */
+export interface ConversationProject {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export type ConversationListItem = ConversationRow & { project: ConversationProject | null };
 
 export const DEFAULT_TITLE = "New conversation";
 
@@ -11,14 +20,42 @@ export class ConversationOwnershipError extends Error {}
 
 // Every function here takes the owner's id. A conversation is only ever read or changed by the user who owns it.
 
-/** The user's listed conversations, or their archived ones, most recent first. */
-export async function listConversations(userId: string, archived = false, limit = 200): Promise<ConversationRow[]> {
-  return getDb()
-    .select()
+/** The user's listed conversations, or their archived ones, most recent first, each with its project when it has one. */
+export async function listConversations(userId: string, archived = false, limit = 200): Promise<ConversationListItem[]> {
+  const rows = await getDb()
+    .select({
+      conversation: conversations,
+      projectId: projects.id,
+      projectName: projects.name,
+      projectColor: projects.color,
+    })
     .from(conversations)
+    .leftJoin(projects, eq(projects.id, conversations.projectId))
     .where(and(eq(conversations.userId, userId), archivedFilter(archived)))
     .orderBy(desc(conversations.updatedAt))
     .limit(limit);
+  return rows.map(({ conversation, projectId, projectName, projectColor }) => ({
+    ...conversation,
+    project: projectId && projectName && projectColor ? { id: projectId, name: projectName, color: projectColor } : null,
+  }));
+}
+
+/**
+ * The listed conversations of one project, most recent first. `total` counts all of them, for "see more" controls.
+ * Archived conversations are left out, as they are in the main list.
+ */
+export async function listProjectConversations(
+  userId: string,
+  projectId: string,
+  limit: number,
+  offset: number,
+): Promise<{ conversations: ConversationRow[]; total: number }> {
+  const scope = and(eq(conversations.userId, userId), eq(conversations.projectId, projectId), isNull(conversations.archivedAt));
+  const [rows, [count]] = await Promise.all([
+    getDb().select().from(conversations).where(scope).orderBy(desc(conversations.updatedAt)).limit(limit).offset(offset),
+    getDb().select({ total: sql<number>`count(*)::int` }).from(conversations).where(scope),
+  ]);
+  return { conversations: rows, total: count?.total ?? 0 };
 }
 
 function archivedFilter(archived: boolean) {
@@ -30,6 +67,19 @@ export async function setConversationArchived(id: string, userId: string, archiv
   const updated = await getDb()
     .update(conversations)
     .set({ archivedAt: archived ? sql`now()` : null })
+    .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
+    .returning({ id: conversations.id });
+  return updated.length > 0;
+}
+
+/**
+ * Puts the conversation in a project, or takes it out of its project (`projectId` null). Its place in the lists does
+ * not change: moving a conversation is not an interaction. Returns false when the conversation is not the user's.
+ */
+export async function setConversationProject(id: string, userId: string, projectId: string | null): Promise<boolean> {
+  const updated = await getDb()
+    .update(conversations)
+    .set({ projectId })
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
     .returning({ id: conversations.id });
   return updated.length > 0;
@@ -70,24 +120,26 @@ export async function canUseConversation(id: string, userId: string): Promise<bo
 /**
  * Creates the conversation if it does not exist yet. The first user message becomes the placeholder title, and
  * `created` says whether this call created it (the naming step only runs for a new conversation).
+ * A new conversation takes the project it is created in; an existing one keeps its project.
  * A message sent to an archived conversation takes it back into the list.
  */
 export async function ensureConversation(
   id: string,
   userId: string,
   firstUserText: string,
-): Promise<{ title: string; created: boolean }> {
+  projectId: string | null = null,
+): Promise<{ title: string; created: boolean; projectId: string | null }> {
   const title = titleFrom(firstUserText);
   const [row] = await getDb()
     .insert(conversations)
-    .values({ id, userId, title })
+    .values({ id, userId, title, projectId })
     .onConflictDoUpdate({
       target: conversations.id,
       set: { updatedAt: sql`now()`, archivedAt: null },
       setWhere: eq(conversations.userId, userId),
     })
     // xmax is 0 for a row this statement inserted and non-zero for a row it updated.
-    .returning({ title: conversations.title, created: sql<boolean>`(xmax = 0)` });
+    .returning({ title: conversations.title, created: sql<boolean>`(xmax = 0)`, projectId: conversations.projectId });
   if (!row) throw new ConversationOwnershipError("conversation belongs to another user");
   return row;
 }

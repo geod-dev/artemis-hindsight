@@ -24,6 +24,8 @@ import {
   setConversationUnread,
   touchConversation,
 } from "../repositories/conversation-repository";
+import { findProject } from "../repositories/project-repository";
+import { ProjectServiceError } from "../projects/project-service";
 import { listMessages, saveMessage, setModelInput, type MessageRow } from "../repositories/message-repository";
 import { activateConversation, flushConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
@@ -58,12 +60,16 @@ import { acquireTurn, endTurn, hasViewers, resumable, startTurn, watchViewers } 
  *
  * Returns the stream of this turn, and the stream id the browser keeps to reconnect after a reload.
  */
-export async function runChatTurn(params: {
+/** The project the composer had selected. It only matters when this message creates the conversation. */
+export interface ChatTurnParams {
   conversationId: string;
   incoming: UIMessage;
   reasoningEffort?: "low" | "medium" | "high";
+  projectId?: string | null;
   user: CurrentUser;
-}): Promise<Response> {
+}
+
+export async function runChatTurn(params: ChatTurnParams): Promise<Response> {
   // A message sent while a reply runs in this conversation waits for that reply to end, then starts its own turn.
   const release = await acquireTurn(params.conversationId);
   try {
@@ -74,15 +80,7 @@ export async function runChatTurn(params: {
   }
 }
 
-async function startChatTurn(
-  params: {
-    conversationId: string;
-    incoming: UIMessage;
-    reasoningEffort?: "low" | "medium" | "high";
-    user: CurrentUser;
-  },
-  release: () => void,
-): Promise<Response> {
+async function startChatTurn(params: ChatTurnParams, release: () => void): Promise<Response> {
   const { conversationId, incoming, user } = params;
   // The composer's Low / Medium / High choice. Medium when the browser sends none.
   const reasoningEffort = params.reasoningEffort ?? "medium";
@@ -92,8 +90,14 @@ async function startChatTurn(
   if (!(await canUseConversation(conversationId, user.id))) {
     throw new ConversationOwnershipError("conversation belongs to another user");
   }
+  // A project named by the browser must be one of the user's. Checked on every message, so a foreign id is refused.
+  if (params.projectId && !(await findProject(params.projectId, user.id))) {
+    throw new ProjectServiceError("project not found", 404);
+  }
   const parts = await checkAttachments(conversationId, incoming.parts);
-  const conversation = await ensureConversation(conversationId, user.id, userText);
+  // A new conversation takes the requested project. An existing one keeps the project it was created in.
+  const conversation = await ensureConversation(conversationId, user.id, userText, params.projectId ?? null);
+  const project = conversation.projectId ? (await findProject(conversation.projectId, user.id)) ?? null : null;
   // Sending from a client means the user is looking at this conversation: it is read.
   await setConversationUnread(conversationId, false);
 
@@ -123,7 +127,7 @@ async function startChatTurn(
   await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
-  const modelHistory = await toModelHistory(conversationId, history, lookup, user, skills);
+  const modelHistory = await toModelHistory(conversationId, history, lookup, user, skills, project);
   // A quoted message reaches the model as a blockquote in front of its text.
   const quotedHistory = injectQuoteContext(modelHistory);
   // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getCurrentUser, unauthorized } from "@/server/auth/session";
 import { activeStreamOf } from "@/server/agent/turn-registry";
 import { findConversation, setConversationUnread } from "@/server/repositories/conversation-repository";
+import { findProject } from "@/server/repositories/project-repository";
 import { listMessages } from "@/server/repositories/message-repository";
 import { toUiMessages } from "@/lib/stored-messages";
 
@@ -24,8 +25,15 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 
   if (conversation.unread) await setConversationUnread(id, false);
 
+  // The project the conversation belongs to, shown as a badge after its title. Null when it has none.
+  const project = conversation.projectId ? await findProject(conversation.projectId, user.id) : undefined;
+
   return Response.json({
-    conversation: { id, title: conversation.title },
+    conversation: {
+      id,
+      title: conversation.title,
+      project: project ? { id: project.id, name: project.name, color: project.color } : null,
+    },
     messages: toUiMessages(await listMessages(id)),
     activeStreamId: activeStreamOf(id),
   });

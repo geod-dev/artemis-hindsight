@@ -5,6 +5,7 @@ import { getConfig } from "../config";
 import type { StoredModelInput } from "../db/schema";
 import { attachmentNotice, modelFileParts } from "./attachments";
 import { escapeAttr, escapeText, renderUserPrompt, textOf, type MemoryLookup } from "./memory-context";
+import { renderProjectMetadata, type ProjectContext } from "./project-context";
 
 /**
  * What the model reads for the latest user message, as built by toModelHistory: the text with the memory and
@@ -92,8 +93,8 @@ export interface ModelUser {
 
 /**
  * The history as the model reads it. Each user message gets its attachment notice and its images and PDFs.
- * The first user message also gets the user metadata and skills tags, and only the latest user message gets the
- * current time and the memory block.
+ * The first user message also gets the user metadata, the project tag (when the conversation has a project) and the
+ * skills tags, and only the latest user message gets the current time and the memory block.
  * The stored messages are not changed.
  */
 export async function toModelHistory(
@@ -102,6 +103,7 @@ export async function toModelHistory(
   lookup: MemoryLookup,
   user: ModelUser,
   skills: InstalledSkill[] = [],
+  project: ProjectContext | null = null,
 ): Promise<UIMessage[]> {
   let first = -1;
   let latest = -1;
@@ -127,7 +129,16 @@ export async function toModelHistory(
         ? [renderCurrentTime(), renderUserPrompt(text, lookup, notice)].join("\n")
         : [notice, text].filter(Boolean).join("\n");
     const content =
-      i === first ? [renderUserMetadata(user), renderAvailableSkills(skills), body].filter(Boolean).join("\n") : body;
+      i === first
+        ? [
+            renderUserMetadata(user),
+            project ? renderProjectMetadata(project, user.username) : "",
+            renderAvailableSkills(skills),
+            body,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : body;
     const files = await modelFileParts(conversationId, message.parts);
 
     out.push({ ...message, parts: [{ type: "text", text: content }, ...files] });

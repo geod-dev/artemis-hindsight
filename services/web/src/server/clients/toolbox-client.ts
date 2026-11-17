@@ -101,6 +101,59 @@ export async function removeSession(sessionId: string): Promise<void> {
   await sendFolderRequest("DELETE", `/sessions/${encodeURIComponent(sessionId)}`);
 }
 
+function projectPath(username: string, projectId: string, suffix = ""): string {
+  return `/workspaces/${encodeURIComponent(username)}/projects/${encodeURIComponent(projectId)}${suffix}`;
+}
+
+/** Creates a project's folder in the user's workspace. Idempotent. */
+export async function ensureProjectFolder(username: string, projectId: string): Promise<void> {
+  await sendFolderRequest("PUT", projectPath(username, projectId));
+}
+
+/** Removes a project's folder and everything in it, its icon included. */
+export async function removeProjectFolder(username: string, projectId: string): Promise<void> {
+  await sendFolderRequest("DELETE", projectPath(username, projectId));
+}
+
+/** Stores a project's icon, replacing the previous one. Returns the icon's file name, e.g. "icon.png". */
+export async function saveProjectIcon(
+  username: string,
+  projectId: string,
+  bytes: ArrayBuffer,
+  mediaType: string,
+): Promise<string> {
+  const res = await fetch(new URL(projectPath(username, projectId, "/icon"), getConfig().TOOLBOX_URL), {
+    method: "PUT",
+    headers: { "content-type": mediaType },
+    body: bytes,
+    signal: AbortSignal.timeout(60_000),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  return z.object({ file: z.string() }).parse(body).file;
+}
+
+/** Reads a project's icon. Returns null when the project has none. */
+export async function readProjectIcon(
+  username: string,
+  projectId: string,
+): Promise<{ bytes: ArrayBuffer; mediaType: string } | null> {
+  const res = await fetch(new URL(projectPath(username, projectId, "/icon"), getConfig().TOOLBOX_URL), {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(errorMessage(await res.json().catch(() => null), res.status));
+  return {
+    bytes: await res.arrayBuffer(),
+    mediaType: res.headers.get("content-type") ?? "application/octet-stream",
+  };
+}
+
+/** Removes a project's icon, keeping its folder. */
+export async function removeProjectIcon(username: string, projectId: string): Promise<void> {
+  await sendFolderRequest("DELETE", projectPath(username, projectId, "/icon"));
+}
+
 /** A user's skills: the folders in <workspace>/<username>/skills. */
 export async function listSkills(username: string, timeoutMs = 10_000): Promise<InstalledSkill[]> {
   const res = await fetch(skillsUrl(username), { signal: AbortSignal.timeout(timeoutMs) });

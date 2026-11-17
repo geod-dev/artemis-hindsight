@@ -34,6 +34,33 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * A project: a folder of the user's workspace (<workspace>/<username>/projects/<id>) with a name, a color, an optional
+ * icon and optional instructions for the agent. Conversations can belong to one project. Deleting the user deletes
+ * their projects; deleting a project keeps its conversations, which then belong to no project.
+ */
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** One of the palette colors in lib/avatar-colors.ts. */
+    color: text("color").notNull(),
+    /** The icon's file name in the project folder, e.g. "icon.png". Null when the project has no icon: its folder icon shows. */
+    iconFile: text("icon_file"),
+    /** Custom instructions for the agent, written by the user. Null when there are none. */
+    description: text("description"),
+    /** The place of the project in the user's list (the sidebar and the mobile drawer). Lower comes first. */
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("projects_user_name_idx").on(table.userId, table.name)],
+);
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -43,6 +70,8 @@ export const conversations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // The project the conversation was created in. Null for a conversation outside any project, or once its project is deleted.
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     // True when a reply finished while no client was connected to receive it. Cleared when a client opens the
     // conversation or sends a message. Drives the unread badge in the conversation list.
@@ -53,7 +82,10 @@ export const conversations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("conversations_user_updated_idx").on(table.userId, table.updatedAt)],
+  (table) => [
+    index("conversations_user_updated_idx").on(table.userId, table.updatedAt),
+    index("conversations_project_updated_idx").on(table.projectId, table.updatedAt),
+  ],
 );
 
 export type MessageStatus = "streaming" | "complete" | "aborted" | "error";

@@ -4,6 +4,7 @@ import { runChatTurn } from "@/server/agent/chat-turn";
 import { AttachmentError } from "@/server/agent/attachments";
 import { getCurrentUser, unauthorized } from "@/server/auth/session";
 import { ConversationOwnershipError } from "@/server/repositories/conversation-repository";
+import { ProjectServiceError } from "@/server/projects/project-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -18,6 +19,8 @@ const requestSchema = z.object({
   ),
   // Model context settings from the composer. Only the reasoning effort is used.
   config: z.object({ reasoningEffort: z.enum(["low", "medium", "high"]).optional() }).optional(),
+  // The project selected in the new chat. Used when this message creates the conversation.
+  projectId: z.uuid().nullable().optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -43,6 +46,7 @@ export async function POST(req: Request): Promise<Response> {
       conversationId: parsed.data.id,
       incoming,
       reasoningEffort: parsed.data.config?.reasoningEffort,
+      projectId: parsed.data.projectId,
       user,
     });
   } catch (error) {
@@ -51,6 +55,9 @@ export async function POST(req: Request): Promise<Response> {
     }
     if (error instanceof ConversationOwnershipError) {
       return Response.json({ error: "conversation not found" }, { status: 404 });
+    }
+    if (error instanceof ProjectServiceError) {
+      return Response.json({ error: error.message }, { status: error.status });
     }
     console.error("failed to start chat turn", error);
     return Response.json({ error: "the chat service is unavailable" }, { status: 503 });
