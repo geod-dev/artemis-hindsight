@@ -96,8 +96,13 @@ A push to `main` does not reach the phones by itself. After the push, publish:
 
 Rules:
 
-- Keep `runtimeVersion` (`appVersion`) and the application id (`com.artemis.mobile`) stable. A different id is a
-  separate app on the phone; a different runtime version hides the OTA updates from the installed APK.
+- Keep the application id (`com.artemis.mobile`) stable. A different id is a separate app on the phone.
+- Versions follow the way the change ships:
+  - **OTA** (`npm run update`): keep the version as it is. The runtime version (`appVersion`, from `expo.version` in
+    `app.json`) must not change, or the OTA stops reaching the installed APK.
+  - **Rebuild + Firebase App Distribution** (a new APK): the version **must** change, with a new build, a minor or a
+    major version. Bump `expo.version` in `app.json` and `version` in `apps/mobile/package.json` together, so the
+    testers' APK is identifiable and the runtime version matches the new APK.
 - The tester list lives in the Firebase console (App Distribution, Testers & groups), not in the repo.
 - Expo and Firebase logins belong to the owner: never log in on their behalf, ask them to run the command.
 
