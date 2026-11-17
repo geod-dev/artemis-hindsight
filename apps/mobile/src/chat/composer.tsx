@@ -120,7 +120,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
     <View>
       <View style={styles.wrapper}>
         {keyboardOpen || voice !== "idle" || !isNewChat ? null : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actions}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsFloat} contentContainerStyle={styles.actions}>
             {QUICK_ACTIONS.map((action) => (
               <Pressable
                 key={action}
@@ -315,6 +315,8 @@ function IconButton({
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
+  // Floats above the composer: it takes no room in the layout, so opening the keyboard (when it folds away) does not move the input.
+  actionsFloat: { position: "absolute", left: 0, right: 0, bottom: "100%", paddingBottom: 8 },
   actions: { gap: 6, paddingHorizontal: 4 },
   action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
