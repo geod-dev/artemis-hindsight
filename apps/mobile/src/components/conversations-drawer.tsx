@@ -1,5 +1,6 @@
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { usePathname, useRouter, type Href } from "expo-router";
+import { useGlobalSearchParams, usePathname, useRouter, type Href } from "expo-router";
+import { setReturnTo } from "@/lib/return-to";
 import { Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DrawerContentComponentProps } from "expo-router/drawer";
@@ -17,10 +18,15 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
   const user = state.status === "signedIn" ? state.user : null;
   const router = useRouter();
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ session?: string }>();
   const { data, isPending, isError, refetch } = useConversations();
   const remove = useDeleteConversation();
 
   const go = (href: Href) => {
+    // The settings open over the current page: back from them returns here (see lib/return-to.ts).
+    if (href === "/settings" && !pathname.startsWith("/settings")) {
+      setReturnTo((params.session ? `${pathname}?session=${params.session}` : pathname) as Href);
+    }
     router.navigate(href);
     props.navigation.closeDrawer();
   };

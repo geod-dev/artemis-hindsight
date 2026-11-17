@@ -2,20 +2,17 @@ import { useRouter, type Href } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { Pressable } from "react-native";
 import { usePreferences } from "@/preferences";
+import { getReturnTo } from "@/lib/return-to";
 
 /**
  * The back arrow in a drawer header: replaces the menu button on a settings screen. With `to`, it goes to that screen
- * (the settings subpages go to the settings main page). Without it, it goes back in the history, or to a new chat.
- * The drawer's history is not a stack: back from a subpage would land on the first drawer screen, not on settings.
+ * (the settings subpages go to the settings main page). Without it, it goes back to the page the settings were opened
+ * from. The drawer's history is not a stack, so that page is remembered when the settings open.
  */
 export function BackButton({ to }: { to?: Href }) {
   const router = useRouter();
   const { colors } = usePreferences();
-  const goBack = () => {
-    if (to) return router.navigate(to);
-    if (router.canGoBack()) return router.back();
-    return router.replace("/new");
-  };
+  const goBack = () => router.navigate(to ?? getReturnTo());
   return (
     <Pressable
       onPress={goBack}

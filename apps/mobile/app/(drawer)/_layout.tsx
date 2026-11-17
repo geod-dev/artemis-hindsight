@@ -6,6 +6,7 @@ import { ConversationsDrawer } from "@/components/conversations-drawer";
 import { BackButton } from "@/components/back-button";
 import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
+import { getReturnTo } from "@/lib/return-to";
 
 /** Everything after sign-in: the chat (with the conversation list as a drawer) and the settings. */
 export default function DrawerLayout() {
@@ -13,11 +14,12 @@ export default function DrawerLayout() {
   const { colors } = usePreferences();
   const pathname = usePathname();
   const router = useRouter();
-  // On a settings subpage, the Android back button goes to the settings main page, as the header arrow does.
+  // In the settings, the Android back button does what the header arrow does: a subpage goes to the settings main page,
+  // the main page goes back to the page the settings were opened from.
   useEffect(() => {
-    if (!pathname.startsWith("/settings/")) return;
+    if (!pathname.startsWith("/settings")) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      router.navigate("/settings");
+      router.navigate(pathname === "/settings" ? getReturnTo() : "/settings");
       return true;
     });
     return () => subscription.remove();
