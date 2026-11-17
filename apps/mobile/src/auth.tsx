@@ -97,7 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "signedIn", serverUrl: state.serverUrl, user });
   }, [state]);
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  // Retrying goes back to the loading screen (its spinner) while the server is asked again, so the press is visibly acted on.
+  const retry = useCallback(() => {
+    setState({ status: "loading" });
+    setAttempt((n) => n + 1);
+  }, []);
 
   const value = useMemo(() => ({ state, signIn, signOut, refreshUser, retry }), [state, signIn, signOut, refreshUser, retry]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
