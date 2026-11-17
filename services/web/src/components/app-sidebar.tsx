@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Archive, MessageSquarePlus, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -72,6 +72,21 @@ export function AppSidebar({
   // A name received in this session wins over the title the server rendered.
   const titleOf = (conversation: SidebarConversation) => renamed[conversation.id] ?? conversation.title;
 
+  /** Moves the conversation to the archived list. It stays on screen if it is open; the list is refreshed. */
+  async function archive(conversation: SidebarConversation) {
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (!res.ok && res.status !== 404) throw new Error(`archive failed with HTTP ${res.status}`);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -139,6 +154,10 @@ export function AppSidebar({
                         </SidebarMenuAction>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent side="right" align="start">
+                        <DropdownMenuItem onSelect={() => void archive(conversation)}>
+                          <Archive />
+                          Archive
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setPendingDelete(conversation)}>
                           <Trash2 />
                           Delete

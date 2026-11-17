@@ -42,10 +42,62 @@ export function useConversationMessages(id: string, enabled: boolean) {
   });
 }
 
+// The archived list sits under the conversations key, so invalidating that key refreshes it too.
+export const archivedConversationsKey = [...conversationsKey, "archived"] as const;
+
+/** The archived conversations, most recent first (the danger zone's archived chats screen). */
+export function useArchivedConversations() {
+  return useQuery({
+    queryKey: archivedConversationsKey,
+    queryFn: () => apiFetch<{ conversations: ConversationSummary[] }>("/api/conversations?archived=true"),
+    select: (data) => data.conversations,
+  });
+}
+
+/** Archives (`archived: true`) or restores (`false`) one conversation. */
+export function useSetConversationArchived() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { archived } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  });
+}
+
 export function useDeleteConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch(`/api/conversations/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  });
+}
+
+/** Archives every listed conversation. Answers with how many were archived. */
+export function useArchiveAllConversations() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<{ archived: number }>("/api/conversations/archive-all", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  });
+}
+
+/** Deletes every conversation, archived or not. The memory is kept. */
+export function useDeleteAllChats() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch("/api/conversations/delete-all", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  });
+}
+
+/** Deletes every conversation and the whole memory. The account stays. */
+export function useDeleteAllData() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch("/api/me/data", { method: "DELETE" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: conversationsKey });
+      await queryClient.invalidateQueries({ queryKey: ["memory-graph"] });
+    },
   });
 }

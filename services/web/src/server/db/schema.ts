@@ -47,6 +47,9 @@ export const conversations = pgTable(
     // True when a reply finished while no client was connected to receive it. Cleared when a client opens the
     // conversation or sends a message. Drives the unread badge in the conversation list.
     unread: boolean("unread").notNull().default(false),
+    // Set when the owner archives the conversation: it leaves the list but keeps its messages. Null while it is listed.
+    // Sending a message to an archived conversation clears it again.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

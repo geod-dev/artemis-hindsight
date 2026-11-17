@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { conversations } from "../db/schema";
 
@@ -11,13 +11,38 @@ export class ConversationOwnershipError extends Error {}
 
 // Every function here takes the owner's id. A conversation is only ever read or changed by the user who owns it.
 
-export async function listConversations(userId: string, limit = 200): Promise<ConversationRow[]> {
+/** The user's listed conversations, or their archived ones, most recent first. */
+export async function listConversations(userId: string, archived = false, limit = 200): Promise<ConversationRow[]> {
   return getDb()
     .select()
     .from(conversations)
-    .where(eq(conversations.userId, userId))
+    .where(and(eq(conversations.userId, userId), archivedFilter(archived)))
     .orderBy(desc(conversations.updatedAt))
     .limit(limit);
+}
+
+function archivedFilter(archived: boolean) {
+  return archived ? isNotNull(conversations.archivedAt) : isNull(conversations.archivedAt);
+}
+
+/** Sets or clears the archive flag. Returns false when the conversation is not the user's. */
+export async function setConversationArchived(id: string, userId: string, archived: boolean): Promise<boolean> {
+  const updated = await getDb()
+    .update(conversations)
+    .set({ archivedAt: archived ? sql`now()` : null })
+    .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
+    .returning({ id: conversations.id });
+  return updated.length > 0;
+}
+
+/** Archives every listed conversation of the user. Returns how many were archived. */
+export async function archiveAllConversations(userId: string): Promise<number> {
+  const updated = await getDb()
+    .update(conversations)
+    .set({ archivedAt: sql`now()` })
+    .where(and(eq(conversations.userId, userId), isNull(conversations.archivedAt)))
+    .returning({ id: conversations.id });
+  return updated.length;
 }
 
 export async function findConversation(id: string, userId: string): Promise<ConversationRow | undefined> {
@@ -45,6 +70,7 @@ export async function canUseConversation(id: string, userId: string): Promise<bo
 /**
  * Creates the conversation if it does not exist yet. The first user message becomes the placeholder title, and
  * `created` says whether this call created it (the naming step only runs for a new conversation).
+ * A message sent to an archived conversation takes it back into the list.
  */
 export async function ensureConversation(
   id: string,
@@ -57,7 +83,7 @@ export async function ensureConversation(
     .values({ id, userId, title })
     .onConflictDoUpdate({
       target: conversations.id,
-      set: { updatedAt: sql`now()` },
+      set: { updatedAt: sql`now()`, archivedAt: null },
       setWhere: eq(conversations.userId, userId),
     })
     // xmax is 0 for a row this statement inserted and non-zero for a row it updated.
@@ -94,6 +120,11 @@ export async function deleteConversation(id: string, userId: string): Promise<bo
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
     .returning({ id: conversations.id });
   return deleted.length > 0;
+}
+
+/** Deletes every conversation of the user, archived or not. Their messages go with them (cascade). */
+export async function deleteAllConversations(userId: string): Promise<void> {
+  await getDb().delete(conversations).where(eq(conversations.userId, userId));
 }
 
 /** Every conversation id of a user, for cleanup when the user is deleted. */

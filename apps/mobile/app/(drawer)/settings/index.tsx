@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/settings/memory", label: "Memory" },
   { href: "/settings/skills", label: "Skills" },
   { href: "/settings/admin", label: "Administration" },
+  { href: "/settings/danger", label: "Danger zone" },
 ] as const;
 
 export default function SettingsIndex() {

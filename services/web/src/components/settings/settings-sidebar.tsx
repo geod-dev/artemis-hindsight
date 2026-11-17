@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Brain, LogOut, Palette, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, Brain, LogOut, Palette, Sparkles, TriangleAlert, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const SECTIONS = [
   { href: "/settings/appearance", label: "Appearance", icon: Palette },
   { href: "/settings/memory", label: "Memory", icon: Brain },
   { href: "/settings/skills", label: "Skills", icon: Sparkles },
+  { href: "/settings/danger", label: "Danger zone", icon: TriangleAlert },
 ] as const;
 
 export function SettingsSidebar() {
@@ -39,7 +40,8 @@ export function SettingsSidebar() {
       <p className="px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Settings</p>
       <nav className="flex flex-col gap-1">
         {SECTIONS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          // A subpage (such as the archived chats under the danger zone) keeps its section highlighted.
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}

@@ -1,7 +1,8 @@
 import { ActionBarPrimitive, BranchPickerPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react-native";
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Square } from "lucide-react-native";
+import { ActionSheet } from "@/components/action-sheet";
 import { usePreferences } from "@/preferences";
 import { MessageParts } from "./message-parts";
 import { FilePart, ImagePart } from "./parts/file-part";
@@ -82,33 +83,27 @@ function StoppedLabel() {
 function MessageSheet({ visible, onClose, isUser }: { visible: boolean; onClose: () => void; isUser: boolean }) {
   const { colors } = usePreferences();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modal}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-          <ActionBarPrimitive.Copy style={[styles.option, { borderColor: colors.border }]}>
-            {({ isCopied }) => <Text style={[styles.optionText, { color: colors.text }]}>{isCopied ? "Copied" : "Copy"}</Text>}
-          </ActionBarPrimitive.Copy>
-          {isUser ? null : (
-            <>
-              <ActionBarPrimitive.Reload style={[styles.option, { borderColor: colors.border }]}>
-                <Text style={[styles.optionText, { color: colors.text }]}>Regenerate</Text>
-              </ActionBarPrimitive.Reload>
-              <View style={[styles.option, styles.versions, { borderColor: colors.border }]}>
-                <BranchPickerPrimitive.Previous style={styles.versionButton}>
-                  <Text style={[styles.optionText, { color: colors.text }]}>‹ Previous</Text>
-                </BranchPickerPrimitive.Previous>
-                <BranchPickerPrimitive.Number style={styles.versionButton} />
-                <BranchPickerPrimitive.Next style={styles.versionButton}>
-                  <Text style={[styles.optionText, { color: colors.text }]}>Next ›</Text>
-                </BranchPickerPrimitive.Next>
-              </View>
-            </>
-          )}
-        </View>
-      </View>
-    </Modal>
+    <ActionSheet visible={visible} onClose={onClose}>
+      <ActionBarPrimitive.Copy style={[styles.option, { borderColor: colors.border }]}>
+        {({ isCopied }) => <Text style={[styles.optionText, { color: colors.text }]}>{isCopied ? "Copied" : "Copy"}</Text>}
+      </ActionBarPrimitive.Copy>
+      {isUser ? null : (
+        <>
+          <ActionBarPrimitive.Reload style={[styles.option, { borderColor: colors.border }]}>
+            <Text style={[styles.optionText, { color: colors.text }]}>Regenerate</Text>
+          </ActionBarPrimitive.Reload>
+          <View style={[styles.option, styles.versions, { borderColor: colors.border }]}>
+            <BranchPickerPrimitive.Previous style={styles.versionButton}>
+              <Text style={[styles.optionText, { color: colors.text }]}>‹ Previous</Text>
+            </BranchPickerPrimitive.Previous>
+            <BranchPickerPrimitive.Number style={styles.versionButton} />
+            <BranchPickerPrimitive.Next style={styles.versionButton}>
+              <Text style={[styles.optionText, { color: colors.text }]}>Next ›</Text>
+            </BranchPickerPrimitive.Next>
+          </View>
+        </>
+      )}
+    </ActionSheet>
   );
 }
 
@@ -120,9 +115,6 @@ const styles = StyleSheet.create({
   stopped: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   userBubble: { maxWidth: "85%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   assistantRow: { gap: 6 },
-  modal: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 32, paddingTop: 10, gap: 8 },
-  grabber: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, marginBottom: 8 },
   option: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
   optionText: { fontSize: 16 },
   versions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

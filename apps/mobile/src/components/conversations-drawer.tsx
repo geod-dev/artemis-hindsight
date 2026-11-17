@@ -1,11 +1,13 @@
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useGlobalSearchParams, usePathname, useRouter, type Href } from "expo-router";
 import { setReturnTo } from "@/lib/return-to";
 import { Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DrawerContentComponentProps } from "expo-router/drawer";
+import { useState } from "react";
 import { useAuth } from "@/auth";
-import { useConversations, useDeleteConversation, type ConversationSummary } from "@/queries/conversations";
+import { ConversationActionsSheet } from "@/components/conversation-actions-sheet";
+import { useConversations, type ConversationSummary } from "@/queries/conversations";
 import { usePreferences } from "@/preferences";
 import { avatarHex, initialsOf } from "@/lib/avatar";
 
@@ -20,7 +22,8 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ session?: string }>();
   const { data, isPending, isError, refetch } = useConversations();
-  const remove = useDeleteConversation();
+  // The conversation whose long-press menu is open (archive or delete).
+  const [menuFor, setMenuFor] = useState<ConversationSummary | null>(null);
 
   const go = (href: Href) => {
     // The settings open over the current page: back from them returns here (see lib/return-to.ts).
@@ -29,23 +32,6 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
     }
     router.navigate(href);
     props.navigation.closeDrawer();
-  };
-
-  const confirmDelete = (conversation: ConversationSummary) => {
-    Alert.alert("Delete conversation", `"${conversation.title}" will be deleted.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          remove.mutate(conversation.id, {
-            onSuccess: () => {
-              if (pathname === `/c/${conversation.id}`) router.navigate("/new");
-            },
-          });
-        },
-      },
-    ]);
   };
 
   return (
@@ -68,7 +54,7 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
             return (
               <Pressable
                 onPress={() => go(`/c/${item.id}`)}
-                onLongPress={() => confirmDelete(item)}
+                onLongPress={() => setMenuFor(item)}
                 accessibilityRole="link"
                 accessibilityLabel={showUnread ? `${item.title}, unread reply` : item.title}
                 style={[styles.item, styles.row, active && { backgroundColor: colors.surfaceStrong }]}
@@ -82,6 +68,15 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
           }}
         />
       )}
+
+      <ConversationActionsSheet
+        conversation={menuFor}
+        archived={false}
+        onClose={() => setMenuFor(null)}
+        onDeleted={(id) => {
+          if (pathname === `/c/${id}`) router.navigate("/new");
+        }}
+      />
 
       {/* The bottom bar: the account (avatar only, opens the settings) on the left, a new chat on the right. A new session
           each time: /new stays mounted after its first reply, so the same route alone would show that chat. */}
