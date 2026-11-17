@@ -12,7 +12,8 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
   // The whole chat is padded by the keyboard's height: the messages shrink and the composer rises with them. The window
   // itself does not resize on Android (edge-to-edge), so the view has to.
   return (
-    <KeyboardAvoidingView style={styles.root} behavior="padding">
+    // automaticOffset: the chat sits below the drawer header, and the padding must account for it.
+    <KeyboardAvoidingView style={styles.root} behavior="padding" automaticOffset>
     <ThreadPrimitive.Root style={[styles.root, { backgroundColor: colors.background }]}>
       <ThreadPrimitive.Empty>
         <View style={styles.empty}>

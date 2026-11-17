@@ -44,7 +44,7 @@ export default function LoginScreen() {
   return (
     // The keyboard controller's view, not React Native's: on Android the app is edge-to-edge, and there the native
     // KeyboardAvoidingView does not move the content when the keyboard opens.
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior="padding">
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior="padding" automaticOffset>
       <ScrollView ref={scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", marginBottom: 8 }}>
           <BrandMark size={96} />
