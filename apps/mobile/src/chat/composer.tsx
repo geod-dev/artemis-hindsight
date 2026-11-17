@@ -29,9 +29,10 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
 
 /**
  * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath
- * (attach and dictate on the left, send or stop on the right). While dictating, the input is replaced by the voice bar, as
- * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The transcript is
- * added to the input. The chat moves it with the keyboard (thread-view.tsx). Icons are lucide, the same set as the web app.
+ * (attach on the left, dictate and send or stop on the right). While dictating, the input is replaced by the voice bar, as
+ * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The left button becomes
+ * cancel, the dictate button becomes stop (the transcript goes into the input), and send becomes "stop and send".
+ * The chat moves it with the keyboard (thread-view.tsx). Icons are lucide, the same set as the web app.
  */
 export function Composer({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
@@ -43,6 +44,8 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const fileCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type !== "image").length);
   const canSend = text.trim().length > 0 || imageCount + fileCount > 0;
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  // Set by "send dictated message": the send happens after the transcript is in the input (see finishVoice).
+  const sendAfter = useRef(false);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 100);
@@ -86,8 +89,10 @@ export function Composer({ conversationId }: { conversationId: string }) {
     setVoice("recording");
   };
 
-  // Stops the recording, sends it to the server, and adds the transcript to the input.
-  const finishVoice = async () => {
+  // Stops the recording, sends it to the server, and adds the transcript to the input. With `andSend` the message is
+  // sent once the transcript is in (the web's "send dictated message"): see the effect below.
+  const finishVoice = async (andSend: boolean) => {
+    sendAfter.current = andSend;
     setVoice("transcribing");
     try {
       await recorder.stop();
@@ -101,13 +106,24 @@ export function Composer({ conversationId }: { conversationId: string }) {
       const dictated = transcript.trim();
       if (dictated) aui.composer().setText(joinText(text, dictated));
     } catch (cause) {
+      sendAfter.current = false;
       setVoiceError(cause instanceof ApiError ? cause.message : "Could not transcribe. Check the connection and try again.");
     } finally {
       setVoice("idle");
     }
   };
 
+  // Sends the message once dictation is over and the transcript is in the input, when the user asked for it.
+  useEffect(() => {
+    if (voice !== "idle" || !sendAfter.current) return;
+    sendAfter.current = false;
+    if (!canSend) return;
+    Keyboard.dismiss();
+    aui.composer().send();
+  }, [voice, text, canSend, aui]);
+
   const cancelVoice = async () => {
+    sendAfter.current = false;
     await recorder.stop().catch(() => undefined);
     setVoice("idle");
   };
@@ -146,7 +162,6 @@ export function Composer({ conversationId }: { conversationId: string }) {
             {voice === "idle" ? (
               <View style={styles.toolbarGroup}>
                 <IconButton icon={Plus} label="Add files" onPress={() => void addFiles()} />
-                <IconButton icon={Mic} label="Dictate" onPress={() => void startVoice()} />
               </View>
             ) : (
               <View style={styles.toolbarGroup}>
@@ -154,42 +169,49 @@ export function Composer({ conversationId }: { conversationId: string }) {
               </View>
             )}
 
-            {voice === "recording" ? (
-              <Pressable
-                onPress={() => void finishVoice()}
-                accessibilityRole="button"
-                accessibilityLabel="Stop dictation"
-                style={[styles.send, { backgroundColor: colors.text }]}
-              >
-                <Square size={12} color={colors.background} fill={colors.background} />
-              </Pressable>
-            ) : voice === "transcribing" ? (
-              <View style={[styles.send, { backgroundColor: colors.surfaceStrong }]} />
-            ) : running ? (
-              <Pressable
-                onPress={stop}
-                accessibilityRole="button"
-                accessibilityLabel="Stop generating"
-                style={[styles.send, { backgroundColor: colors.text }]}
-              >
-                <Square size={12} color={colors.background} fill={colors.background} />
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => {
-                  // Sending closes the keyboard: the reply is read, not typed into.
-                  Keyboard.dismiss();
-                  aui.composer().send();
-                }}
-                disabled={!canSend}
-                accessibilityRole="button"
-                accessibilityLabel="Send message"
-                // The web's send button: the primary colour, dimmed (half opacity) while there is nothing to send.
-                style={[styles.send, { backgroundColor: colors.accent, opacity: canSend ? 1 : 0.5 }]}
-              >
-                <ArrowUp size={ICON_SIZE} color={colors.accentText} />
-              </Pressable>
-            )}
+            {/* While dictating, the mic's place becomes Stop (transcribe into the input) and send becomes "stop and send", as on the web. */}
+            <View style={styles.toolbarGroup}>
+              {voice === "idle" ? (
+                <IconButton icon={Mic} label="Dictate" onPress={() => void startVoice()} />
+              ) : (
+                <IconButton icon={Square} label="Stop dictation" onPress={() => void finishVoice(false)} disabled={voice === "transcribing"} />
+              )}
+              {voice === "idle" && running ? (
+                <Pressable
+                  onPress={stop}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop generating"
+                  style={[styles.send, { backgroundColor: colors.text }]}
+                >
+                  <Square size={12} color={colors.background} fill={colors.background} />
+                </Pressable>
+              ) : voice !== "idle" ? (
+                <Pressable
+                  onPress={() => void finishVoice(true)}
+                  disabled={voice === "transcribing"}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send dictated message"
+                  style={[styles.send, { backgroundColor: colors.accent, opacity: voice === "transcribing" ? 0.5 : 1 }]}
+                >
+                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    // Sending closes the keyboard: the reply is read, not typed into.
+                    Keyboard.dismiss();
+                    aui.composer().send();
+                  }}
+                  disabled={!canSend}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send message"
+                  // The web's send button: the primary colour, dimmed (half opacity) while there is nothing to send.
+                  style={[styles.send, { backgroundColor: colors.accent, opacity: canSend ? 1 : 0.5 }]}
+                >
+                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+                </Pressable>
+              )}
+            </View>
           </View>
         </ComposerPrimitive.Root>
 
