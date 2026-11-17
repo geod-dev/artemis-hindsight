@@ -362,9 +362,10 @@ export function Composer({ conversationId }: { conversationId: string }) {
                   disabled={voice === "transcribing"}
                   accessibilityRole="button"
                   accessibilityLabel="Send dictated message"
-                  style={[styles.send, { backgroundColor: colors.accent, opacity: voice === "transcribing" ? 0.5 : 1 }, hover === "send" && styles.highlighted]}
+                  // Reversed like the rest of the dictating composer: a light disc on the inverted card, with a dark arrow.
+                  style={[styles.send, { backgroundColor: colors.background, opacity: voice === "transcribing" ? 0.5 : 1 }, hover === "send" && styles.highlighted]}
                 >
-                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+                  <ArrowUp size={ICON_SIZE} color={colors.text} />
                 </Pressable>
               ) : running ? (
                 <Pressable
