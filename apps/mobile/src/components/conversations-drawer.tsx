@@ -43,7 +43,8 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.surface, paddingTop: insets.top + 8 }]}>
-      <Pressable onPress={() => go("/new")} style={[styles.newButton, { backgroundColor: colors.accent }]}>
+      {/* A new session each time: /new stays mounted after its first reply, so the same route alone would show that chat. */}
+      <Pressable onPress={() => go(`/new?session=${Date.now()}`)} style={[styles.newButton, { backgroundColor: colors.accent }]}>
         <Text style={[styles.newButtonText, { color: colors.accentText }]}>+ New conversation</Text>
       </Pressable>
 
