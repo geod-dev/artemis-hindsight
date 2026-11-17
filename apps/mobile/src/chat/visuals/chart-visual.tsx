@@ -21,13 +21,16 @@ function directionOf(trend: "up" | "down" | "flat" | undefined, delta: string | 
  * and the series. No axes and no rules: the curve carries the story, and the numbers stay in the header.
  */
 export function ChartVisual({ value }: { value: ChartValue }) {
-  const { colors } = usePreferences();
+  const { colors, isDark } = usePreferences();
   const [width, setWidth] = useState(0);
   const variant = value.variant ?? "area";
   const trend = directionOf(value.trend, value.delta);
   // Green when the change is good for the metric (up, unless up_is_good is false), red when it is bad, grey when flat.
+  // The shades are the web's: emerald-600 / red-600 on light, emerald-400 / red-400 on dark.
   const good = value.up_is_good ?? true;
-  const trendColor = trend === "flat" ? colors.muted : (trend === "up") === good ? "#16a34a" : colors.danger;
+  const goodColor = isDark ? "#34d399" : "#16a34a";
+  const badColor = isDark ? "#f87171" : colors.danger;
+  const trendColor = trend === "flat" ? colors.muted : (trend === "up") === good ? goodColor : badColor;
 
   const data = value.points.map((point, index) => ({
     value: point,
