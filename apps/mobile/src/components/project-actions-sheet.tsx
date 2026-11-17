@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text } from "react-native";
+import { Alert } from "react-native";
 import { ApiError } from "@/lib/api";
 import { useDeleteProject, useProjects, useSaveProjectOrder, type ProjectSummary } from "@/queries/projects";
-import { usePreferences } from "@/preferences";
 import { ActionSheet, ActionSheetOption } from "./action-sheet";
 
 /**
@@ -21,7 +20,6 @@ export function ProjectActionsSheet({
   /** Called once the project is deleted. Its conversations stay, outside any project. */
   onDeleted?: (projectId: string) => void;
 }) {
-  const { colors } = usePreferences();
   const remove = useDeleteProject();
   const projects = useProjects();
   const saveOrder = useSaveProjectOrder();
@@ -71,12 +69,9 @@ export function ProjectActionsSheet({
     );
 
   return (
-    <ActionSheet visible={project !== null} onClose={onClose}>
+    <ActionSheet visible={project !== null} title={shown?.name} onClose={onClose}>
       {shown ? (
         <>
-          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
-            {shown.name}
-          </Text>
           {canMove(shown, -1) ? (
             <ActionSheetOption
               label="Move up"
@@ -116,6 +111,3 @@ export function ProjectActionsSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
-});

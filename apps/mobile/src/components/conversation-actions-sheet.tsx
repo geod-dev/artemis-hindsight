@@ -70,12 +70,13 @@ export function ConversationActionsSheet({
   };
 
   return (
-    <ActionSheet visible={conversation !== null} onClose={onClose}>
+    <ActionSheet
+      visible={conversation !== null}
+      title={view === "projects" ? "Move to project" : shown?.title}
+      onClose={onClose}
+    >
       {shown && view === "projects" ? (
         <>
-          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
-            Move to project
-          </Text>
           {(projects.data ?? []).map((project) => (
             <ActionSheetOption
               key={project.id}
@@ -99,9 +100,6 @@ export function ConversationActionsSheet({
         </>
       ) : shown ? (
         <>
-          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
-            {shown.title}
-          </Text>
           <ActionSheetOption label="Move to project" onPress={() => setView("projects")} />
           {shown.project ? (
             <ActionSheetOption label="Remove from project" onPress={() => move(shown, null)} />
@@ -128,6 +126,5 @@ export function ConversationActionsSheet({
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
-  hint: { fontSize: 13, paddingHorizontal: 4, paddingVertical: 4 },
+  hint: { fontSize: 13, textAlign: "center", paddingVertical: 10 },
 });
