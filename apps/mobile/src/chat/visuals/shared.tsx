@@ -1,10 +1,12 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { ActivityIndicator, View, type ViewStyle } from "react-native";
+import { Button, Column, Text } from "@expo/ui";
 import { usePreferences } from "@/preferences";
+import { M3Host } from "@/components/m3";
 
-/** A bordered card for a visual. */
+/** The container of a visual: the screen's surface colour, no outline and no padding of its own. */
 export function VisualCard({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const { colors } = usePreferences();
-  return <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }, style]}>{children}</View>;
+  return <View style={[{ backgroundColor: colors.surface }, style]}>{children}</View>;
 }
 
 /** Shown while a visual's block is still streaming, so the layout does not jump when it completes. */
@@ -22,17 +24,13 @@ export function VisualError({ title, message, onRetry }: { title: string; messag
   const { colors } = usePreferences();
   return (
     <VisualCard>
-      <Text style={{ color: colors.text, fontWeight: "600" }}>{title}</Text>
-      <Text style={{ color: colors.muted, fontSize: 13 }}>{message}</Text>
-      {onRetry ? (
-        <Pressable onPress={onRetry} accessibilityRole="button">
-          <Text style={{ color: colors.accent, marginTop: 6 }}>Try again</Text>
-        </Pressable>
-      ) : null}
+      <M3Host matchContents={{ vertical: true }}>
+        <Column>
+          <Text>{title}</Text>
+          <Text textStyle={{ color: colors.muted }}>{message}</Text>
+          {onRetry ? <Button variant="text" label="Try again" onPress={onRetry} /> : null}
+        </Column>
+      </M3Host>
     </VisualCard>
   );
 }
-
-const styles = StyleSheet.create({
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 14, gap: 6 },
-});

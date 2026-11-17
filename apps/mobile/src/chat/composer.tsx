@@ -1,10 +1,12 @@
 import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react-native";
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
-import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
+import { Button, Text, TextInput, useNativeState } from "@expo/ui";
+import { GlyphView, Glyph, type GlyphName } from "@/components/glyph";
+import { M3Host } from "@/components/m3";
 import { fileKind } from "@/lib/file-icons";
 import { forwardRef, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import { Alert, Image, Keyboard, Pressable, StyleSheet, Text as RNText, View, type StyleProp, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -53,8 +55,8 @@ interface Press {
  * The composer's surface, also used by the jump-to-latest button. In light mode the surface is the page's white, so the
  * composer gets the soft grey the web composer has (its muted tone over the page); dark mode keeps the card colour.
  */
-export function composerSurface(colors: { surface: string; surfaceStrong: string }, isDark: boolean): string {
-  return isDark ? colors.surface : colors.surfaceStrong;
+export function composerSurface(colors: { surface: string }): string {
+  return colors.surface;
 }
 
 /**
@@ -63,18 +65,23 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
  * surface) and the toolbar reads: cancel (left), the live waveform, stop (transcribe into the input), send (transcribe and
  * send). Pressing the dictate button starts dictation at once. A tap leaves it running. Holding it dictates while the finger
  * is down: sliding onto cancel, stop or send buzzes and enlarges that button, and lifting there does its action. Lifting
- * anywhere else stops, as the stop button does. Icons are lucide, the same set as the web app.
+ * anywhere else stops, as the stop button does. Icons are @expo/ui glyphs (see components/glyph.tsx).
  */
 export function Composer({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
   const aui = useAui();
   const running = useAuiState((s) => s.thread.isRunning);
   const text = useAuiState((s) => s.composer.text);
+  // The field is controlled by the runtime's text (dictation and send change it from outside the field), so it is an
+  // observable state the effect below keeps in step with that text.
+  const input = useNativeState(text);
+  useEffect(() => {
+    if (input.get() !== text) input.set(text);
+  }, [input, text]);
   // Images sit inline, other files one per line, so the two are counted apart.
   const imageCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type === "image").length);
   const fileCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type !== "image").length);
   const canSend = text.trim().length > 0 || imageCount + fileCount > 0;
-  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   // Set by "send dictated message": the send happens after the transcript is in the input (see finishVoice).
   const sendAfter = useRef(false);
 
@@ -288,15 +295,8 @@ export function Composer({ conversationId }: { conversationId: string }) {
 
   return (
     <View>
-      <View style={styles.wrapper}>
-        <ComposerPrimitive.Root
-          style={[
-            styles.card,
-            inverted
-              ? { backgroundColor: colors.text, borderColor: colors.text }
-              : { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border },
-          ]}
-        >
+      <View>
+        <ComposerPrimitive.Root style={{ backgroundColor: inverted ? colors.text : composerSurface(colors) }}>
           {/* Attachments side by side, wrapping onto a new row: square image previews sit inline. */}
           {imageCount > 0 ? (
             <View style={styles.imageRow}>
@@ -304,29 +304,30 @@ export function Composer({ conversationId }: { conversationId: string }) {
             </View>
           ) : null}
           {fileCount > 0 ? (
-            <View style={styles.fileList}>
+            <View>
               <ComposerPrimitive.Attachments>{() => <AttachmentChip kind="file" />}</ComposerPrimitive.Attachments>
             </View>
           ) : null}
 
-          <TextInput
-            ref={inputRef}
-            value={text}
-            onChangeText={(value) => aui.composer().setText(value)}
-            placeholder="Message Artemis"
-            placeholderTextColor={inverted ? colors.background : colors.muted}
-            multiline
-            style={[styles.input, { color: inverted ? colors.background : colors.text }]}
-          />
+          <M3Host matchContents={{ vertical: true }}>
+            <TextInput
+              value={input}
+              onChangeText={(value) => aui.composer().setText(value)}
+              placeholder="Message Artemis"
+              multiline
+              cursorColor={inverted ? colors.background : colors.text}
+              textStyle={{ color: inverted ? colors.background : colors.text }}
+            />
+          </M3Host>
 
           <View style={styles.toolbar}>
             <View style={styles.toolbarGroup}>
               {voice === "idle" ? (
-                <IconButton icon={Plus} label="Add files" tone={tone} onPress={() => void addFiles()} />
+                <IconButton icon="add" label="Add files" tone={tone} onPress={() => void addFiles()} />
               ) : (
                 <IconButton
                   ref={cancelRef}
-                  icon={X}
+                  icon="close"
                   label="Cancel dictation"
                   tone={tone}
                   onPress={() => void cancelVoice()}
@@ -355,9 +356,9 @@ export function Composer({ conversationId }: { conversationId: string }) {
                   <View ref={stopRef} collapsable={false} style={styles.fill}>
                     <Lift active={hover === "stop"} style={styles.fill}>
                       {voice === "idle" ? (
-                        <Mic size={ICON_SIZE} color={colors.muted} />
+                        <GlyphView name="mic" color={colors.muted} />
                       ) : (
-                        <Square size={12} color={tone} fill={tone} />
+                        <GlyphView name="stop" color={tone} />
                       )}
                     </Lift>
                   </View>
@@ -375,39 +376,39 @@ export function Composer({ conversationId }: { conversationId: string }) {
                   style={[styles.send, { opacity: voice === "transcribing" ? 0.5 : 1 }]}
                 >
                   <Lift active={hover === "send"} style={[styles.send, { backgroundColor: colors.background }]}>
-                    <ArrowUp size={ICON_SIZE} color={colors.text} />
+                    <GlyphView name="arrowUp" color={colors.text} />
                   </Lift>
                 </Pressable>
               ) : running ? (
-                <Pressable
-                  onPress={stop}
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop generating"
-                  style={[styles.send, { backgroundColor: colors.text }]}
-                >
-                  <Square size={12} color={colors.background} fill={colors.background} />
-                </Pressable>
+                <M3Host matchContents>
+                  <Button onPress={stop} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.text }}>
+                    <Glyph name="stop" color={colors.background} />
+                  </Button>
+                </M3Host>
               ) : (
-                <Pressable
-                  onPress={() => {
-                    // Sending closes the keyboard: the reply is read, not typed into.
-                    Keyboard.dismiss();
-                    aui.composer().send();
-                  }}
-                  disabled={!canSend}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send message"
-                  // The web's send button: the primary colour, dimmed (half opacity) while there is nothing to send.
-                  style={[styles.send, { backgroundColor: colors.accent, opacity: canSend ? 1 : 0.5 }]}
-                >
-                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
-                </Pressable>
+                <M3Host matchContents>
+                  <Button
+                    onPress={() => {
+                      // Sending closes the keyboard: the reply is read, not typed into.
+                      Keyboard.dismiss();
+                      aui.composer().send();
+                    }}
+                    disabled={!canSend}
+                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent }}
+                  >
+                    <Glyph name="arrowUp" color={colors.onUser} />
+                  </Button>
+                </M3Host>
               )}
             </View>
           </View>
         </ComposerPrimitive.Root>
 
-        {voiceError ? <Text style={[styles.error, { color: colors.danger }]}>{voiceError}</Text> : null}
+        {voiceError ? (
+          <M3Host matchContents={{ vertical: true }}>
+            <Text textStyle={{ color: colors.danger }}>{voiceError}</Text>
+          </M3Host>
+        ) : null}
       </View>
     </View>
   );
@@ -471,7 +472,7 @@ function DictationWaveform({
           />
         ))}
       </View>
-      <Text style={[styles.timer, { color: tone }]}>{transcribing ? "Transcribing" : timer}</Text>
+      <RNText style={[styles.timer, { color: tone }]}>{transcribing ? "Transcribing" : timer}</RNText>
     </View>
   );
 }
@@ -499,29 +500,37 @@ function AttachmentChip({ kind }: { kind: "image" | "file" }) {
         <AttachmentPrimitive.Root style={styles.preview}>
           <Image source={{ uri }} accessibilityLabel={name} style={styles.previewImage} />
           <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "image"}`} style={[styles.previewRemove, { backgroundColor: colors.background }]}>
-            <X size={14} color={colors.text} />
+            <GlyphView name="close" color={colors.text} />
           </AttachmentPrimitive.Remove>
         </AttachmentPrimitive.Root>
-        {failure ? <Text style={[styles.failure, { color: colors.danger }]}>{failure}</Text> : null}
+        {failure ? (
+          <M3Host matchContents={{ vertical: true }}>
+            <Text textStyle={{ color: colors.danger }}>{failure}</Text>
+          </M3Host>
+        ) : null}
       </View>
     );
   }
 
-  const { Icon, tint } = fileKind(name);
+  const { glyph, tint } = fileKind(name);
   return (
     <View style={styles.failureGroup}>
-      <AttachmentPrimitive.Root style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        <View style={[styles.chipIcon, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
-          <Icon size={16} color={tint ?? colors.muted} />
-        </View>
-        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: "500", maxWidth: 160 }}>
-          {name}
-        </Text>
-        <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "file"}`} style={styles.chipRemove}>
-          <X size={14} color={colors.muted} />
+      <AttachmentPrimitive.Root style={{ backgroundColor: colors.background }}>
+        <M3Host matchContents>
+          <Glyph name={glyph} color={tint} />
+        </M3Host>
+        <M3Host matchContents={{ vertical: true }}>
+          <Text>{name ?? ""}</Text>
+        </M3Host>
+        <AttachmentPrimitive.Remove accessibilityLabel={`Remove ${name ?? "file"}`}>
+          <GlyphView name="close" color={colors.muted} />
         </AttachmentPrimitive.Remove>
       </AttachmentPrimitive.Root>
-      {failure ? <Text style={[styles.failure, { color: colors.danger }]}>{failure}</Text> : null}
+      {failure ? (
+        <M3Host matchContents={{ vertical: true }}>
+          <Text textStyle={{ color: colors.danger }}>{failure}</Text>
+        </M3Host>
+      ) : null}
     </View>
   );
 }
@@ -560,8 +569,8 @@ function Lift({ active, style, children }: { active: boolean; style?: StyleProp<
 
 const IconButton = forwardRef<
   ViewRef,
-  { icon: LucideIcon; label: string; onPress: () => void; disabled?: boolean; tone: string; highlighted?: boolean }
->(function IconButton({ icon: Icon, label, onPress, disabled, tone, highlighted }, ref) {
+  { icon: GlyphName; label: string; onPress: () => void; disabled?: boolean; tone: string; highlighted?: boolean }
+>(function IconButton({ icon, label, onPress, disabled, tone, highlighted }, ref) {
   return (
     <Pressable
       ref={ref}
@@ -572,35 +581,28 @@ const IconButton = forwardRef<
       style={[styles.iconButton, disabled && { opacity: 0.35 }]}
     >
       <Lift active={Boolean(highlighted)}>
-        <Icon size={ICON_SIZE} color={tone} />
+        <GlyphView name={icon} color={tone} />
       </Lift>
     </Pressable>
   );
 });
 
+// Only the sizes and the layout the dictation needs (a touch disc, the waveform's bars). No paddings, margins or gaps:
+// the components keep their own spacing.
 const styles = StyleSheet.create({
-  wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
-  imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  fileList: { gap: 6 },
-  input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
-  toolbar: { flexDirection: "row", alignItems: "center", gap: 6 },
-  toolbarGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
+  imageRow: { flexDirection: "row", flexWrap: "wrap" },
+  toolbar: { flexDirection: "row", alignItems: "center" },
+  toolbarGroup: { flexDirection: "row", alignItems: "center" },
   middle: { flex: 1, minWidth: 0 },
-  waveform: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 },
+  waveform: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" },
   recDot: { width: 8, height: 8, borderRadius: 4 },
-  bars: { flex: 1, minWidth: 0, height: 28, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, overflow: "hidden" },
-  timer: { fontFamily: "monospace", fontSize: 13, fontVariant: ["tabular-nums"] },
+  bars: { flex: 1, minWidth: 0, height: 28, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", overflow: "hidden" },
+  timer: { fontFamily: "monospace", fontVariant: ["tabular-nums"] },
   iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   fill: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  error: { fontSize: 13, paddingHorizontal: 12 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingLeft: 6, paddingRight: 8, paddingVertical: 6 },
-  chipIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  chipRemove: { paddingLeft: 4, paddingVertical: 2 },
-  failureGroup: { alignSelf: "flex-start", gap: 4 },
-  failure: { fontSize: 12, paddingHorizontal: 4 },
-  preview: { width: 64, height: 64, borderRadius: 12, overflow: "hidden" },
+  failureGroup: { alignSelf: "flex-start" },
+  preview: { width: 64, height: 64, overflow: "hidden" },
   previewImage: { width: 64, height: 64 },
-  previewRemove: { position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  previewRemove: { position: "absolute", top: 0, right: 0, width: 22, height: 22, alignItems: "center", justifyContent: "center" },
 });

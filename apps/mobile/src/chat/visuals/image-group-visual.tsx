@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Image, Linking, Pressable, ScrollView, Text } from "react-native";
+import { Image, Linking, Pressable, ScrollView } from "react-native";
+import { Text } from "@expo/ui";
+import { M3Host } from "@/components/m3";
 import { apiFetch, absoluteUrl, authHeaders } from "@/lib/api";
 import { usePreferences } from "@/preferences";
 import { VisualError, VisualSkeleton } from "./shared";
@@ -38,7 +40,7 @@ export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
   if (query.data.length === 0) return <VisualError title="No images" message={spec.queries.join(", ")} />;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       {query.data.map((result, index) => (
         <Pressable
           key={`${result.thumbnailUrl}-${index}`}
@@ -49,13 +51,13 @@ export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
         >
           <Image
             source={{ uri: absoluteUrl(result.thumbnailUrl), headers: authHeaders() }}
-            style={{ width: tileWidth, height: tileHeight, borderRadius: 12, backgroundColor: colors.surface }}
+            style={{ width: tileWidth, height: tileHeight, backgroundColor: colors.surface }}
             resizeMode="cover"
           />
           {result.title ? (
-            <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
-              {result.title}
-            </Text>
+            <M3Host matchContents={{ vertical: true }}>
+              <Text textStyle={{ color: colors.muted }}>{result.title}</Text>
+            </M3Host>
           ) : null}
         </Pressable>
       ))}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text } from "react-native";
+import { Alert } from "react-native";
+import { Text } from "@expo/ui";
 import { useRouter, type Href } from "expo-router";
-import { Archive, ArchiveRestore, ChevronLeft, FolderInput, FolderMinus, Plus, Trash2 } from "lucide-react-native";
 import { ApiError } from "@/lib/api";
 import {
   useDeleteConversation,
@@ -10,7 +10,6 @@ import {
   type ConversationSummary,
 } from "@/queries/conversations";
 import { useProjects } from "@/queries/projects";
-import { usePreferences } from "@/preferences";
 import { ActionSheet, ActionSheetOption } from "./action-sheet";
 
 /**
@@ -31,7 +30,6 @@ export function ConversationActionsSheet({
   /** Called once the conversation is deleted (the drawer leaves the chat when it was the open one). */
   onDeleted?: (id: string) => void;
 }) {
-  const { colors } = usePreferences();
   const router = useRouter();
   const projects = useProjects();
   const setArchived = useSetConversationArchived();
@@ -87,36 +85,36 @@ export function ConversationActionsSheet({
             />
           ))}
           {projects.data?.length === 0 ? (
-            <Text style={[styles.hint, { color: colors.muted }]}>No projects yet. Create one from the Projects list.</Text>
+            <Text>No projects yet. Create one from the Projects list.</Text>
           ) : null}
           <ActionSheetOption
             label="New project"
-            icon={<Plus size={20} color={colors.text} />}
+            icon="add"
             onPress={() => {
               // The form creates the project and moves this conversation into it.
               onClose();
               router.navigate(`/projects/form?moveConversation=${shown.id}` as Href);
             }}
           />
-          <ActionSheetOption label="Back" icon={<ChevronLeft size={20} color={colors.text} />} onPress={() => setView("menu")} />
+          <ActionSheetOption label="Back" icon="chevronLeft" onPress={() => setView("menu")} />
         </>
       ) : shown ? (
         <>
           <ActionSheetOption
             label="Move to project"
-            icon={<FolderInput size={20} color={colors.text} />}
+            icon="folderMove"
             onPress={() => setView("projects")}
           />
           {shown.project ? (
             <ActionSheetOption
               label="Remove from project"
-              icon={<FolderMinus size={20} color={colors.text} />}
+              icon="folderRemove"
               onPress={() => move(shown, null)}
             />
           ) : null}
           <ActionSheetOption
             label={archived ? "Restore" : "Archive"}
-            icon={archived ? <ArchiveRestore size={20} color={colors.text} /> : <Archive size={20} color={colors.text} />}
+            icon={archived ? "unarchive" : "archive"}
             onPress={() => {
               onClose();
               setArchived.mutate({ id: shown.id, archived: !archived }, { onError: failed(archived ? "Restore failed" : "Archive failed") });
@@ -124,7 +122,7 @@ export function ConversationActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
-            icon={<Trash2 size={20} color={colors.danger} />}
+            icon="delete"
             destructive
             onPress={() => {
               onClose();
@@ -136,7 +134,3 @@ export function ConversationActionsSheet({
     </ActionSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  hint: { fontSize: 13, textAlign: "center", paddingVertical: 10 },
-});

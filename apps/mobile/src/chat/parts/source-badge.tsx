@@ -1,4 +1,4 @@
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, Text, View } from "react-native";
 import { usePreferences } from "@/preferences";
 import { domainOf } from "../source-links";
 
@@ -6,34 +6,13 @@ import { domainOf } from "../source-links";
 export function SourceBadge({ url, label }: { url: string; label: string }) {
   const { colors } = usePreferences();
   const domain = domainOf(url);
+  // A link inside a sentence of the reply: it stays React Native text (the markdown around it is React Native too).
   return (
-    <Pressable
-      onPress={() => void Linking.openURL(url)}
-      accessibilityRole="link"
-      accessibilityLabel={`Source: ${label}`}
-      style={({ pressed }) => [
-        {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 4,
-          alignSelf: "center",
-          marginHorizontal: 2,
-          paddingLeft: 4,
-          paddingRight: 8,
-          paddingVertical: 2,
-          borderRadius: 999,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-          opacity: pressed ? 0.6 : 1,
-          maxWidth: 220,
-        },
-      ]}
-    >
-      <View style={{ width: 14, height: 14, borderRadius: 3, overflow: "hidden", backgroundColor: colors.surfaceStrong }}>
+    <Pressable onPress={() => void Linking.openURL(url)} accessibilityRole="link" accessibilityLabel={`Source: ${label}`}>
+      <View>
         <Image source={{ uri: `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico` }} style={{ width: 14, height: 14 }} />
       </View>
-      <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 }}>
+      <Text numberOfLines={1} style={{ color: colors.muted }}>
         {label || domain}
       </Text>
     </Pressable>

@@ -1,8 +1,10 @@
 import { ActionBarPrimitive, BranchPickerPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react-native";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Square } from "lucide-react-native";
+import { Pressable, View } from "react-native";
+import { Row, RNHostView, Text } from "@expo/ui";
 import { ActionSheet } from "@/components/action-sheet";
+import { Glyph } from "@/components/glyph";
+import { M3Host } from "@/components/m3";
 import { usePreferences } from "@/preferences";
 import { MessageParts } from "./message-parts";
 import { FilePart, ImagePart } from "./parts/file-part";
@@ -37,11 +39,11 @@ export function MessageView() {
   const stopped = useAuiState((s) => s.message.status?.type === "incomplete" && (s.message.status as { reason?: string }).reason === "cancelled");
 
   return (
-    <MessagePrimitive.Root style={isUser ? styles.userRow : styles.assistantRow}>
+    <MessagePrimitive.Root style={{ alignItems: isUser ? "flex-end" : "stretch" }}>
       {files.length > 0 ? (
-        <View style={styles.userFiles}>
+        <View style={{ alignItems: "flex-end" }}>
           {files.some(isImageFile) ? (
-            <View style={styles.imageRow}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end" }}>
               {files.filter(isImageFile).map((file, index) => (
                 <ImagePart key={`image-${index}`} url={urlOf(file)} />
               ))}
@@ -56,7 +58,7 @@ export function MessageView() {
         onLongPress={() => setSheetOpen(true)}
         delayLongPress={350}
         accessibilityHint="Long press for options"
-        style={isUser ? [styles.userBubble, { backgroundColor: colors.user }] : undefined}
+        style={isUser ? { backgroundColor: colors.user } : undefined}
       >
         <MessageParts role={isUser ? "user" : "assistant"} />
       </Pressable>
@@ -70,53 +72,58 @@ const NO_ATTACHMENTS: { content?: unknown[] }[] = [];
 
 /** The pill under a reply the user stopped: the web's "stopped by you". */
 function StoppedLabel() {
-  const { colors } = usePreferences();
   return (
-    <View style={[styles.stopped, { borderColor: colors.border }]}>
-      <Square size={9} color={colors.muted} fill={colors.muted} />
-      <Text style={{ color: colors.muted, fontSize: 12 }}>Stopped by you</Text>
-    </View>
+    <M3Host matchContents>
+      <Row alignment="center">
+        <Glyph name="stop" />
+        <Text>Stopped by you</Text>
+      </Row>
+    </M3Host>
   );
 }
 
-/** The options of one message, in a bottom sheet. Tap outside to close it. */
+/**
+ * The options of one message, in a bottom sheet. Tap outside to close it. The assistant-ui action primitives are React
+ * Native touch targets: each one sits in an RNHostView, and its label is @expo/ui.
+ */
 function MessageSheet({ visible, onClose, isUser }: { visible: boolean; onClose: () => void; isUser: boolean }) {
-  const { colors } = usePreferences();
   return (
     <ActionSheet visible={visible} onClose={onClose}>
-      <ActionBarPrimitive.Copy style={[styles.option, { borderColor: colors.border }]}>
-        {({ isCopied }) => <Text style={[styles.optionText, { color: colors.text }]}>{isCopied ? "Copied" : "Copy"}</Text>}
-      </ActionBarPrimitive.Copy>
+      <RNHostView matchContents>
+        <ActionBarPrimitive.Copy>
+          {({ isCopied }) => (
+            <M3Host matchContents>
+              <Text>{isCopied ? "Copied" : "Copy"}</Text>
+            </M3Host>
+          )}
+        </ActionBarPrimitive.Copy>
+      </RNHostView>
       {isUser ? null : (
         <>
-          <ActionBarPrimitive.Reload style={[styles.option, { borderColor: colors.border }]}>
-            <Text style={[styles.optionText, { color: colors.text }]}>Regenerate</Text>
-          </ActionBarPrimitive.Reload>
-          <View style={[styles.option, styles.versions, { borderColor: colors.border }]}>
-            <BranchPickerPrimitive.Previous style={styles.versionButton}>
-              <Text style={[styles.optionText, { color: colors.text }]}>‹ Previous</Text>
-            </BranchPickerPrimitive.Previous>
-            <BranchPickerPrimitive.Number style={styles.versionButton} />
-            <BranchPickerPrimitive.Next style={styles.versionButton}>
-              <Text style={[styles.optionText, { color: colors.text }]}>Next ›</Text>
-            </BranchPickerPrimitive.Next>
-          </View>
+          <RNHostView matchContents>
+            <ActionBarPrimitive.Reload>
+              <M3Host matchContents>
+                <Text>Regenerate</Text>
+              </M3Host>
+            </ActionBarPrimitive.Reload>
+          </RNHostView>
+          <RNHostView matchContents>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <BranchPickerPrimitive.Previous>
+                <M3Host matchContents>
+                  <Text>‹ Previous</Text>
+                </M3Host>
+              </BranchPickerPrimitive.Previous>
+              <BranchPickerPrimitive.Number />
+              <BranchPickerPrimitive.Next>
+                <M3Host matchContents>
+                  <Text>Next ›</Text>
+                </M3Host>
+              </BranchPickerPrimitive.Next>
+            </View>
+          </RNHostView>
         </>
       )}
     </ActionSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  userRow: { alignItems: "flex-end", gap: 6 },
-  // The files sit above the bubble, on the right like it: the pictures side by side, the other files one per line.
-  userFiles: { maxWidth: "85%", gap: 6, alignItems: "flex-end" },
-  imageRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 },
-  stopped: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  userBubble: { maxWidth: "85%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  assistantRow: { gap: 6 },
-  option: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
-  optionText: { fontSize: 16 },
-  versions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  versionButton: { paddingVertical: 4, paddingHorizontal: 6 },
-});

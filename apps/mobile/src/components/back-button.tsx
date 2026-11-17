@@ -1,7 +1,7 @@
+import { Button } from "@expo/ui";
 import { useRouter, type Href } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
-import { Pressable } from "react-native";
-import { usePreferences } from "@/preferences";
+import { Glyph } from "./glyph";
+import { M3Host } from "./m3";
 import { getReturnTo } from "@/lib/return-to";
 
 /**
@@ -11,17 +11,12 @@ import { getReturnTo } from "@/lib/return-to";
  */
 export function BackButton({ to }: { to?: Href }) {
   const router = useRouter();
-  const { colors } = usePreferences();
   const goBack = () => router.navigate(to ?? getReturnTo());
   return (
-    <Pressable
-      onPress={goBack}
-      accessibilityRole="button"
-      accessibilityLabel="Back"
-      hitSlop={12}
-      style={{ marginLeft: 8, marginRight: 4, padding: 4 }}
-    >
-      <ChevronLeft size={24} color={colors.text} />
-    </Pressable>
+    <M3Host matchContents>
+      <Button variant="text" onPress={goBack}>
+        <Glyph name="chevronLeft" />
+      </Button>
+    </M3Host>
   );
 }

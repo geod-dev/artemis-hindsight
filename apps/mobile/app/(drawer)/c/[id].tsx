@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import { Text } from "@expo/ui";
+import { M3Host } from "@/components/m3";
 import { ChatScreen } from "@/chat/chat-screen";
 import { ConversationTitleBar } from "@/components/conversation-title-bar";
 import { useConversationMessages } from "@/queries/conversations";
@@ -32,8 +34,10 @@ export default function ConversationScreen() {
   }
   if (isError) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: colors.background }}>
-        <Text style={{ color: colors.muted }}>Conversation not found.</Text>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <M3Host matchContents>
+          <Text textStyle={{ color: colors.muted }}>Conversation not found.</Text>
+        </M3Host>
       </View>
     );
   }

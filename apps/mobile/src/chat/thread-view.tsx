@@ -1,12 +1,14 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
+import { Button, Column, Text } from "@expo/ui";
 import { useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { NativeScrollEvent, NativeSyntheticEvent, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
-import { ChevronDown } from "lucide-react-native";
+import { Glyph } from "@/components/glyph";
+import { M3Host } from "@/components/m3";
 import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
-import { Composer, composerSurface } from "./composer";
+import { Composer } from "./composer";
 import { MessageView } from "./message-view";
 import { ProjectRecents } from "./project-recents";
 
@@ -33,7 +35,7 @@ export function ThreadView({
   /** The project picker, shown under the mascot in the empty chat. */
   projectPicker?: ReactNode;
 }) {
-  const { colors, isDark } = usePreferences();
+  const { colors } = usePreferences();
 
   // The sizes that decide how much room the messages have: the chat's height, the composer's, and the messages' content.
   const sizes = useRef({ chat: 0, composer: 0, content: 0 });
@@ -75,8 +77,12 @@ export function ThreadView({
           <ThreadPrimitive.Empty>
             <View style={styles.empty}>
               <BrandMark size={72} tint={mascotTint} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>What do you want to know?</Text>
-              <Text style={[styles.emptyBody, { color: colors.muted }]}>Ask a question, add a file, or dictate your message.</Text>
+              <M3Host matchContents={{ vertical: true }}>
+                <Column>
+                  <Text>What do you want to know?</Text>
+                  <Text>Ask a question, add a file, or dictate your message.</Text>
+                </Column>
+              </M3Host>
               {projectPicker}
             </View>
           </ThreadPrimitive.Empty>
@@ -84,7 +90,6 @@ export function ThreadView({
             <ThreadPrimitive.MessagesFlatList
               ref={list}
               style={styles.list}
-              contentContainerStyle={styles.listContent}
               autoScroll
               scrollToBottomOnInitialize
               scrollToBottomOnRunStart
@@ -100,14 +105,11 @@ export function ThreadView({
             </ThreadPrimitive.MessagesFlatList>
             {atBottom ? null : (
               <View style={styles.jumpLayer} pointerEvents="box-none">
-                <Pressable
-                  onPress={() => list.current?.scrollToEnd({ animated: true })}
-                  accessibilityRole="button"
-                  accessibilityLabel="Scroll to the latest message"
-                  style={[styles.jump, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}
-                >
-                  <ChevronDown size={20} color={colors.text} />
-                </Pressable>
+                <M3Host matchContents>
+                  <Button variant="outlined" onPress={() => list.current?.scrollToEnd({ animated: true })}>
+                    <Glyph name="chevronDown" />
+                  </Button>
+                </M3Host>
               </View>
             )}
           </View>
@@ -134,18 +136,7 @@ const styles = StyleSheet.create({
   clip: { flex: 1, overflow: "hidden" },
   root: { flex: 1 },
   list: { flex: 1 },
-  listContent: { padding: 16, gap: 16 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 8 },
-  emptyTitle: { fontSize: 22, fontWeight: "600" },
-  emptyBody: { fontSize: 15, textAlign: "center" },
-  jumpLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end", alignItems: "center", paddingBottom: 12 },
-  jump: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 2,
-  },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // The jump button sits over the bottom of the messages, centred (its position, not a margin).
+  jumpLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end", alignItems: "center" },
 });

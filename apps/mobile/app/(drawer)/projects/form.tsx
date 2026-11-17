@@ -1,11 +1,13 @@
 import * as DocumentPicker from "expo-document-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState, type ComponentRef } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, ScrollView, View } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
-import { Folder, ImagePlus, X } from "lucide-react-native";
+import { Button, Column, Row, RNHostView, Text, TextInput } from "@expo/ui";
+import { Glyph, GlyphView } from "@/components/glyph";
 import { ColorSwatches } from "@/components/color-swatches";
+import { M3Host } from "@/components/m3";
 import { ApiError } from "@/lib/api";
 import { useSetConversationProject } from "@/queries/conversations";
 import { firstUnusedColor, isAvatarColorId, paletteHex, type AvatarColorId } from "@/lib/avatar";
@@ -38,7 +40,7 @@ export default function ProjectFormScreen() {
   if (!id) return <ProjectForm key="new" existing={null} />;
   if (projects.isPending) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.accent} />
       </View>
     );
@@ -46,8 +48,10 @@ export default function ProjectFormScreen() {
   const existing = projects.data?.find((project) => project.id === id) ?? null;
   if (!existing) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.muted }}>This project no longer exists.</Text>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <M3Host matchContents>
+          <Text textStyle={{ color: colors.muted }}>This project no longer exists.</Text>
+        </M3Host>
       </View>
     );
   }
@@ -163,120 +167,71 @@ function ProjectForm({ existing }: { existing: ProjectSummary | null }) {
     );
   }
 
-  const field = [styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }];
   const hasPreview = icon !== null || keepsIcon;
 
   return (
     <Animated.View style={[{ flex: 1, backgroundColor: colors.background }, keyboardPadding]}>
       <Stack.Screen options={{ title: isEdit ? "Edit project" : "New project" }} />
-      <ScrollView ref={scroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.label, { color: colors.muted }]}>Icon</Text>
-        <View style={styles.iconRow}>
-          <View style={[styles.iconBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            {icon ? (
-              <Image source={{ uri: icon.uri }} style={styles.iconImage} accessibilityIgnoresInvertColors />
-            ) : keepsIcon && existing ? (
-              <Image source={projectIconSource(existing)} style={styles.iconImage} accessibilityIgnoresInvertColors />
-            ) : (
-              <Folder size={30} color={paletteHex(color)} fill={paletteHex(color)} />
-            )}
-          </View>
-          <View style={styles.iconActions}>
-            <Pressable
-              onPress={() => void pickIcon()}
-              disabled={busy}
-              accessibilityRole="button"
-              style={[styles.secondary, { borderColor: colors.border }]}
-            >
-              <ImagePlus size={16} color={colors.text} />
-              <Text style={[styles.secondaryText, { color: colors.text }]}>{hasPreview ? "Change icon" : "Add icon"}</Text>
-            </Pressable>
-            {hasPreview ? (
-              <Pressable onPress={dropIcon} disabled={busy} accessibilityRole="button" style={styles.textAction}>
-                <X size={14} color={colors.muted} />
-                <Text style={[styles.textActionText, { color: colors.muted }]}>Remove</Text>
-              </Pressable>
+      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled">
+        <M3Host matchContents={{ vertical: true }}>
+          <Column>
+            <Text>Icon</Text>
+            <Row alignment="center">
+              {icon ? (
+                <Image source={{ uri: icon.uri }} style={{ width: 72, height: 72 }} accessibilityIgnoresInvertColors />
+              ) : keepsIcon && existing ? (
+                <Image source={projectIconSource(existing)} style={{ width: 72, height: 72 }} accessibilityIgnoresInvertColors />
+              ) : (
+                <GlyphView name="folder" color={paletteHex(color)} />
+              )}
+              <Column>
+                <Button variant="outlined" disabled={busy} onPress={() => void pickIcon()}>
+                  <Row alignment="center">
+                    <Glyph name="imageAdd" />
+                    <Text>{hasPreview ? "Change icon" : "Add icon"}</Text>
+                  </Row>
+                </Button>
+                {hasPreview ? <Button variant="text" label="Remove" disabled={busy} onPress={dropIcon} /> : null}
+              </Column>
+            </Row>
+
+            <Text>Name</Text>
+            <TextInput onChangeText={setName} maxLength={NAME_MAX} placeholder="Trip to Lisbon" editable={!busy} />
+
+            <Text>Color</Text>
+            <RNHostView matchContents>
+              <ColorSwatches value={color} onChange={setColor} disabled={busy} />
+            </RNHostView>
+
+            <Text>Instructions (optional)</Text>
+            <TextInput
+              onChangeText={setDescription}
+              maxLength={DESCRIPTION_MAX}
+              multiline
+              placeholder="What the assistant should know or follow in this project."
+              editable={!busy}
+              onFocus={() => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250)}
+            />
+            <Text textStyle={{ color: colors.muted }}>Given to the assistant in every conversation of this project.</Text>
+
+            {error ? <Text textStyle={{ color: colors.danger }}>{error}</Text> : null}
+
+            <Button
+              variant="filled"
+              disabled={!canSave}
+              style={{ backgroundColor: colors.accent }}
+              label={create.isPending || update.isPending ? "Saving…" : isEdit ? "Save changes" : "Create project"}
+              onPress={save}
+            />
+
+            {existing ? (
+              <Button variant="outlined" disabled={busy} onPress={() => confirmDelete(existing)}>
+                <Text textStyle={{ color: colors.danger }}>Delete project</Text>
+              </Button>
             ) : null}
-          </View>
-        </View>
-
-        <Text style={[styles.label, { color: colors.muted }]}>Name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          maxLength={NAME_MAX}
-          placeholder="Trip to Lisbon"
-          placeholderTextColor={colors.muted}
-          editable={!busy}
-          style={field}
-        />
-
-        <Text style={[styles.label, { color: colors.muted }]}>Color</Text>
-        <ColorSwatches value={color} onChange={setColor} disabled={busy} />
-
-        <Text style={[styles.label, { color: colors.muted }]}>Instructions (optional)</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          maxLength={DESCRIPTION_MAX}
-          multiline
-          textAlignVertical="top"
-          placeholder="What the assistant should know or follow in this project."
-          placeholderTextColor={colors.muted}
-          editable={!busy}
-          onFocus={() => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250)}
-          style={[...field, styles.textarea]}
-        />
-        <Text style={[styles.hint, { color: colors.muted }]}>Given to the assistant in every conversation of this project.</Text>
-
-        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-
-        <Pressable
-          onPress={save}
-          disabled={!canSave}
-          accessibilityRole="button"
-          style={[styles.button, { backgroundColor: colors.accent, opacity: canSave ? 1 : 0.4 }]}
-        >
-          {create.isPending || update.isPending ? (
-            <ActivityIndicator color={colors.accentText} />
-          ) : (
-            <Text style={[styles.buttonText, { color: colors.accentText }]}>{isEdit ? "Save changes" : "Create project"}</Text>
-          )}
-        </Pressable>
-
-        {existing ? (
-          <Pressable
-            onPress={() => confirmDelete(existing)}
-            disabled={busy}
-            accessibilityRole="button"
-            style={[styles.deleteButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.deleteText, { color: colors.danger }]}>Delete project</Text>
-          </Pressable>
-        ) : null}
+          </Column>
+        </M3Host>
       </ScrollView>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  form: { gap: 10, padding: 16, paddingBottom: 32 },
-  label: { fontSize: 13, fontWeight: "500", marginTop: 8 },
-  iconRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  iconBox: { width: 72, height: 72, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  iconImage: { width: 72, height: 72 },
-  iconActions: { gap: 6, alignItems: "flex-start" },
-  secondary: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
-  secondaryText: { fontSize: 14, fontWeight: "500" },
-  textAction: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 4 },
-  textActionText: { fontSize: 13 },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  textarea: { minHeight: 120 },
-  hint: { fontSize: 12 },
-  error: { fontSize: 14, marginTop: 4 },
-  button: { marginTop: 16, borderRadius: 999, paddingVertical: 14, alignItems: "center" },
-  buttonText: { fontSize: 16, fontWeight: "600" },
-  deleteButton: { marginTop: 8, borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingVertical: 14, alignItems: "center" },
-  deleteText: { fontSize: 16, fontWeight: "600" },
-});

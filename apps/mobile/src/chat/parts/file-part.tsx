@@ -1,13 +1,14 @@
+import { Button, ListItem, RNHostView, Text } from "@expo/ui";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { X } from "lucide-react-native";
 import { absoluteUrl, authHeaders } from "@/lib/api";
-import { FILE_CARD, fileKind } from "@/lib/file-icons";
+import { fileKind } from "@/lib/file-icons";
 import { baseName, extensionLabel, sandboxFileUrl } from "@/lib/sandbox-files";
-import { usePreferences } from "@/preferences";
+import { Glyph } from "@/components/glyph";
+import { M3Host } from "@/components/m3";
 
 /**
  * Downloads a file from the server into the cache with the session, then opens the system share sheet (save, open
@@ -31,15 +32,21 @@ export async function openSandboxFile(conversationId: string, path: string): Pro
 }
 
 /**
- * An image in a message (the uploaded picture, or one the agent produced): a square rounded thumbnail. A tap opens it
- * full screen; the close button, or a tap outside the picture, closes it. Loaded with the session.
+ * An image in a message (the uploaded picture, or one the agent produced): a thumbnail. A tap opens it full screen; the
+ * close button, or a tap outside the picture, closes it. Loaded with the session. The picture itself is a React Native
+ * Image (@expo/ui has none); the full-screen controls are @expo/ui.
  */
 export function ImagePart({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
-  const { colors } = usePreferences();
   const source = { uri: absoluteUrl(url), headers: authHeaders() };
-  if (failed) return <Text style={{ color: colors.muted }}>Image unavailable</Text>;
+  if (failed) {
+    return (
+      <M3Host matchContents>
+        <Text>Image unavailable</Text>
+      </M3Host>
+    );
+  }
   return (
     <>
       <Pressable onPress={() => setOpen(true)} accessibilityRole="imagebutton" accessibilityLabel="Open image" style={styles.thumb}>
@@ -50,9 +57,11 @@ export function ImagePart({ url }: { url: string }) {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Close image" />
           <Image source={source} resizeMode="contain" style={styles.fullImage} />
           <SafeAreaView style={styles.closeBar} edges={["top"]} pointerEvents="box-none">
-            <Pressable onPress={() => setOpen(false)} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} style={styles.closeButton}>
-              <X size={22} color="#ffffff" />
-            </Pressable>
+            <M3Host matchContents>
+              <Button variant="text" onPress={() => setOpen(false)}>
+                <Glyph name="close" color="#ffffff" />
+              </Button>
+            </M3Host>
           </SafeAreaView>
         </View>
       </Modal>
@@ -60,12 +69,11 @@ export function ImagePart({ url }: { url: string }) {
   );
 }
 
-/** A file in a message: its name, opened through the share sheet. */
+/** A file in a message: its name and type, opened through the share sheet. */
 export function FilePart({ url, filename, mimeType }: { url: string; filename?: string; mimeType?: string }) {
-  const { colors } = usePreferences();
   const [busy, setBusy] = useState(false);
   const name = filename ?? baseName(url);
-  const { Icon, tint } = fileKind(name, mimeType);
+  const { glyph, tint } = fileKind(name, mimeType);
 
   const open = async () => {
     setBusy(true);
@@ -80,48 +88,31 @@ export function FilePart({ url, filename, mimeType }: { url: string; filename?: 
   };
 
   return (
-    <Pressable
-      onPress={() => void open()}
-      accessibilityRole="button"
-      style={[styles.file, { borderColor: colors.border, backgroundColor: colors.surface }]}
-    >
-      <View style={[styles.fileIcon, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
-        <Icon size={18} color={tint ?? colors.muted} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, fontWeight: "500" }}>
-          {name}
-        </Text>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>{extensionLabel(name) || "File"}</Text>
-      </View>
-      {busy ? <ActivityIndicator color={colors.muted} /> : null}
-    </Pressable>
+    <M3Host matchContents={{ vertical: true }}>
+      <ListItem onPress={() => void open()}>
+        <Text>{name}</Text>
+        <ListItem.Supporting>
+          <Text>{extensionLabel(name) || "File"}</Text>
+        </ListItem.Supporting>
+        <ListItem.Leading>
+          <Glyph name={glyph} color={tint} />
+        </ListItem.Leading>
+        {busy ? (
+          <ListItem.Trailing>
+            <RNHostView matchContents>
+              <ActivityIndicator />
+            </RNHostView>
+          </ListItem.Trailing>
+        ) : null}
+      </ListItem>
+    </M3Host>
   );
 }
 
 const styles = StyleSheet.create({
-  thumb: { width: 140, aspectRatio: 1, borderRadius: 16, overflow: "hidden" },
+  thumb: { width: 140, aspectRatio: 1, overflow: "hidden" },
   thumbImage: { width: "100%", height: "100%" },
   fullscreen: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center" },
   fullImage: { width: "100%", height: "100%" },
-  closeBar: { position: "absolute", top: 0, right: 0, padding: 12 },
-  closeButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.15)" },
-  fileIcon: {
-    width: FILE_CARD.tile,
-    height: FILE_CARD.tile,
-    borderRadius: FILE_CARD.tileRadius,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  file: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: FILE_CARD.gap,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: FILE_CARD.radius,
-    paddingVertical: FILE_CARD.padding,
-    paddingLeft: FILE_CARD.padding,
-    paddingRight: FILE_CARD.paddingRight,
-  },
+  closeBar: { position: "absolute", top: 0, right: 0 },
 });

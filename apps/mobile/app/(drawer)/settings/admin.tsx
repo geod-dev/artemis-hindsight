@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert } from "react-native";
+import { Button, Column, Row, RNHostView, ScrollView, Text, TextInput } from "@expo/ui";
+import { M3Host } from "@/components/m3";
 import { apiFetch, ApiError } from "@/lib/api";
 import { usePreferences } from "@/preferences";
 
@@ -30,6 +32,8 @@ export default function AdminSettings() {
   const [newPassword, setNewPassword] = useState("");
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
+  // Bumped after a save: the password fields remount empty.
+  const [formRound, setFormRound] = useState(0);
 
   const users = useQuery({
     queryKey: ["admin", "users", unlocked],
@@ -47,6 +51,7 @@ export default function AdminSettings() {
     onSuccess: () => {
       setNewUsername("");
       setNewPassword("");
+      setFormRound((round) => round + 1);
       void refresh();
     },
     onError: fail,
@@ -65,6 +70,7 @@ export default function AdminSettings() {
     onSuccess: () => {
       setResetFor(null);
       setResetPassword("");
+      setFormRound((round) => round + 1);
       Alert.alert("Password reset");
     },
     onError: fail,
@@ -83,88 +89,77 @@ export default function AdminSettings() {
       { text: "Delete", style: "destructive", onPress: () => remove.mutate(username) },
     ]);
 
-  const field = [styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }];
-
   if (unlocked === null) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.muted }}>Enter the server admin key. It is kept on this screen only.</Text>
-        <TextInput value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" placeholder="Admin key" placeholderTextColor={colors.muted} style={field} />
-        <Pressable
-          onPress={() => key && setUnlocked(key)}
-          disabled={!key}
-          accessibilityRole="button"
-          style={[styles.button, { backgroundColor: colors.accent, opacity: key ? 1 : 0.4 }]}
-        >
-          <Text style={{ color: colors.accentText, fontWeight: "600" }}>Open</Text>
-        </Pressable>
-      </View>
+      <M3Host style={{ flex: 1 }}>
+        <Column>
+          <Text textStyle={{ color: colors.muted }}>Enter the server admin key. It is kept on this screen only.</Text>
+          <TextInput onChangeText={setKey} secureTextEntry autoCapitalize="none" placeholder="Admin key" />
+          <Button variant="filled" label="Open" disabled={!key} onPress={() => key && setUnlocked(key)} />
+        </Column>
+      </M3Host>
     );
   }
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, gap: 12 }}>
-      {users.isPending ? <ActivityIndicator color={colors.accent} /> : null}
-      {users.isError ? (
-        <Text style={{ color: colors.danger }}>{errorMessage(users.error)}</Text>
-      ) : null}
+    <M3Host style={{ flex: 1 }}>
+      <ScrollView>
+        <Column>
+          {users.isPending ? (
+            <RNHostView matchContents>
+              <ActivityIndicator color={colors.accent} />
+            </RNHostView>
+          ) : null}
+          {users.isError ? <Text textStyle={{ color: colors.danger }}>{errorMessage(users.error)}</Text> : null}
 
-      <Text style={[styles.section, { color: colors.muted }]}>Nouveau compte</Text>
-      <TextInput value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" placeholder="Username" placeholderTextColor={colors.muted} style={field} />
-      <TextInput value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="Password" placeholderTextColor={colors.muted} style={field} />
-      <Pressable
-        onPress={() => create.mutate()}
-        disabled={!newUsername.trim() || !newPassword || create.isPending}
-        accessibilityRole="button"
-        style={[styles.button, { backgroundColor: colors.accent, opacity: newUsername.trim() && newPassword ? 1 : 0.4 }]}
-      >
-        <Text style={{ color: colors.accentText, fontWeight: "600" }}>Create account</Text>
-      </Pressable>
+          <Text textStyle={{ color: colors.muted }}>Nouveau compte</Text>
+          {/* The fields are remounted (key) after a successful create, so they come back empty. */}
+          <TextInput key={`user-${formRound}`} onChangeText={setNewUsername} autoCapitalize="none" placeholder="Username" />
+          <TextInput key={`pass-${formRound}`} onChangeText={setNewPassword} secureTextEntry placeholder="Password" />
+          <Button
+            variant="filled"
+            label="Create account"
+            disabled={!newUsername.trim() || !newPassword || create.isPending}
+            onPress={() => create.mutate()}
+          />
 
-      <Text style={[styles.section, { color: colors.muted }]}>Comptes</Text>
-      {users.data?.map((user) => {
-        const archived = user.status === "archived";
-        return (
-          <View key={user.username} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}>
-              {user.username} <Text style={{ color: colors.muted, fontWeight: "400", fontSize: 12 }}>{archived ? "· archived" : "· active"}</Text>
-            </Text>
-            <View style={styles.actions}>
-              <Pressable onPress={() => setArchived.mutate({ username: user.username, archived: !archived })} accessibilityRole="button">
-                <Text style={{ color: colors.accent }}>{archived ? "Reactivate" : "Archive"}</Text>
-              </Pressable>
-              <Pressable onPress={() => setResetFor(resetFor === user.username ? null : user.username)} accessibilityRole="button">
-                <Text style={{ color: colors.accent }}>Password</Text>
-              </Pressable>
-              <Pressable onPress={() => confirmDelete(user.username)} accessibilityRole="button">
-                <Text style={{ color: colors.danger }}>Delete</Text>
-              </Pressable>
-            </View>
-            {resetFor === user.username ? (
-              <View style={{ gap: 8 }}>
-                <TextInput value={resetPassword} onChangeText={setResetPassword} secureTextEntry placeholder="New password" placeholderTextColor={colors.muted} style={field} />
-                <Pressable
-                  onPress={() => resetPasswordFor.mutate({ username: user.username, password: resetPassword })}
-                  disabled={!resetPassword}
-                  accessibilityRole="button"
-                  style={[styles.button, { backgroundColor: colors.accent, opacity: resetPassword ? 1 : 0.4 }]}
-                >
-                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>Save</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
-    </ScrollView>
+          <Text textStyle={{ color: colors.muted }}>Comptes</Text>
+          {users.data?.map((user) => {
+            const archived = user.status === "archived";
+            return (
+              <Column key={user.username}>
+                <Text>{`${user.username} · ${archived ? "archived" : "active"}`}</Text>
+                <Row alignment="center">
+                  <Button
+                    variant="text"
+                    label={archived ? "Reactivate" : "Archive"}
+                    onPress={() => setArchived.mutate({ username: user.username, archived: !archived })}
+                  />
+                  <Button
+                    variant="text"
+                    label="Password"
+                    onPress={() => setResetFor(resetFor === user.username ? null : user.username)}
+                  />
+                  <Button variant="text" onPress={() => confirmDelete(user.username)}>
+                    <Text textStyle={{ color: colors.danger }}>Delete</Text>
+                  </Button>
+                </Row>
+                {resetFor === user.username ? (
+                  <Column>
+                    <TextInput key={`reset-${formRound}`} onChangeText={setResetPassword} secureTextEntry placeholder="New password" />
+                    <Button
+                      variant="filled"
+                      label="Save"
+                      disabled={!resetPassword}
+                      onPress={() => resetPasswordFor.mutate({ username: user.username, password: resetPassword })}
+                    />
+                  </Column>
+                ) : null}
+              </Column>
+            );
+          })}
+        </Column>
+      </ScrollView>
+    </M3Host>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, padding: 16, gap: 12 },
-  section: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
-  button: { borderRadius: 999, paddingVertical: 12, alignItems: "center" },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 14, gap: 10 },
-  actions: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
-});

@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
-import Markdown, { Renderer, type MarkedStyles } from "react-native-marked";
+import Markdown, { Renderer } from "react-native-marked";
 import { usePreferences } from "@/preferences";
 import { parseSandboxFileHref } from "@/lib/sandbox-files";
 import { renderVisual, VISUAL_LANGUAGES } from "../visuals";
@@ -10,12 +10,6 @@ import { groupSourceLinks, parseSourceHref } from "../source-links";
 import { SourceBadge } from "./source-badge";
 import { SandboxFileCard } from "./sandbox-file-card";
 
-// Headings sized closer to the body text, and no rule under them: the library draws a 1px border under h1 and h2 by default.
-const markdownStyles: MarkedStyles = {
-  h1: { fontSize: 19, fontWeight: "600", borderBottomWidth: 0, marginTop: 12, marginBottom: 6 },
-  h2: { fontSize: 17, fontWeight: "600", borderBottomWidth: 0, marginTop: 10, marginBottom: 4 },
-  h3: { fontSize: 16, fontWeight: "600", marginTop: 8, marginBottom: 4 },
-};
 
 type Segment =
   | { kind: "markdown"; text: string }
@@ -134,8 +128,9 @@ export function TextPart({ text }: { text: string }) {
         text: colors.text,
         background: "transparent",
         code: colors.surface,
+        // The markdown's own rules and table lines: the muted tone, the palette's only secondary colour.
+        border: colors.muted,
         link: colors.accent,
-        border: colors.border,
       },
     }),
     [colors],
@@ -144,7 +139,7 @@ export function TextPart({ text }: { text: string }) {
   const renderer = useMemo(() => createReplyRenderer(conversationId, { color: colors.text }), [conversationId, colors.text]);
 
   return (
-    <View style={{ gap: 8 }}>
+    <View>
       {segments.map((segment, index) =>
         segment.kind === "visual" ? (
           <View key={index}>{renderVisual(segment.language, segment.code, segment.closed)}</View>
@@ -155,7 +150,6 @@ export function TextPart({ text }: { text: string }) {
             key={index}
             value={segment.text}
             theme={theme}
-            styles={markdownStyles}
             renderer={renderer}
             flatListProps={{ scrollEnabled: false, style: { backgroundColor: "transparent" } }}
           />

@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { LayoutChangeEvent, Text, View } from "react-native";
+import { LayoutChangeEvent, View } from "react-native";
 import { BarChart, LineChart } from "react-native-gifted-charts";
+import { Column, Row, Text } from "@expo/ui";
+import { M3Host } from "@/components/m3";
 import { usePreferences } from "@/preferences";
 import { VisualCard } from "./shared";
 import type { ChartValue } from "./schemas";
@@ -18,7 +20,8 @@ function directionOf(trend: "up" | "down" | "flat" | undefined, delta: string | 
 
 /**
  * A trend card, as the web chart shows it (`visual__chart`): the label, the headline value with a small coloured delta,
- * and the series. No axes and no rules: the curve carries the story, and the numbers stay in the header.
+ * and the series. No axes and no rules: the curve carries the story, and the numbers stay in the header. The header is
+ * @expo/ui; the curve is react-native-gifted-charts (@expo/ui has no chart).
  */
 export function ChartVisual({ value }: { value: ChartValue }) {
   const { colors, isDark } = usePreferences();
@@ -46,20 +49,19 @@ export function ChartVisual({ value }: { value: ChartValue }) {
   return (
     <VisualCard>
       <View onLayout={onLayout}>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>{value.label}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Text style={{ color: colors.text, fontSize: 22, fontWeight: "600" }}>{value.value}</Text>
-          {value.delta ? (
-            <View style={{ backgroundColor: `${trendColor}1f`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ color: trendColor, fontSize: 12, fontWeight: "600" }}>
-                {TREND_SIGN[trend] ? `${TREND_SIGN[trend]} ` : ""}
-                {value.delta}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        <M3Host matchContents={{ vertical: true }}>
+          <Column>
+            <Text textStyle={{ color: colors.muted }}>{value.label}</Text>
+            <Row alignment="center">
+              <Text textStyle={{ color: colors.text }}>{value.value}</Text>
+              {value.delta ? (
+                <Text textStyle={{ color: trendColor }}>{`${TREND_SIGN[trend] ? `${TREND_SIGN[trend]} ` : ""}${value.delta}`}</Text>
+              ) : null}
+            </Row>
+          </Column>
+        </M3Host>
         {width > 0 ? (
-          <View style={{ marginTop: 10 }}>
+          <View>
             {variant === "bars" ? (
               <BarChart
                 data={data}

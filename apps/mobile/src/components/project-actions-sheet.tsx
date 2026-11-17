@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react-native";
 import { ApiError } from "@/lib/api";
 import { useDeleteProject, useProjects, useSaveProjectOrder, type ProjectSummary } from "@/queries/projects";
-import { usePreferences } from "@/preferences";
 import { ActionSheet, ActionSheetOption } from "./action-sheet";
 
 /**
@@ -22,7 +20,6 @@ export function ProjectActionsSheet({
   /** Called once the project is deleted. Its conversations stay, outside any project. */
   onDeleted?: (projectId: string) => void;
 }) {
-  const { colors } = usePreferences();
   const remove = useDeleteProject();
   const projects = useProjects();
   const saveOrder = useSaveProjectOrder();
@@ -78,7 +75,7 @@ export function ProjectActionsSheet({
           {canMove(shown, -1) ? (
             <ActionSheetOption
               label="Move up"
-              icon={<ArrowUp size={20} color={colors.text} />}
+              icon="arrowUp"
               onPress={() => {
                 onClose();
                 moveBy(shown, -1);
@@ -88,7 +85,7 @@ export function ProjectActionsSheet({
           {canMove(shown, 1) ? (
             <ActionSheetOption
               label="Move down"
-              icon={<ArrowDown size={20} color={colors.text} />}
+              icon="arrowDown"
               onPress={() => {
                 onClose();
                 moveBy(shown, 1);
@@ -97,7 +94,7 @@ export function ProjectActionsSheet({
           ) : null}
           <ActionSheetOption
             label="Edit"
-            icon={<Pencil size={20} color={colors.text} />}
+            icon="edit"
             onPress={() => {
               onClose();
               onEdit(shown);
@@ -105,7 +102,7 @@ export function ProjectActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
-            icon={<Trash2 size={20} color={colors.danger} />}
+            icon="delete"
             destructive
             onPress={() => {
               onClose();

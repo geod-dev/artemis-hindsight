@@ -1,6 +1,8 @@
+import { Row, Text } from "@expo/ui";
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { Pressable, View } from "react-native";
+import { Glyph } from "@/components/glyph";
+import { M3Host } from "@/components/m3";
 import { usePreferences } from "@/preferences";
 
 // The turn's work, as the web app shows it (services/web/src/components/assistant-ui/elements/run-activity.tsx): one quiet
@@ -30,25 +32,23 @@ export function RunActivity({
   const summary = durationLabel ? `${statusLabel} ${durationLabel}` : statusLabel;
 
   return (
-    <View style={styles.root}>
-      <Pressable
-        onPress={() => setOpen((value) => !value)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        style={styles.trigger}
-      >
-        <View style={{ transform: [{ rotate: open ? "90deg" : "0deg" }] }}>
-          <ChevronRight size={14} color={colors.muted} />
-        </View>
-        <Text style={[styles.summary, { color: colors.muted }]}>{summary}</Text>
+    <View>
+      <Pressable onPress={() => setOpen((value) => !value)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+        <M3Host matchContents={{ vertical: true }}>
+          <Row alignment="center">
+            <Glyph name={open ? "chevronDown" : "chevronRight"} />
+            <Text>{summary}</Text>
+          </Row>
+        </M3Host>
       </Pressable>
       {!open && running && latest ? (
-        <Text numberOfLines={1} style={[styles.latest, { color: colors.muted }]}>
-          {latest}
-        </Text>
+        <M3Host matchContents={{ vertical: true }}>
+          <Text>{latest}</Text>
+        </M3Host>
       ) : null}
       {open ? (
-        <View style={[styles.timeline, { borderLeftColor: colors.border }]}>
+        // The timeline: a thin rule down the left of the steps (a decoration, not a control: plain React Native).
+        <View style={{ borderLeftWidth: 1, borderLeftColor: colors.muted }}>
           {entries.map((entry) => (
             <View key={entry.id}>{entry.content}</View>
           ))}
@@ -57,11 +57,3 @@ export function RunActivity({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { gap: 4 },
-  trigger: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, alignSelf: "flex-start" },
-  summary: { fontSize: 14, fontVariant: ["tabular-nums"] },
-  latest: { fontSize: 13, paddingLeft: 18 },
-  timeline: { marginLeft: 6, paddingLeft: 14, paddingTop: 6, paddingBottom: 4, gap: 12, borderLeftWidth: StyleSheet.hairlineWidth },
-});
