@@ -47,20 +47,21 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const [voice, setVoice] = useState<Voice>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  const addFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
+  // Several files at once; each one is checked on its own, so one too large does not stop the others.
+  const addFiles = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
     if (result.canceled) return;
-    const asset = result.assets[0];
-    if (!asset) return;
-    if ((asset.size ?? 0) > MAX_ATTACHMENT_MB * 1024 * 1024) {
-      Alert.alert("File too large", `${asset.name} is larger than ${MAX_ATTACHMENT_MB} MB.`);
-      return;
-    }
-    const picked: PickedFile = { uri: asset.uri, name: asset.name, type: asset.mimeType ?? "application/octet-stream", size: asset.size };
-    try {
-      await aui.composer().addAttachment(picked as unknown as File);
-    } catch (cause) {
-      Alert.alert("Attachment rejected", cause instanceof Error ? cause.message : "This file cannot be added.");
+    for (const asset of result.assets) {
+      if ((asset.size ?? 0) > MAX_ATTACHMENT_MB * 1024 * 1024) {
+        Alert.alert("File too large", `${asset.name} is larger than ${MAX_ATTACHMENT_MB} MB.`);
+        continue;
+      }
+      const picked: PickedFile = { uri: asset.uri, name: asset.name, type: asset.mimeType ?? "application/octet-stream", size: asset.size };
+      try {
+        await aui.composer().addAttachment(picked as unknown as File);
+      } catch (cause) {
+        Alert.alert("Attachment rejected", cause instanceof Error ? cause.message : "This file cannot be added.");
+      }
     }
   };
 
@@ -113,7 +114,12 @@ export function Composer({ conversationId }: { conversationId: string }) {
     <View>
       <View style={styles.wrapper}>
         <ComposerPrimitive.Root style={[styles.card, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}>
-          <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
+          {/* Attachments side by side, wrapping onto a new row: square image previews sit inline. */}
+          {attachmentCount > 0 ? (
+            <View style={styles.attachments}>
+              <ComposerPrimitive.Attachments>{() => <AttachmentChip />}</ComposerPrimitive.Attachments>
+            </View>
+          ) : null}
 
           {voice === "idle" ? (
             <TextInput
@@ -132,7 +138,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
           <View style={styles.toolbar}>
             {voice === "idle" ? (
               <View style={styles.toolbarGroup}>
-                <IconButton icon={Plus} label="Add a file" onPress={() => void addFile()} />
+                <IconButton icon={Plus} label="Add files" onPress={() => void addFiles()} />
                 <IconButton icon={Mic} label="Dictate" onPress={() => void startVoice()} />
               </View>
             ) : (
@@ -317,6 +323,7 @@ function IconButton({
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
+  attachments: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
   voiceRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8 },
   recDot: { width: 8, height: 8, borderRadius: 4 },
