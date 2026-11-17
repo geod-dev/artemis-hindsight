@@ -1,5 +1,6 @@
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePathname, useRouter, type Href } from "expo-router";
+import { Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DrawerContentComponentProps } from "expo-router/drawer";
 import { useAuth } from "@/auth";
@@ -43,11 +44,6 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.surface, paddingTop: insets.top + 8 }]}>
-      {/* A new session each time: /new stays mounted after its first reply, so the same route alone would show that chat. */}
-      <Pressable onPress={() => go(`/new?session=${Date.now()}`)} style={[styles.newButton, { backgroundColor: colors.accent }]}>
-        <Text style={[styles.newButtonText, { color: colors.accentText }]}>+ New conversation</Text>
-      </Pressable>
-
       {isPending ? (
         <ActivityIndicator style={{ marginTop: 24 }} color={colors.accent} />
       ) : isError ? (
@@ -81,33 +77,41 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
         />
       )}
 
-      {/* The account button: like the web sidebar footer, it opens the settings. */}
-      <Pressable
-        onPress={() => go("/settings")}
-        accessibilityRole="link"
-        accessibilityLabel="Account and settings"
-        style={[styles.footer, { borderTopColor: colors.border }]}
-      >
-        <View style={[styles.avatar, { backgroundColor: user ? avatarHex(user.avatarColor, user.username) : colors.muted }]}>
+      {/* The bottom bar: the account (avatar only, opens the settings) on the left, a new chat on the right. A new session
+          each time: /new stays mounted after its first reply, so the same route alone would show that chat. */}
+      <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <Pressable
+          onPress={() => go("/settings")}
+          accessibilityRole="link"
+          accessibilityLabel="Account and settings"
+          hitSlop={8}
+          style={[styles.avatar, { backgroundColor: user ? avatarHex(user.avatarColor, user.username) : colors.muted }]}
+        >
           <Text style={styles.avatarText}>{user ? initialsOf(user.displayName ?? user.username) : "?"}</Text>
-        </View>
-        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15, fontWeight: "500", flexShrink: 1 }}>
-          {user ? (user.displayName ?? user.username) : ""}
-        </Text>
-      </Pressable>
+        </Pressable>
+        <Pressable
+          onPress={() => go(`/new?session=${Date.now()}`)}
+          accessibilityRole="button"
+          accessibilityLabel="New chat"
+          style={[styles.newButton, { backgroundColor: colors.accent }]}
+        >
+          <Plus size={20} color={colors.accentText} />
+          <Text style={[styles.newButtonText, { color: colors.accentText }]}>New Chat</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 12 },
-  newButton: { borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 12 },
-  newButtonText: { fontSize: 15, fontWeight: "600" },
+  newButton: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 20 },
+  newButtonText: { fontSize: 16, fontWeight: "600" },
   item: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   empty: { padding: 12, fontSize: 14 },
-  footer: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 12, paddingHorizontal: 4, marginTop: "auto" },
-  avatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 16, paddingHorizontal: 4, marginTop: "auto" },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
