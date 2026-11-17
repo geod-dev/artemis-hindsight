@@ -3,21 +3,43 @@ import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecor
 import * as DocumentPicker from "expo-document-picker";
 import { ArrowUp, Mic, Plus, Square, X, type LucideIcon } from "lucide-react-native";
 import { fileKind } from "@/lib/file-icons";
-import { useEffect, useRef, useState, type ComponentRef } from "react";
-import { Alert, Animated, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { forwardRef, useEffect, useRef, useState, type ComponentRef } from "react";
+import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, Vibration, View, type GestureResponderEvent } from "react-native";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
 import { usePreferences } from "@/preferences";
 
 const ICON_SIZE = 18;
-const BARS = Array.from({ length: 14 }, (_, i) => i);
+// A press shorter than this is a click: dictation keeps going after the finger lifts. Longer, it is push-to-talk.
+const HOLD_MS = 250;
+// The live waveform: one sample per tick, one 2 px bar per sample with a 2 px gap between bars.
+const SAMPLE_MS = 60;
+const BAR_STEP = 4;
+const MAX_SAMPLES = 1000;
+// How far outside a button the finger still counts as on it.
+const HIT_SLOP = 4;
 
-// The same wave as the web composer's voice bar (services/web/src/components/assistant-ui/elements/composer.tsx).
-function barHeight(bar: number, tick: number): number {
-  return 5 + Math.abs(Math.sin(bar * 1.35 + tick * 0.55)) * 13;
-}
-
+type ViewRef = ComponentRef<typeof View>;
 type Voice = "idle" | "recording" | "transcribing";
+/** The three buttons a held finger can end on while dictating. */
+type Target = "cancel" | "stop" | "send";
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+/** One press on the dictate button, from the finger going down until it lifts. */
+interface Press {
+  x: number;
+  y: number;
+  /** Held past HOLD_MS: the release decides the action. */
+  held: boolean;
+  /** The press started while already recording: a tap on the stop button. */
+  onStop: boolean;
+  hover: Target | null;
+  timer?: ReturnType<typeof setTimeout>;
+}
 
 /**
  * The composer's surface, also used by the jump-to-latest button. In light mode the surface is the page's white, so the
@@ -28,11 +50,12 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
 }
 
 /**
- * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath
- * (attach on the left, dictate and send or stop on the right). While dictating, the input is replaced by the voice bar, as
- * on the web: animated waves and a timer while recording, "Transcribing" while the server answers. The left button becomes
- * cancel, the dictate button becomes stop (the transcript goes into the input), and send becomes "stop and send".
- * The chat moves it with the keyboard (thread-view.tsx). Icons are lucide, the same set as the web app.
+ * The message composer, laid out like the web composer: a rounded card with the input full width, and a toolbar underneath.
+ * Attach on the left; dictate and send on the right. While dictating, the card turns inverted (its text colour becomes the
+ * surface) and the toolbar reads: cancel (left), the live waveform, stop (transcribe into the input), send (transcribe and
+ * send). Pressing the dictate button starts dictation at once. A tap leaves it running. Holding it dictates while the finger
+ * is down: sliding onto cancel, stop or send (with a short buzz) and lifting there does that action; lifting anywhere else
+ * stops, as the stop button does. Icons are lucide, the same set as the web app.
  */
 export function Composer({ conversationId }: { conversationId: string }) {
   const { colors, isDark } = usePreferences();
@@ -47,10 +70,21 @@ export function Composer({ conversationId }: { conversationId: string }) {
   // Set by "send dictated message": the send happens after the transcript is in the input (see finishVoice).
   const sendAfter = useRef(false);
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 100);
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const [voice, setVoice] = useState<Voice>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  // The button the held finger is over: it is shown enlarged, and the finger buzzes when it arrives.
+  const [hover, setHover] = useState<Target | null>(null);
+  const press = useRef<Press | null>(null);
+  // The action of a press that lifted before the recording had started (the microphone permission dialog).
+  const pendingEnd = useRef<{ target: Target | null } | null>(null);
+  const targetRects = useRef<Partial<Record<Target, Rect>>>({});
+  const cancelRef = useRef<ViewRef>(null);
+  const stopRef = useRef<ViewRef>(null);
+  const sendRef = useRef<ViewRef>(null);
+  const inverted = voice !== "idle";
+  // Icons on the inverted card take the surface colour; on the normal card they are muted, as before.
+  const tone = inverted ? colors.background : colors.muted;
 
   // Several files at once; each one is checked on its own, so one too large does not stop the others.
   const addFiles = async () => {
@@ -78,15 +112,21 @@ export function Composer({ conversationId }: { conversationId: string }) {
 
   const startVoice = async () => {
     setVoiceError(null);
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      setVoiceError("Allow microphone access in your phone settings to dictate.");
-      return;
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        pendingEnd.current = null;
+        setVoiceError("Allow microphone access in your phone settings to dictate.");
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setVoice("recording");
+    } catch (cause) {
+      pendingEnd.current = null;
+      setVoiceError(cause instanceof Error ? cause.message : "Could not start dictation.");
     }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    setVoice("recording");
   };
 
   // Stops the recording, sends it to the server, and adds the transcript to the input. With `andSend` the message is
@@ -113,6 +153,20 @@ export function Composer({ conversationId }: { conversationId: string }) {
     }
   };
 
+  const cancelVoice = async () => {
+    sendAfter.current = false;
+    pendingEnd.current = null;
+    await recorder.stop().catch(() => undefined);
+    setVoice("idle");
+  };
+
+  // Runs the action of a button the press ended on. Anywhere else (null) it is a stop.
+  const perform = (target: Target | null) => {
+    if (target === "cancel") void cancelVoice();
+    else if (target === "send") void finishVoice(true);
+    else void finishVoice(false);
+  };
+
   // Sends the message once dictation is over and the transcript is in the input, when the user asked for it.
   useEffect(() => {
     if (voice !== "idle" || !sendAfter.current) return;
@@ -122,16 +176,100 @@ export function Composer({ conversationId }: { conversationId: string }) {
     aui.composer().send();
   }, [voice, text, canSend, aui]);
 
-  const cancelVoice = async () => {
-    sendAfter.current = false;
-    await recorder.stop().catch(() => undefined);
-    setVoice("idle");
+  // Once recording, the buttons are where they are on screen: measure them for the hit test. A press that ended before
+  // the recording started acts now.
+  useEffect(() => {
+    if (voice !== "recording") return undefined;
+    const id = setTimeout(() => {
+      const measure = (key: Target, node: ViewRef | null) =>
+        node?.measureInWindow((x, y, width, height) => {
+          targetRects.current[key] = { x, y, width, height };
+        });
+      measure("cancel", cancelRef.current);
+      measure("stop", stopRef.current);
+      measure("send", sendRef.current);
+    }, 0);
+    const pending = pendingEnd.current;
+    pendingEnd.current = null;
+    if (pending) perform(pending.target);
+    return () => clearTimeout(id);
+  }, [voice]);
+
+  const hitTest = (pageX: number, pageY: number): Target | null => {
+    for (const key of ["cancel", "stop", "send"] as Target[]) {
+      const rect = targetRects.current[key];
+      if (!rect) continue;
+      if (
+        pageX >= rect.x - HIT_SLOP &&
+        pageX <= rect.x + rect.width + HIT_SLOP &&
+        pageY >= rect.y - HIT_SLOP &&
+        pageY <= rect.y + rect.height + HIT_SLOP
+      ) {
+        return key;
+      }
+    }
+    return null;
+  };
+
+  // The dictate button. Its finger press starts dictation at once; see the Composer doc comment for the gesture.
+  const onPressGrant = (event: GestureResponderEvent) => {
+    const { pageX, pageY } = event.nativeEvent;
+    if (voice === "recording") {
+      press.current = { x: pageX, y: pageY, held: false, onStop: true, hover: null };
+      return;
+    }
+    const next: Press = { x: pageX, y: pageY, held: false, onStop: false, hover: null };
+    next.timer = setTimeout(() => {
+      if (press.current === next) next.held = true;
+    }, HOLD_MS);
+    press.current = next;
+    void startVoice();
+  };
+
+  const onPressMove = (event: GestureResponderEvent) => {
+    const current = press.current;
+    if (!current) return;
+    const { pageX, pageY } = event.nativeEvent;
+    current.x = pageX;
+    current.y = pageY;
+    if (!current.held || current.onStop) return;
+    const target = hitTest(pageX, pageY);
+    if (target !== current.hover) {
+      current.hover = target;
+      setHover(target);
+      if (target) Vibration.vibrate(12);
+    }
+  };
+
+  const onPressRelease = (event: GestureResponderEvent) => {
+    const current = press.current;
+    press.current = null;
+    if (!current) return;
+    if (current.timer) clearTimeout(current.timer);
+    setHover(null);
+    if (current.onStop) {
+      void finishVoice(false);
+      return;
+    }
+    // A click: dictation keeps running until stop, cancel or send is pressed.
+    if (!current.held) return;
+    const { pageX, pageY } = event.nativeEvent;
+    const target = hitTest(pageX, pageY);
+    if (voice === "recording") perform(target);
+    else pendingEnd.current = { target };
   };
 
   return (
     <View>
       <View style={styles.wrapper}>
-        <ComposerPrimitive.Root style={[styles.card, { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border }]}>
+        <ComposerPrimitive.Root
+          style={[
+            styles.card,
+            inverted
+              ? { backgroundColor: colors.text, borderColor: colors.text }
+              : { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border },
+          ]}
+        >
           {/* Attachments side by side, wrapping onto a new row: square image previews sit inline. */}
           {imageCount > 0 ? (
             <View style={styles.imageRow}>
@@ -144,39 +282,76 @@ export function Composer({ conversationId }: { conversationId: string }) {
             </View>
           ) : null}
 
-          {voice === "idle" ? (
-            <TextInput
-              ref={inputRef}
-              value={text}
-              onChangeText={(value) => aui.composer().setText(value)}
-              placeholder="Message Artemis"
-              placeholderTextColor={colors.muted}
-              multiline
-              style={[styles.input, { color: colors.text }]}
-            />
-          ) : (
-            <VoiceBar voice={voice} seconds={Math.floor((recorderState.durationMillis ?? 0) / 1000)} />
-          )}
+          <TextInput
+            ref={inputRef}
+            value={text}
+            onChangeText={(value) => aui.composer().setText(value)}
+            placeholder="Message Artemis"
+            placeholderTextColor={inverted ? colors.background : colors.muted}
+            multiline
+            style={[styles.input, { color: inverted ? colors.background : colors.text }]}
+          />
 
           <View style={styles.toolbar}>
-            {voice === "idle" ? (
-              <View style={styles.toolbarGroup}>
-                <IconButton icon={Plus} label="Add files" onPress={() => void addFiles()} />
-              </View>
-            ) : (
-              <View style={styles.toolbarGroup}>
-                <IconButton icon={X} label="Cancel dictation" onPress={() => void cancelVoice()} disabled={voice === "transcribing"} />
-              </View>
-            )}
-
-            {/* While dictating, the mic's place becomes Stop (transcribe into the input) and send becomes "stop and send", as on the web. */}
             <View style={styles.toolbarGroup}>
               {voice === "idle" ? (
-                <IconButton icon={Mic} label="Dictate" onPress={() => void startVoice()} />
+                <IconButton icon={Plus} label="Add files" tone={tone} onPress={() => void addFiles()} />
               ) : (
-                <IconButton icon={Square} label="Stop dictation" onPress={() => void finishVoice(false)} disabled={voice === "transcribing"} />
+                <IconButton
+                  ref={cancelRef}
+                  icon={X}
+                  label="Cancel dictation"
+                  tone={tone}
+                  onPress={() => void cancelVoice()}
+                  disabled={voice === "transcribing"}
+                  highlighted={hover === "cancel"}
+                />
               )}
-              {voice === "idle" && running ? (
+            </View>
+
+            {/* The live waveform sits between cancel and stop, as on the web. */}
+            <View style={styles.middle}>
+              {voice === "idle" ? null : (
+                <DictationWaveform recorder={recorder} transcribing={voice === "transcribing"} tone={colors.background} />
+              )}
+            </View>
+
+            <View style={styles.toolbarGroup}>
+              {/* The dictate button: while dictating it is the stop button, in the same place. Its press is handled here
+                  (not by a Pressable) so a held finger keeps reporting its position while it slides over the other buttons. */}
+              <View
+                ref={stopRef}
+                collapsable={false}
+                accessibilityRole="button"
+                accessibilityLabel={voice === "idle" ? "Dictate" : "Stop dictation"}
+                accessibilityHint={voice === "idle" ? "Press and hold to dictate while holding" : undefined}
+                onStartShouldSetResponder={() => voice !== "transcribing"}
+                onResponderTerminationRequest={() => false}
+                onResponderGrant={onPressGrant}
+                onResponderMove={onPressMove}
+                onResponderRelease={onPressRelease}
+                onResponderTerminate={onPressRelease}
+                style={[styles.iconButton, hover === "stop" && styles.highlighted, voice === "transcribing" && { opacity: 0.35 }]}
+              >
+                {voice === "idle" ? (
+                  <Mic size={ICON_SIZE} color={colors.muted} />
+                ) : (
+                  <Square size={12} color={tone} fill={tone} />
+                )}
+              </View>
+
+              {voice !== "idle" ? (
+                <Pressable
+                  ref={sendRef}
+                  onPress={() => void finishVoice(true)}
+                  disabled={voice === "transcribing"}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send dictated message"
+                  style={[styles.send, { backgroundColor: colors.accent, opacity: voice === "transcribing" ? 0.5 : 1 }, hover === "send" && styles.highlighted]}
+                >
+                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+                </Pressable>
+              ) : running ? (
                 <Pressable
                   onPress={stop}
                   accessibilityRole="button"
@@ -184,16 +359,6 @@ export function Composer({ conversationId }: { conversationId: string }) {
                   style={[styles.send, { backgroundColor: colors.text }]}
                 >
                   <Square size={12} color={colors.background} fill={colors.background} />
-                </Pressable>
-              ) : voice !== "idle" ? (
-                <Pressable
-                  onPress={() => void finishVoice(true)}
-                  disabled={voice === "transcribing"}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send dictated message"
-                  style={[styles.send, { backgroundColor: colors.accent, opacity: voice === "transcribing" ? 0.5 : 1 }]}
-                >
-                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
                 </Pressable>
               ) : (
                 <Pressable
@@ -226,54 +391,60 @@ function joinText(current: string, addition: string): string {
   return `${current.trimEnd()} ${addition}`;
 }
 
-/** The voice bar: a pulsing dot, 14 waves and a timer while recording; "Transcribing" with a pulse while it runs. */
-function VoiceBar({ voice, seconds }: { voice: Voice; seconds: number }) {
+/** Microphone loudness between 0 and 1, from the recorder's level in decibels (about -60 silent, 0 loudest). */
+function levelOf(decibels: number | undefined): number {
+  if (decibels === undefined) return 0;
+  return Math.min(1, Math.max(0, (decibels + 60) / 50));
+}
+
+/**
+ * The live recording waveform: a scrolling row of microphone-level bars (the newest on the right) and the elapsed time.
+ * As many bars as the space allows are drawn. `transcribing` freezes the bars and shows the label in place of the time.
+ */
+function DictationWaveform({
+  recorder,
+  transcribing,
+  tone,
+}: {
+  recorder: ReturnType<typeof useAudioRecorder>;
+  transcribing: boolean;
+  tone: string;
+}) {
   const { colors } = usePreferences();
-  const [tick, setTick] = useState(0);
-  const pulse = useRef(new Animated.Value(0.4)).current;
+  const state = useAudioRecorderState(recorder, SAMPLE_MS);
+  const [slots, setSlots] = useState(0);
+  const samplesRef = useRef<number[]>([]);
+  const [samples, setSamples] = useState<number[]>([]);
 
+  // One sample per tick while recording. Transcribing, the bars stay where they were.
   useEffect(() => {
-    if (voice !== "recording") return undefined;
-    const id = setInterval(() => setTick((value) => value + 1), 100);
-    return () => clearInterval(id);
-  }, [voice]);
+    if (transcribing) return;
+    const list = samplesRef.current;
+    list.push(levelOf(state.metering));
+    if (list.length > MAX_SAMPLES) list.splice(0, list.length - MAX_SAMPLES);
+    setSamples(list.slice());
+  }, [state.durationMillis, transcribing]);
 
-  useEffect(() => {
-    if (voice === "idle") return undefined;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [voice, pulse]);
+  const visible = slots > 0 ? samples.slice(-slots) : [];
+  const padded = [...Array.from({ length: Math.max(0, slots - visible.length) }, () => 0), ...visible];
+  const seconds = Math.floor(state.durationMillis / 1000);
+  const timer = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-  if (voice === "transcribing") {
-    return (
-      <View style={styles.voiceRow}>
-        <Animated.Text style={[styles.transcribing, { color: colors.muted, opacity: pulse }]}>Transcribing</Animated.Text>
-      </View>
-    );
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const rest = String(seconds % 60).padStart(2, "0");
   return (
-    <View style={styles.voiceRow}>
-      <View style={[styles.recDot, { backgroundColor: colors.danger }]} />
-      <View style={styles.bars}>
-        {BARS.map((bar) => (
+    <View style={[styles.waveform, transcribing && { opacity: 0.6 }]} accessibilityLabel={transcribing ? "Transcribing" : "Recording"}>
+      <View style={[styles.recDot, { backgroundColor: transcribing ? tone : colors.danger }]} />
+      <View
+        style={styles.bars}
+        onLayout={(event) => setSlots(Math.max(1, Math.floor((event.nativeEvent.layout.width + 2) / BAR_STEP)))}
+      >
+        {padded.map((level, index) => (
           <View
-            key={bar}
-            style={{ width: 2, borderRadius: 1, height: barHeight(bar, tick), backgroundColor: colors.text, opacity: 0.5 }}
+            key={index}
+            style={{ width: 2, borderRadius: 1, height: `${Math.round(12 + level * 88)}%`, backgroundColor: tone, opacity: 0.7 }}
           />
         ))}
       </View>
-      <Text style={[styles.timer, { color: colors.muted }]}>
-        {minutes}:{rest}
-      </Text>
+      <Text style={[styles.timer, { color: tone }]}>{transcribing ? "Transcribing" : timer}</Text>
     </View>
   );
 }
@@ -328,30 +499,23 @@ function AttachmentChip({ kind }: { kind: "image" | "file" }) {
   );
 }
 
-function IconButton({
-  icon: Icon,
-  label,
-  onPress,
-  disabled,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const { colors } = usePreferences();
+const IconButton = forwardRef<
+  ViewRef,
+  { icon: LucideIcon; label: string; onPress: () => void; disabled?: boolean; tone: string; highlighted?: boolean }
+>(function IconButton({ icon: Icon, label, onPress, disabled, tone, highlighted }, ref) {
   return (
     <Pressable
+      ref={ref}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.iconButton, disabled && { opacity: 0.35 }]}
+      style={[styles.iconButton, disabled && { opacity: 0.35 }, highlighted && styles.highlighted]}
     >
-      <Icon size={ICON_SIZE} color={colors.muted} />
+      <Icon size={ICON_SIZE} color={tone} />
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
@@ -359,15 +523,17 @@ const styles = StyleSheet.create({
   imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   fileList: { gap: 6 },
   input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
-  voiceRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8 },
+  toolbar: { flexDirection: "row", alignItems: "center", gap: 6 },
+  toolbarGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
+  middle: { flex: 1, minWidth: 0 },
+  waveform: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 },
   recDot: { width: 8, height: 8, borderRadius: 4 },
-  bars: { flex: 1, height: 24, flexDirection: "row", alignItems: "center", gap: 3 },
+  bars: { flex: 1, minWidth: 0, height: 28, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, overflow: "hidden" },
   timer: { fontFamily: "monospace", fontSize: 13, fontVariant: ["tabular-nums"] },
-  transcribing: { fontSize: 14 },
-  toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  toolbarGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
   iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  // The button a held finger is over: enlarged, so it reads as selected under the thumb.
+  highlighted: { transform: [{ scale: 1.2 }] },
   error: { fontSize: 13, paddingHorizontal: 12 },
   chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingLeft: 6, paddingRight: 8, paddingVertical: 6 },
   chipIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
