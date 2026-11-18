@@ -2,13 +2,55 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import {
+  closestCenter,
+  KeyboardSensor,
+  pointerWithin,
+  PointerSensor,
+  rectIntersection,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import {
+  restrictToFirstScrollableAncestor,
+  restrictToParentElement,
+  restrictToVerticalAxis,
+} from "@dnd-kit/modifiers";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { conversationIdFromDragId } from "@/components/conversations/draggable-conversation-row";
 import { saveProjectOrder } from "@/components/projects/project-api";
 import type { ProjectSummary } from "@/lib/projects";
 
 /** How long after a drop the clicks are ignored: the browser may click whatever lies under the pointer. */
 const GHOST_CLICK_WINDOW_MS = 500;
+
+function isConversationDrag(activeId: string | number): boolean {
+  return conversationIdFromDragId(String(activeId)) !== null;
+}
+
+/**
+ * A project being reordered takes the nearest place. A conversation only lands on the project under the pointer (or,
+ * dragged with the keyboard, the project it overlaps): dropped anywhere else, it stays where it was.
+ */
+const sidebarCollisionDetection: CollisionDetection = (args) => {
+  if (!isConversationDrag(args.active.id)) return closestCenter(args);
+  return args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args);
+};
+
+/**
+ * Keeps a dragged row inside the sidebar, so the drag never makes the sidebar scroll wider or taller. A project moves
+ * only up and down its own list; a conversation moves within the sidebar's visible area, up to the projects.
+ */
+const restrictSidebarDrag: Modifier = (args) => {
+  if (!args.active) return args.transform;
+  if (isConversationDrag(args.active.id)) return restrictToFirstScrollableAncestor(args);
+  return restrictToParentElement({ ...args, transform: restrictToVerticalAxis(args) });
+};
+
+const sidebarModifiers = [restrictSidebarDrag];
 
 /**
  * The sidebar's project order. A drop shows the new order at once and saves it; the server's list replaces the shown
@@ -70,5 +112,12 @@ export function useProjectOrder(projects: ProjectSummary[]) {
       });
   }
 
-  return { ordered, sensors, collisionDetection: closestCenter, onDragEnd, markDragEnded };
+  return {
+    ordered,
+    sensors,
+    collisionDetection: sidebarCollisionDetection,
+    modifiers: sidebarModifiers,
+    onDragEnd,
+    markDragEnded,
+  };
 }

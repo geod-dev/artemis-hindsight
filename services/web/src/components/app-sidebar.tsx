@@ -247,6 +247,7 @@ export function AppSidebar({
     ordered: orderedProjects,
     sensors: dragSensors,
     collisionDetection,
+    modifiers: dragModifiers,
     onDragEnd: onProjectDragEnd,
     markDragEnded,
   } = useProjectOrder(projects);
@@ -296,7 +297,13 @@ export function AppSidebar({
       </SidebarHeader>
 
       {/* A fixed id: dnd-kit otherwise numbers its accessibility ids per render, which differs between server and client. */}
-      <DndContext id="sidebar-dnd" sensors={dragSensors} collisionDetection={collisionDetection} onDragEnd={onSidebarDragEnd}>
+      <DndContext
+        id="sidebar-dnd"
+        sensors={dragSensors}
+        collisionDetection={collisionDetection}
+        modifiers={dragModifiers}
+        onDragEnd={onSidebarDragEnd}
+      >
         <SidebarContent>
           <SidebarGroup>
             <CollapsibleGroupLabel
