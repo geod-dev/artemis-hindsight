@@ -1,9 +1,10 @@
 import { ActionBarPrimitive, BranchPickerPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react-native";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ChevronLeft, ChevronRight, Copy, Square } from "lucide-react-native";
 import { ActionSheet } from "@/components/action-sheet";
 import { usePreferences } from "@/preferences";
+import { MessageLongPressContext } from "./message-long-press";
 import { MessageParts } from "./message-parts";
 import { FilePart, ImagePart } from "./parts/file-part";
 
@@ -17,6 +18,7 @@ export function MessageView() {
   const isUser = role === "user";
   const { colors } = usePreferences();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const openSheet = useCallback(() => setSheetOpen(true), []);
   // The user's files sit above the bubble, as on the web: images as thumbnails, other files as cards.
   // The runtime keeps a message's composer attachments apart from its parts (message.attachments, each with its content),
   // while messages loaded from the server carry their files as parts. Both are shown.
@@ -53,12 +55,14 @@ export function MessageView() {
         </View>
       ) : null}
       <Pressable
-        onLongPress={() => setSheetOpen(true)}
+        onLongPress={openSheet}
         delayLongPress={400}
         accessibilityHint="Long press for options"
         style={isUser ? [styles.userBubble, { backgroundColor: colors.user }] : undefined}
       >
-        <MessageParts role={isUser ? "user" : "assistant"} />
+        <MessageLongPressContext.Provider value={openSheet}>
+          <MessageParts role={isUser ? "user" : "assistant"} />
+        </MessageLongPressContext.Provider>
       </Pressable>
       {!isUser && stopped ? <StoppedLabel /> : null}
       <MessageSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { BackHandler, Dimensions } from "react-native";
 import { Redirect, usePathname, useRouter } from "expo-router";
 import { Drawer } from "expo-router/drawer";
@@ -22,6 +22,10 @@ export default function DrawerLayout() {
   const swipeLocked = useSwipeLocked();
   // The drawer's pan waits for every sideways scroll on screen to fail, natively (lib/sideways-scroll.ts).
   const scrolls = useSidewaysScrolls();
+  // The same function while the scrolls on screen do not change: the drawer rebuilds its pan only then. A new function on
+  // every render would rebuild the pan (react-native-drawer-layout memoizes it on this function), and a rebuild during a
+  // touch breaks the sideways scroll under the finger.
+  const configureGestureHandler = useCallback(<Pan,>(pan: Pan): Pan => awaitSidewaysScrolls(pan, scrolls), [scrolls]);
   const pathname = usePathname();
   const router = useRouter();
   // On the settings' main page, the Android back button goes back to the page the settings were opened from. The subpages
@@ -47,7 +51,7 @@ export default function DrawerLayout() {
         sceneStyle: { backgroundColor: colors.background },
         drawerType: "front",
         swipeEnabled: !swipeLocked,
-        configureGestureHandler: (pan) => awaitSidewaysScrolls(pan, scrolls),
+        configureGestureHandler,
         // A swipe to the right opens the drawer from anywhere on the screen, not only from the left edge.
         swipeEdgeWidth: Dimensions.get("window").width,
         drawerStyle: { backgroundColor: colors.surface, width: 300 },
