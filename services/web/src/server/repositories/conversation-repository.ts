@@ -200,7 +200,8 @@ export async function conversationIdsOf(userId: string): Promise<string[]> {
   return rows.map((row) => row.id);
 }
 
-function titleFrom(text: string): string {
+/** The placeholder title a message gives a new conversation. */
+export function titleFrom(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return DEFAULT_TITLE;
   return normalized.length > 60 ? `${normalized.slice(0, 57)}...` : normalized;

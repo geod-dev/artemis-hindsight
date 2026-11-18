@@ -20,7 +20,9 @@ import type { CurrentUser } from "../auth/session";
 import {
   canUseConversation,
   ConversationOwnershipError,
+  DEFAULT_TITLE,
   ensureConversation,
+  titleFrom,
   setConversationUnread,
   touchConversation,
 } from "../repositories/conversation-repository";
@@ -52,10 +54,12 @@ import { announceListChange } from "../events/list-events";
  *      the user's active one, and the previous active conversation is flushed to memory in the background
  *   6. load the full history from the database, the source of truth, and build the model input
  *   7. stream the model response into the resumable store; every completed step is written to the database
- *   8. when the conversation was just created, name it in the background (see naming below)
+ *   8. while the conversation still has its placeholder title, name it in the background (see naming below)
  *
  * Naming: the placeholder title (the first message) stays until a short model call answers with a name. That call
- * runs beside the agent and is never awaited. When it answers, the name is stored and also sent on this turn's
+ * runs beside the agent and is never awaited. It runs on every turn whose conversation still carries a placeholder,
+ * not only the first one: a first turn that failed before streaming (toolbox outage, restart) or a naming call that
+ * failed would otherwise leave the placeholder for good. When it answers, the name is stored and also sent on this turn's
  * stream as a transient part, so the sidebar updates without a reload. If the turn has already ended, the stored
  * name shows on the next load.
  *
@@ -128,6 +132,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
+  const naming = namingInput(conversation.title, history);
   const modelHistory = await toModelHistory(conversationId, history, lookup, user, skills, project);
   // A quoted message reaches the model as a blockquote in front of its text.
   const quotedHistory = injectQuoteContext(modelHistory);
@@ -175,13 +180,13 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
           anthropic: { effort: reasoningEffort, thinking: { type: "adaptive", display: "summarized" } },
         },
       });
-      if (conversation.created && userText) {
+      if (naming) {
         // Not awaited: the agent's reply never waits for the name. The name is announced on this stream if it is still open.
         void nameConversation({
           conversationId,
           userId: user.id,
           placeholderTitle: conversation.title,
-          firstMessage: userText,
+          firstMessage: naming,
         }).then((title) => {
           if (title) announceTitle(writer, title);
         });
@@ -233,6 +238,19 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   return new Response(body, {
     headers: { ...UI_MESSAGE_STREAM_HEADERS, [RESUMABLE_STREAM_ID_HEADER]: streamId },
   });
+}
+
+/**
+ * The text to name the conversation from, or undefined when it already has a real name. The title is a placeholder
+ * when it is the default one or the one a user message of this conversation gives (see `ensureConversation`). The
+ * name comes from the first user message with text, so a conversation opened with only a file is named on the first
+ * message that says something.
+ */
+function namingInput(title: string, history: UIMessage[]): string | undefined {
+  const userTexts = history.filter((message) => message.role === "user").map(textOf);
+  const isPlaceholder = title === DEFAULT_TITLE || userTexts.some((text) => titleFrom(text) === title);
+  if (!isPlaceholder) return undefined;
+  return userTexts.find(Boolean);
 }
 
 /** Sends the conversation's new name on the turn's stream. Transient: the browser reads it, the messages do not store it. */

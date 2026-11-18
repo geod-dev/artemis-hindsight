@@ -46,6 +46,8 @@ export async function nameConversation(params: {
       system: loadConversationTitlePrompt(),
       prompt: firstMessage.slice(0, MAX_INPUT_CHARS),
       maxOutputTokens: 32,
+      // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
+      maxRetries: 4,
     });
     const title = cleanTitle(text);
     if (!title) return undefined;
