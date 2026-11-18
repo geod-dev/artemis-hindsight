@@ -152,7 +152,6 @@ function renderPart(part: Part, role: "user" | "assistant", key: number, options
       return (
         <ReasoningPart
           key={key}
-          text={part.text ?? ""}
           live={Boolean(options.running) && options.timing?.endedAt === undefined}
           startedAt={options.timing?.startedAt}
           endedAt={options.timing?.endedAt}

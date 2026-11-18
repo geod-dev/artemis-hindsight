@@ -1,7 +1,7 @@
 import { ActionBarPrimitive, BranchPickerPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Square } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Copy, Square } from "lucide-react-native";
 import { ActionSheet } from "@/components/action-sheet";
 import { usePreferences } from "@/preferences";
 import { MessageParts } from "./message-parts";
@@ -54,14 +54,14 @@ export function MessageView() {
       ) : null}
       <Pressable
         onLongPress={() => setSheetOpen(true)}
-        delayLongPress={350}
+        delayLongPress={400}
         accessibilityHint="Long press for options"
         style={isUser ? [styles.userBubble, { backgroundColor: colors.user }] : undefined}
       >
         <MessageParts role={isUser ? "user" : "assistant"} />
       </Pressable>
       {!isUser && stopped ? <StoppedLabel /> : null}
-      <MessageSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} isUser={isUser} />
+      <MessageSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </MessagePrimitive.Root>
   );
 }
@@ -80,29 +80,48 @@ function StoppedLabel() {
 }
 
 /** The options of one message, in a bottom sheet. Tap outside to close it. */
-function MessageSheet({ visible, onClose, isUser }: { visible: boolean; onClose: () => void; isUser: boolean }) {
+function MessageSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = usePreferences();
+  // The reply's versions: a previous one and a next one are offered only when the reply has them.
+  const branchNumber = useAuiState((s) => s.message.branchNumber);
+  const branchCount = useAuiState((s) => s.message.branchCount);
+  const hasPrevious = branchNumber > 1;
+  const hasNext = branchNumber < branchCount;
   return (
     <ActionSheet visible={visible} onClose={onClose}>
-      <ActionBarPrimitive.Copy style={[styles.option, { borderColor: colors.border }]}>
-        {({ isCopied }) => <Text style={[styles.optionText, { color: colors.text }]}>{isCopied ? "Copied" : "Copy"}</Text>}
-      </ActionBarPrimitive.Copy>
-      {isUser ? null : (
-        <>
-          <ActionBarPrimitive.Reload style={[styles.option, { borderColor: colors.border }]}>
-            <Text style={[styles.optionText, { color: colors.text }]}>Regenerate</Text>
-          </ActionBarPrimitive.Reload>
-          <View style={[styles.option, styles.versions, { borderColor: colors.border }]}>
-            <BranchPickerPrimitive.Previous style={styles.versionButton}>
-              <Text style={[styles.optionText, { color: colors.text }]}>‹ Previous</Text>
-            </BranchPickerPrimitive.Previous>
-            <BranchPickerPrimitive.Number style={styles.versionButton} />
-            <BranchPickerPrimitive.Next style={styles.versionButton}>
-              <Text style={[styles.optionText, { color: colors.text }]}>Next ›</Text>
-            </BranchPickerPrimitive.Next>
+      <ActionBarPrimitive.Copy style={styles.option} android_ripple={{ color: colors.border }}>
+        {({ isCopied }) => (
+          <View style={styles.optionLead}>
+            <Copy size={18} color={colors.text} />
+            <Text style={[styles.optionText, { color: colors.text }]}>{isCopied ? "Copied" : "Copy"}</Text>
           </View>
-        </>
-      )}
+        )}
+      </ActionBarPrimitive.Copy>
+      {branchCount > 1 ? (
+        <View style={[styles.option, styles.versions]}>
+          <View style={styles.versionStart}>
+            {hasPrevious ? (
+              <BranchPickerPrimitive.Previous style={styles.versionButton}>
+                <View style={styles.optionLead}>
+                  <ChevronLeft size={18} color={colors.text} />
+                  <Text style={[styles.optionText, { color: colors.text }]}>Previous</Text>
+                </View>
+              </BranchPickerPrimitive.Previous>
+            ) : null}
+          </View>
+          <BranchPickerPrimitive.Number style={styles.versionButton} />
+          <View style={styles.versionEnd}>
+            {hasNext ? (
+              <BranchPickerPrimitive.Next style={styles.versionButton}>
+                <View style={styles.optionLead}>
+                  <Text style={[styles.optionText, { color: colors.text }]}>Next</Text>
+                  <ChevronRight size={18} color={colors.text} />
+                </View>
+              </BranchPickerPrimitive.Next>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </ActionSheet>
   );
 }
@@ -115,8 +134,14 @@ const styles = StyleSheet.create({
   stopped: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   userBubble: { maxWidth: "85%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   assistantRow: { gap: 6 },
-  option: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  // A transparent row across the full width of the sheet: no border (the sheet's own surface behind it).
+  option: { alignSelf: "stretch", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  optionLead: { flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1 },
   optionText: { fontSize: 16 },
-  versions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  // The versions row: the previous on the left, the count in the middle, the next on the right; a missing side stays empty,
+  // so the count does not move.
+  versions: { flexDirection: "row", alignItems: "center" },
+  versionStart: { flex: 1, alignItems: "flex-start" },
+  versionEnd: { flex: 1, alignItems: "flex-end" },
   versionButton: { paddingVertical: 4, paddingHorizontal: 6 },
 });
