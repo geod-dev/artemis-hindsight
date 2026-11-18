@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { apiFetch } from "@/lib/api";
 
@@ -22,7 +22,20 @@ export interface ConversationPayload {
 }
 
 export const conversationsKey = ["conversations"] as const;
+/** Every project's conversation lists (the new chat's recents, the full list). Lives here so both query modules share it. */
+export const projectConversationsKey = ["project-conversations"] as const;
 export const messagesKey = (id: string) => ["conversation-messages", id] as const;
+
+/**
+ * Refreshes every list that shows conversations: the drawer's, the archived one, and each project's own lists. A
+ * conversation that is archived, moved, deleted or created changes all of them.
+ */
+export function invalidateConversationLists(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: conversationsKey }),
+    queryClient.invalidateQueries({ queryKey: projectConversationsKey }),
+  ]);
+}
 
 /** The signed-in user's conversations, most recent first (the web app's sidebar list). */
 export function useConversations() {
@@ -64,7 +77,7 @@ export function useSetConversationArchived() {
   return useMutation({
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
       apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { archived } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+    onSuccess: () => invalidateConversationLists(queryClient),
   });
 }
 
@@ -74,11 +87,12 @@ export function useSetConversationProject() {
   return useMutation({
     mutationFn: ({ id, projectId }: { id: string; projectId: string | null }) =>
       apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { projectId } }),
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: conversationsKey }),
-      // The projects' own lists (their recents and counts) change too. Same key as queries/projects.ts's projectsKey.
-      queryClient.invalidateQueries({ queryKey: ["projects"] }),
-    ]),
+    onSuccess: () =>
+      Promise.all([
+        invalidateConversationLists(queryClient),
+        // The projects' own summaries follow too. Same key as queries/projects.ts's projectsKey.
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
   });
 }
 
@@ -86,7 +100,7 @@ export function useDeleteConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch(`/api/conversations/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+    onSuccess: () => invalidateConversationLists(queryClient),
   });
 }
 
@@ -95,7 +109,7 @@ export function useArchiveAllConversations() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiFetch<{ archived: number }>("/api/conversations/archive-all", { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+    onSuccess: () => invalidateConversationLists(queryClient),
   });
 }
 
@@ -104,7 +118,7 @@ export function useDeleteAllChats() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiFetch("/api/conversations/delete-all", { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsKey }),
+    onSuccess: () => invalidateConversationLists(queryClient),
   });
 }
 
@@ -114,7 +128,7 @@ export function useDeleteAllData() {
   return useMutation({
     mutationFn: () => apiFetch("/api/me/data", { method: "DELETE" }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: conversationsKey });
+      await invalidateConversationLists(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["memory-graph"] });
     },
   });

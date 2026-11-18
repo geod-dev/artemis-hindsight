@@ -1,6 +1,7 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { conversations, projects } from "../db/schema";
+import { announceListChange } from "../events/list-events";
 
 export type ConversationRow = typeof conversations.$inferSelect;
 
@@ -69,6 +70,7 @@ export async function setConversationArchived(id: string, userId: string, archiv
     .set({ archivedAt: archived ? sql`now()` : null })
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
     .returning({ id: conversations.id });
+  if (updated.length > 0) announceListChange(userId);
   return updated.length > 0;
 }
 
@@ -82,6 +84,7 @@ export async function setConversationProject(id: string, userId: string, project
     .set({ projectId })
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
     .returning({ id: conversations.id });
+  if (updated.length > 0) announceListChange(userId);
   return updated.length > 0;
 }
 
@@ -92,6 +95,7 @@ export async function archiveAllConversations(userId: string): Promise<number> {
     .set({ archivedAt: sql`now()` })
     .where(and(eq(conversations.userId, userId), isNull(conversations.archivedAt)))
     .returning({ id: conversations.id });
+  if (updated.length > 0) announceListChange(userId);
   return updated.length;
 }
 
@@ -159,11 +163,17 @@ export async function renameUntitledConversation(
     .set({ title })
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId), eq(conversations.title, placeholderTitle)))
     .returning({ id: conversations.id });
+  if (updated.length > 0) announceListChange(userId);
   return updated.length > 0;
 }
 
-export async function touchConversation(id: string): Promise<void> {
+/**
+ * Moves the conversation to the top of the lists: a turn touched it. Announced, so the other windows and devices list it
+ * in its new place. The caller has checked that the conversation belongs to the user.
+ */
+export async function touchConversation(id: string, userId: string): Promise<void> {
   await getDb().update(conversations).set({ updatedAt: sql`now()` }).where(eq(conversations.id, id));
+  announceListChange(userId);
 }
 
 export async function deleteConversation(id: string, userId: string): Promise<boolean> {
@@ -171,12 +181,14 @@ export async function deleteConversation(id: string, userId: string): Promise<bo
     .delete(conversations)
     .where(and(eq(conversations.id, id), eq(conversations.userId, userId)))
     .returning({ id: conversations.id });
+  if (deleted.length > 0) announceListChange(userId);
   return deleted.length > 0;
 }
 
 /** Deletes every conversation of the user, archived or not. Their messages go with them (cascade). */
 export async function deleteAllConversations(userId: string): Promise<void> {
   await getDb().delete(conversations).where(eq(conversations.userId, userId));
+  announceListChange(userId);
 }
 
 /** Every conversation id of a user, for cleanup when the user is deleted. */
@@ -196,8 +208,14 @@ function titleFrom(text: string): string {
 
 /**
  * Sets the unread flag. Callers have already checked that the conversation belongs to the user: this only writes.
- * Unread means a reply finished while nobody was connected to read it; opening the conversation clears it.
+ * Unread means a reply finished while nobody was connected to read it; opening the conversation clears it. Announced
+ * only when the flag actually changes, so opening a read conversation does not refresh the lists.
  */
-export async function setConversationUnread(id: string, unread: boolean): Promise<void> {
-  await getDb().update(conversations).set({ unread }).where(eq(conversations.id, id));
+export async function setConversationUnread(id: string, userId: string, unread: boolean): Promise<void> {
+  const changed = await getDb()
+    .update(conversations)
+    .set({ unread })
+    .where(and(eq(conversations.id, id), ne(conversations.unread, unread)))
+    .returning({ id: conversations.id });
+  if (changed.length > 0) announceListChange(userId);
 }

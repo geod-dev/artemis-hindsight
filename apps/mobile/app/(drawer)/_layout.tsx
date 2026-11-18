@@ -8,11 +8,14 @@ import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
 import { getReturnTo } from "@/lib/return-to";
 import { usePushToTalkHeld } from "@/chat/push-to-talk";
+import { useLiveListUpdates } from "@/queries/live-updates";
 
 /** Everything after sign-in: the chat (with the conversation list as a drawer) and the settings. */
 export default function DrawerLayout() {
   const { state } = useAuth();
   const { colors } = usePreferences();
+  // The lists follow the server while the app is open (a change made in the web app or on another device shows here).
+  useLiveListUpdates(state.status === "signedIn");
   // While a push-to-talk press is held, the drawer's swipe is off: a slide towards cancel or send must not open it.
   const pushToTalk = usePushToTalkHeld();
   const pathname = usePathname();

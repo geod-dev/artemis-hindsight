@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ConversationTitlesProvider } from "@/components/conversation-titles";
+import { LiveUpdates } from "@/components/live-updates";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ProfileSetupScreen } from "@/components/profile/profile-setup-screen";
 import { getCurrentUser } from "@/server/auth/session";
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ConversationTitlesProvider>
+      <LiveUpdates />
       <SidebarProvider>
         <AppSidebar
           username={user.username}

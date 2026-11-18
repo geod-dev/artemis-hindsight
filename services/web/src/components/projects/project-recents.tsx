@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { onListsChanged } from "@/lib/list-events";
 import type { ConversationSummary } from "@/lib/projects";
 import { ConversationRowContent } from "@/components/conversations/conversation-row-content";
 
@@ -19,29 +20,37 @@ interface Page {
 /**
  * The recent conversations of the selected project, under the new chat's composer. Four at first; "See more" adds
  * ten at a time. The list is fetched for each project and each size, so a switch never shows the previous project.
+ * It is read again whenever a list changes (a conversation moved here, or a change made in another window): the shown
+ * list stays until the new one arrives.
  */
 export function ProjectRecents({ projectId }: { projectId: string }) {
   const [limit, setLimit] = useState(FIRST_PAGE);
   const [page, setPage] = useState<Page | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
   // Identifies one request: a page of one project. A response or a failure only applies to its own request.
   const key = `${projectId}:${limit}`;
+
+  useEffect(() => onListsChanged(() => setRevision((value) => value + 1)), []);
 
   useEffect(() => {
     const controller = new AbortController();
     const requested = `${projectId}:${limit}`;
     const url = `/api/projects/${encodeURIComponent(projectId)}/conversations?limit=${limit}&offset=0`;
-    fetch(url, { signal: controller.signal })
+    fetch(url, { signal: controller.signal, cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<{ conversations: ConversationSummary[]; total: number }>;
       })
-      .then((data) => setPage({ key: requested, conversations: data.conversations, total: data.total }))
+      .then((data) => {
+        setPage({ key: requested, conversations: data.conversations, total: data.total });
+        setFailedKey(null);
+      })
       .catch(() => {
         if (!controller.signal.aborted) setFailedKey(requested);
       });
     return () => controller.abort();
-  }, [projectId, limit]);
+  }, [projectId, limit, revision]);
 
   const current = page?.key === key ? page : null;
 

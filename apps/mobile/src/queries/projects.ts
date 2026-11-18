@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { absoluteUrl, apiFetch, apiForm, authHeaders } from "@/lib/api";
-import { conversationsKey, type ConversationSummary } from "./conversations";
+import { conversationsKey, projectConversationsKey, type ConversationSummary } from "./conversations";
 
 // Mirrors services/web/src/server/projects/project-service.ts (ProjectJson) and the web's lib/projects.ts. The routes are
 // /api/projects (list, create), /api/projects/<id> (update, delete), /api/projects/<id>/icon and
@@ -35,8 +35,7 @@ export interface ProjectDraft {
 }
 
 export const projectsKey = ["projects"] as const;
-/** Every project's conversation lists, the recents and the full list. Refreshed when a conversation or a project changes. */
-export const projectConversationsKey = ["project-conversations"] as const;
+/** Each project's conversation lists are under projectConversationsKey (queries/conversations.ts). */
 export const projectConversationsOf = (projectId: string) => [...projectConversationsKey, projectId] as const;
 
 /** The signed-in user's projects, by name (the drawer's Projects section). */

@@ -1,10 +1,10 @@
 "use client";
 
-import { Archive, FolderInput, FolderMinus, ListFilter, MessageSquarePlus, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, FolderInput, FolderMinus, ListFilter, MessageSquarePlus, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { DndContext } from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useConversationTitles } from "@/components/conversation-titles";
 import { deleteProject } from "@/components/projects/project-api";
@@ -12,7 +12,10 @@ import { ProjectDialog } from "@/components/projects/project-dialog";
 import { ProjectIcon } from "@/components/projects/project-icon";
 import { SortableProjectRow } from "@/components/projects/sortable-project-row";
 import { useProjectOrder } from "@/components/projects/use-project-order";
-import { ConversationRowContent } from "@/components/conversations/conversation-row-content";
+import {
+  conversationIdFromDragId,
+  DraggableConversationRow,
+} from "@/components/conversations/draggable-conversation-row";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,18 +50,60 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { selectNewChatProject } from "@/lib/new-chat-project";
-import { readShowProjectConversations, writeShowProjectConversations } from "@/lib/sidebar-prefs";
+import { selectNewChatProject, useNewChatProjectSelection } from "@/lib/new-chat-project";
+import {
+  readShowProjectConversations,
+  readSidebarGroupCollapsed,
+  writeShowProjectConversations,
+  writeSidebarGroupCollapsed,
+  type SidebarGroupName,
+} from "@/lib/sidebar-prefs";
 import { newChatInProjectHref, type ConversationSummary, type ProjectSummary } from "@/lib/projects";
+import { cn } from "@/lib/utils";
+
+/**
+ * A group label that folds its group when clicked. A small chevron shows when the sidebar is hovered.
+ */
+function CollapsibleGroupLabel({
+  label,
+  collapsed,
+  controls,
+  onToggle,
+}: {
+  label: string;
+  collapsed: boolean;
+  controls: string;
+  onToggle: () => void;
+}) {
+  return (
+    <SidebarGroupLabel asChild>
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls={controls}
+        onClick={onToggle}
+        className="group/label w-full cursor-pointer gap-1 text-left hover:text-sidebar-foreground"
+      >
+        {label}
+        {/* Shown when the sidebar is hovered, or when the label has keyboard focus. A span, not a direct svg child:
+            the label's own [&>svg] sizing would otherwise apply to the chevron. */}
+        <span
+          aria-hidden
+          className="flex size-3 items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible/label:opacity-100"
+        >
+          <ChevronDown className={cn("size-3 transition-transform duration-200", collapsed && "-rotate-90")} />
+        </span>
+      </button>
+    </SidebarGroupLabel>
+  );
+}
 
 /**
  * The app's sidebar: the new chat button, the projects (drag them to reorder; each opens the new chat with it selected),
- * then the recent conversations.
+ * then the recent conversations. Each group folds when its label is clicked.
  */
 export function AppSidebar({
   username,
@@ -74,7 +119,6 @@ export function AppSidebar({
   conversations: ConversationSummary[];
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { renamed } = useConversationTitles();
 
@@ -84,11 +128,25 @@ export function AppSidebar({
     return () => clearInterval(timer);
   }, [router]);
 
-  // The sort menu of Recents. Read from the browser after mount, so the server render and the first paint agree.
+  // The sort menu of Recents, and which groups are folded. Read from the browser after mount, so the server render and
+  // the first paint agree.
   const [showProjectConversations, setShowProjectConversations] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<SidebarGroupName, boolean>>({
+    projects: false,
+    recents: false,
+  });
   useEffect(() => {
     setShowProjectConversations(readShowProjectConversations());
+    setCollapsedGroups({
+      projects: readSidebarGroupCollapsed("projects"),
+      recents: readSidebarGroupCollapsed("recents"),
+    });
   }, []);
+  const toggleGroup = (group: SidebarGroupName) => {
+    const next = !collapsedGroups[group];
+    setCollapsedGroups({ ...collapsedGroups, [group]: next });
+    writeSidebarGroupCollapsed(group, next);
+  };
   const toggleProjectConversations = (show: boolean) => {
     setShowProjectConversations(show);
     writeShowProjectConversations(show);
@@ -97,8 +155,9 @@ export function AppSidebar({
     ? conversations
     : conversations.filter((conversation) => !conversation.project);
 
-  // The project the new chat page has selected, as its URL names it.
-  const activeProjectId = pathname === "/" ? searchParams.get("project") : null;
+  // The project the new chat page has selected, whether the picker or the sidebar chose it.
+  const pickedProjectId = useNewChatProjectSelection();
+  const activeProjectId = pathname === "/" ? pickedProjectId : null;
   // A project shows an unread dot while one of its conversations has an unread reply that is not open now.
   const unreadProjectIds = new Set(
     conversations.flatMap((conversation) =>
@@ -184,7 +243,29 @@ export function AppSidebar({
     }
   }
 
-  const { ordered: orderedProjects, sensors: projectSensors, collisionDetection, onDragEnd } = useProjectOrder(projects);
+  const {
+    ordered: orderedProjects,
+    sensors: dragSensors,
+    collisionDetection,
+    onDragEnd: onProjectDragEnd,
+    markDragEnded,
+  } = useProjectOrder(projects);
+
+  /** One drag context for the whole sidebar: a project dropped on another place is reordered, a conversation dropped on a project moves into it. */
+  function onSidebarDragEnd(event: DragEndEvent) {
+    const conversationId = conversationIdFromDragId(String(event.active.id));
+    if (conversationId === null) {
+      onProjectDragEnd(event);
+      return;
+    }
+    markDragEnded();
+    const { over } = event;
+    const conversation = conversations.find((candidate) => candidate.id === conversationId);
+    if (!over || !conversation) return;
+    const projectId = String(over.id);
+    if (projectId === conversation.project?.id || !projects.some((project) => project.id === projectId)) return;
+    void moveConversation(conversation, projectId);
+  }
 
   function openNewProject() {
     setEditingProject(null);
@@ -214,26 +295,31 @@ export function AppSidebar({
         </Button>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Projects</SidebarGroupLabel>
-          {/* Hidden until the sidebar is hovered, like its close button. */}
-          <SidebarGroupAction
-            aria-label="New project"
-            title="New project"
-            onClick={openNewProject}
-            className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [&>svg]:size-3"
-          >
-            <Plus />
-          </SidebarGroupAction>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {projects.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">No projects yet.</p>
-              )}
-              {/* Projects are dragged into another place: the new order is saved as soon as it is dropped. */}
-              {/* A fixed id: dnd-kit otherwise numbers its accessibility ids per render, which differs between server and client. */}
-              <DndContext id="sidebar-projects" sensors={projectSensors} collisionDetection={collisionDetection} onDragEnd={onDragEnd}>
+      {/* A fixed id: dnd-kit otherwise numbers its accessibility ids per render, which differs between server and client. */}
+      <DndContext id="sidebar-dnd" sensors={dragSensors} collisionDetection={collisionDetection} onDragEnd={onSidebarDragEnd}>
+        <SidebarContent>
+          <SidebarGroup>
+            <CollapsibleGroupLabel
+              label="Projects"
+              collapsed={collapsedGroups.projects}
+              controls="sidebar-projects-list"
+              onToggle={() => toggleGroup("projects")}
+            />
+            {/* Hidden until the sidebar is hovered, like its close button. */}
+            <SidebarGroupAction
+              aria-label="New project"
+              title="New project"
+              onClick={openNewProject}
+              className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [&>svg]:size-3"
+            >
+              <Plus />
+            </SidebarGroupAction>
+            <SidebarGroupContent id="sidebar-projects-list" hidden={collapsedGroups.projects}>
+              <SidebarMenu>
+                {projects.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">No projects yet.</p>
+                )}
+                {/* Projects are dragged into another place: the new order is saved as soon as it is dropped. */}
                 <SortableContext items={orderedProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
                   {orderedProjects.map((project) => (
                     <SortableProjectRow
@@ -249,122 +335,130 @@ export function AppSidebar({
                     />
                   ))}
                 </SortableContext>
-              </DndContext>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Recents</SidebarGroupLabel>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarGroupAction
-                aria-label="Sort and filter recents"
-                title="Sort and filter recents"
-                className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [&>svg]:size-3"
-              >
-                <ListFilter />
-                {/* A tiny dot while project conversations are left out of Recents. */}
-                {!showProjectConversations && (
-                  <span aria-hidden className="absolute top-0 right-0 size-1 rounded-full bg-primary" />
+          <SidebarGroup>
+            <CollapsibleGroupLabel
+              label="Recents"
+              collapsed={collapsedGroups.recents}
+              controls="sidebar-recents-list"
+              onToggle={() => toggleGroup("recents")}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarGroupAction
+                  aria-label="Sort and filter recents"
+                  title="Sort and filter recents"
+                  className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [&>svg]:size-3"
+                >
+                  <ListFilter />
+                  {/* A tiny dot while project conversations are left out of Recents. */}
+                  {!showProjectConversations && (
+                    <span aria-hidden className="absolute top-0 right-0 size-1 rounded-full bg-primary" />
+                  )}
+                </SidebarGroupAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start" className="rounded-xl bg-popover/95 backdrop-blur">
+                <DropdownMenuCheckboxItem
+                  checked={showProjectConversations}
+                  onCheckedChange={toggleProjectConversations}
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  Show project conversations
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SidebarGroupContent id="sidebar-recents-list" hidden={collapsedGroups.recents}>
+              <SidebarMenu>
+                {recentConversations.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                    {conversations.length === 0 ? "No conversations yet." : "No conversations outside projects."}
+                  </p>
                 )}
-              </SidebarGroupAction>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="start" className="rounded-xl bg-popover/95 backdrop-blur">
-              <DropdownMenuCheckboxItem
-                checked={showProjectConversations}
-                onCheckedChange={toggleProjectConversations}
-                onSelect={(event) => event.preventDefault()}
-              >
-                Show project conversations
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {recentConversations.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {conversations.length === 0 ? "No conversations yet." : "No conversations outside projects."}
-                </p>
-              )}
-              {recentConversations.map((conversation) => {
-                const href = `/c/${conversation.id}`;
-                const title = titleOf(conversation);
-                const showUnread = conversation.unread && pathname !== href;
-                return (
-                  <SidebarMenuItem key={conversation.id}>
-                    <SidebarMenuButton asChild isActive={pathname === href} tooltip={title}>
-                      <Link href={href}>
-                        <ConversationRowContent title={title} project={conversation.project} unread={showUnread} />
-                      </Link>
-                    </SidebarMenuButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <SidebarMenuAction showOnHover aria-label={`Actions for ${title}`}>
-                          <MoreHorizontal />
-                        </SidebarMenuAction>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="right"
-                        align="start"
-                        // The project dialog opens from this menu: it takes the focus, the menu must not hand it back.
-                        onCloseAutoFocus={(event) => event.preventDefault()}
-                      >
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <FolderInput />
-                            Move to project
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            {projects.length === 0 && <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>}
-                            {orderedProjects.map((project) => (
+                {recentConversations.map((conversation) => {
+                  const href = `/c/${conversation.id}`;
+                  const title = titleOf(conversation);
+                  const showUnread = conversation.unread && pathname !== href;
+                  return (
+                    <DraggableConversationRow
+                      key={conversation.id}
+                      conversationId={conversation.id}
+                      title={title}
+                      href={href}
+                      project={conversation.project}
+                      unread={showUnread}
+                      active={pathname === href}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <SidebarMenuAction showOnHover aria-label={`Actions for ${title}`}>
+                            <MoreHorizontal />
+                          </SidebarMenuAction>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="right"
+                          align="start"
+                          // The project dialog opens from this menu: it takes the focus, the menu must not hand it back.
+                          onCloseAutoFocus={(event) => event.preventDefault()}
+                        >
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <FolderInput />
+                              Move to project
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              {projects.length === 0 && <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>}
+                              {orderedProjects.map((project) => (
+                                <DropdownMenuItem
+                                  key={project.id}
+                                  disabled={conversation.project?.id === project.id}
+                                  onSelect={() => void moveConversation(conversation, project.id)}
+                                >
+                                  <ProjectIcon project={project} size={14} />
+                                  <span className="truncate">{project.name}</span>
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                key={project.id}
-                                disabled={conversation.project?.id === project.id}
-                                onSelect={() => void moveConversation(conversation, project.id)}
+                                onSelect={() => {
+                                  // The dialog opens over the menu; once a project is created, it takes this conversation.
+                                  setConversationToMove(conversation);
+                                  setEditingProject(null);
+                                  setProjectDialogOpen(true);
+                                }}
                               >
-                                <ProjectIcon project={project} size={14} />
-                                <span className="truncate">{project.name}</span>
+                                <Plus />
+                                New project
                               </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                // The dialog opens over the menu; once a project is created, it takes this conversation.
-                                setConversationToMove(conversation);
-                                setEditingProject(null);
-                                setProjectDialogOpen(true);
-                              }}
-                            >
-                              <Plus />
-                              New project
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          {conversation.project && (
+                            <DropdownMenuItem onSelect={() => void moveConversation(conversation, null)}>
+                              <FolderMinus />
+                              Remove from project
                             </DropdownMenuItem>
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                        {conversation.project && (
-                          <DropdownMenuItem onSelect={() => void moveConversation(conversation, null)}>
-                            <FolderMinus />
-                            Remove from project
+                          )}
+                          <DropdownMenuItem onSelect={() => void archive(conversation)}>
+                            <Archive />
+                            Archive
                           </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onSelect={() => void archive(conversation)}>
-                          <Archive />
-                          Archive
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onSelect={() => setPendingConversationDelete(conversation)}>
-                          <Trash2 />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onSelect={() => setPendingConversationDelete(conversation)}>
+                            <Trash2 />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </DraggableConversationRow>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </DndContext>
 
       <SidebarFooter className="p-2">
         <Link

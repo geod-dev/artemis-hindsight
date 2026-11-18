@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { randomUUID } from "expo-crypto";
-import { useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { ChatScreen } from "@/chat/chat-screen";
 import { ProjectPicker } from "@/chat/project-picker";
+import { setNewChatProjectSelection } from "@/chat/new-chat-selection";
 import { ConversationTitleBar } from "@/components/conversation-title-bar";
 import { useProjects } from "@/queries/projects";
 
@@ -29,6 +30,12 @@ function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
   const list = projects.data ?? [];
   // Only a project that still exists is used, as on the web: a project deleted meanwhile is never sent.
   const selected = list.find((project) => project.id === pickedId) ?? null;
+
+  // The drawer highlights the selected project: it reads the selection from here, as the web's sidebar does.
+  useEffect(() => {
+    setNewChatProjectSelection(selected?.id ?? null);
+    return () => setNewChatProjectSelection(null);
+  }, [selected?.id]);
 
   // The badge of the selected project shows once the conversation has its name (the placeholder title has none yet).
   const badgeProject = title !== DEFAULT_TITLE ? selected : null;

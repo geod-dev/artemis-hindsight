@@ -12,6 +12,7 @@ import { Glyph } from "@/components/glyph";
 import { M3Host } from "@/components/m3";
 import { ProjectActionsSheet } from "@/components/project-actions-sheet";
 import { ProjectBar, ProjectIcon } from "@/components/project-icon";
+import { useNewChatProjectSelection } from "@/chat/new-chat-selection";
 import { useConversations, type ConversationSummary } from "@/queries/conversations";
 import { useProjects, type ProjectSummary } from "@/queries/projects";
 import { usePreferences } from "@/preferences";
@@ -59,7 +60,9 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
 
   // A new chat with the project selected. A new session each time, so a chat already open is not reused.
   const openProject = (projectId: string) => go(`/new?project=${projectId}&session=${Date.now()}`);
-  const selectedProject = pathname === "/new" ? params.project : undefined;
+  // The project the new chat has selected, whether its picker or a row here chose it: the row of that project is highlighted.
+  const pickedProject = useNewChatProjectSelection();
+  const selectedProject = pathname === "/new" ? pickedProject : undefined;
 
   const projectsSection = (
     <M3Host matchContents={{ vertical: true }}>

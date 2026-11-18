@@ -20,7 +20,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   if (!conversation) notFound();
 
   // Opening the conversation reads it.
-  if (conversation.unread) await setConversationUnread(id, false);
+  if (conversation.unread) await setConversationUnread(id, user.id, false);
 
   const initialMessages: UIMessage[] = toUiMessages(await listMessages(id));
   // The project's name and color, for the badge after the title. A project deleted meanwhile leaves no badge.

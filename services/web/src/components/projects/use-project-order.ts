@@ -46,8 +46,13 @@ export function useProjectOrder(projects: ProjectSummary[]) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  function onDragEnd(event: DragEndEvent) {
+  /** Call at the end of any sidebar drag: the click the pointer makes on release is ignored. */
+  function markDragEnded() {
     dragEndedAt.current = Date.now();
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    markDragEnded();
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const ids = ordered.map((project) => project.id);
@@ -65,5 +70,5 @@ export function useProjectOrder(projects: ProjectSummary[]) {
       });
   }
 
-  return { ordered, sensors, collisionDetection: closestCenter, onDragEnd };
+  return { ordered, sensors, collisionDetection: closestCenter, onDragEnd, markDragEnded };
 }

@@ -37,6 +37,10 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 - Storage of pending turns is per conversation on both clients. A reply running in one conversation is never resumed
   in another.
 - Turn state is in memory (`turn-registry.ts`). A server restart ends running turns; the messages saved so far stay.
+- Live lists: `GET /api/events` (cookie or bearer) sends a `changed` event whenever one of the user's lists (conversations
+  or projects) changes, from any window or device. Every repository write that changes a list calls
+  `announceListChange(userId)` (`server/events/list-events.ts`). A new write that changes a list must announce too.
+  Clients read the lists again on `changed`: the web app in `LiveUpdates`, the phone in `useLiveListUpdates`.
 
 ## Mobile app (`apps/mobile`)
 

@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { projects } from "../db/schema";
+import { announceListChange } from "../events/list-events";
 
 export type ProjectRow = typeof projects.$inferSelect;
 
@@ -37,6 +38,7 @@ export async function setProjectOrder(userId: string, ids: string[]): Promise<vo
         .where(and(eq(projects.id, id), eq(projects.userId, userId)));
     }
   });
+  announceListChange(userId);
 }
 
 export async function findProject(id: string, userId: string): Promise<ProjectRow | undefined> {
@@ -58,6 +60,7 @@ export async function insertProject(values: NewProject): Promise<ProjectRow> {
     })
     .returning();
   if (!row) throw new Error("the project was not stored");
+  announceListChange(values.userId);
   return row;
 }
 
@@ -72,6 +75,7 @@ export async function updateProject(
     .set({ ...values, updatedAt: sql`now()` })
     .where(and(eq(projects.id, id), eq(projects.userId, userId)))
     .returning();
+  if (row) announceListChange(userId);
   return row;
 }
 
@@ -81,5 +85,6 @@ export async function deleteProject(id: string, userId: string): Promise<boolean
     .delete(projects)
     .where(and(eq(projects.id, id), eq(projects.userId, userId)))
     .returning({ id: projects.id });
+  if (deleted.length > 0) announceListChange(userId);
   return deleted.length > 0;
 }

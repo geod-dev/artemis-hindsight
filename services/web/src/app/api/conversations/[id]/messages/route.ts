@@ -23,7 +23,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
   const conversation = await findConversation(id, user.id);
   if (!conversation) return Response.json({ error: "conversation not found" }, { status: 404 });
 
-  if (conversation.unread) await setConversationUnread(id, false);
+  if (conversation.unread) await setConversationUnread(id, user.id, false);
 
   // The project the conversation belongs to, shown as a badge after its title. Null when it has none.
   const project = conversation.projectId ? await findProject(conversation.projectId, user.id) : undefined;

@@ -99,7 +99,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   const conversation = await ensureConversation(conversationId, user.id, userText, params.projectId ?? null);
   const project = conversation.projectId ? (await findProject(conversation.projectId, user.id)) ?? null : null;
   // Sending from a client means the user is looking at this conversation: it is read.
-  await setConversationUnread(conversationId, false);
+  await setConversationUnread(conversationId, user.id, false);
 
   const [lookup, skills] = await Promise.all([lookupMemory(user.username, userText), loadUsableSkills(user.username)]);
 
@@ -205,10 +205,10 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
     onEnd: async ({ messages, isAborted }) => {
       timing.endedAt ??= Date.now();
       await persistLatestAssistant(conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
-      await touchConversation(conversationId);
+      await touchConversation(conversationId, user.id);
       // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
       const delivered = hasViewers(streamId);
-      await setConversationUnread(conversationId, !delivered);
+      await setConversationUnread(conversationId, user.id, !delivered);
       endTurn(conversationId, streamId);
       release();
       // Not awaited. A reply that called flush_memory saves its conversation now, the reply being stored above. Otherwise,

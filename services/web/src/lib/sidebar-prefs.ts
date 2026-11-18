@@ -19,3 +19,24 @@ export function writeShowProjectConversations(show: boolean): void {
     // Not stored: the choice lasts until the page is reloaded.
   }
 }
+
+export type SidebarGroupName = "projects" | "recents";
+
+const collapsedGroupKey = (group: SidebarGroupName) => `artemis.sidebar.collapsed.${group}`;
+
+/** Whether a sidebar group (Projects or Recents) is folded. Expanded by default. */
+export function readSidebarGroupCollapsed(group: SidebarGroupName): boolean {
+  try {
+    return window.localStorage.getItem(collapsedGroupKey(group)) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function writeSidebarGroupCollapsed(group: SidebarGroupName, collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(collapsedGroupKey(group), String(collapsed));
+  } catch {
+    // Not stored: the choice lasts until the page is reloaded.
+  }
+}
