@@ -9,12 +9,16 @@ import { openSandboxFile } from "./file-part";
 import { groupSourceLinks, parseSourceHref } from "../source-links";
 import { SourceBadge } from "./source-badge";
 import { SandboxFileCard } from "./sandbox-file-card";
+import { CodeBlock } from "./code-block";
 
 // Headings sized closer to the body text, and no rule under them: the library draws a 1px border under h1 and h2 by default.
+// Inline code is upright monospace, as on the web (the library's default is italic).
 const markdownStyles: MarkedStyles = {
   h1: { fontSize: 19, fontWeight: "600", borderBottomWidth: 0, marginTop: 12, marginBottom: 6 },
   h2: { fontSize: 17, fontWeight: "600", borderBottomWidth: 0, marginTop: 10, marginBottom: 4 },
   h3: { fontSize: 16, fontWeight: "600", marginTop: 8, marginBottom: 4 },
+  // The web's inline code is 0.85em of the text: a little smaller, so it reads as code without shouting.
+  codespan: { fontFamily: "monospace", fontStyle: "normal", fontWeight: "400", fontSize: 13 },
 };
 
 type Segment =
@@ -98,8 +102,28 @@ export function splitVisuals(text: string): Segment[] {
  * The markdown renderer of one conversation. Its links to sandbox files (the agent writes [label](#sandbox-file:<path>))
  * are downloaded with the session; every other link is rendered as the library does.
  */
+/** A short hash of a text, stable across renders (a React key). */
+function hashText(text: string): string {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, 33) ^ text.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
+}
+
 function createReplyRenderer(conversationId: string, textStyle: TextStyle): Renderer {
   class ReplyRenderer extends Renderer {
+    // A fenced code block is a real code block: highlighted for its language, scrolling sideways (see code-block.tsx).
+    // The key comes from the block's content, not from the renderer's counter: the library re-parses the reply on every
+    // streamed chunk, and a counter key would remount the block (and its sideways scroll) each time.
+    code(text: string, language?: string): ReactNode {
+      return <CodeBlock key={`code-${language ?? ""}-${hashText(text)}`} code={text} language={language ?? ""} />;
+    }
+
+    // Inline code: a nested Text cannot have padding or rounded corners, so the highlight gets its side padding from
+    // two quarter-em spaces inside the background (the web's px-1.5).
+    codespan(text: string, styles?: TextStyle): ReactNode {
+      return super.codespan(` ${text} `, styles);
+    }
+
     link(children: string | ReactNode[], href: string, styles?: TextStyle, title?: string): ReactNode {
       const source = parseSourceHref(href);
       if (source) {
@@ -133,7 +157,8 @@ export function TextPart({ text }: { text: string }) {
       colors: {
         text: colors.text,
         background: "transparent",
-        code: colors.surface,
+        // The inline code's background: it must show on the reply's background (the card colour is white in light mode).
+        code: colors.surfaceStrong,
         link: colors.accent,
         border: colors.border,
       },
