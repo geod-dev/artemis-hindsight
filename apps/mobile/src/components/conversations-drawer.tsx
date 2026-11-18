@@ -150,7 +150,8 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
         }}
       />
 
-      <ActionSheet visible={sortOpen} title="Recents" onClose={() => setSortOpen(false)}>
+      <ActionSheet visible={sortOpen} onClose={() => setSortOpen(false)}>
+        <Text style={[styles.sheetTitle, { color: colors.muted }]}>Recents</Text>
         <ActionSheetOption
           label="Show project conversations"
           checked={preferences.showProjectConversations}
@@ -217,6 +218,7 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingTop: 4 },
   sectionLabel: { fontSize: 13, fontWeight: "500" },
   recentsRow: { paddingTop: 16, paddingBottom: 4 },
+  sheetTitle: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
   sectionAction: { padding: 4 },
   hint: { padding: 12, fontSize: 14 },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 16, paddingHorizontal: 4, marginTop: "auto" },

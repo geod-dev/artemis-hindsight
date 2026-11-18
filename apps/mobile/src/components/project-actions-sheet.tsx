@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react-native";
+import { Alert, StyleSheet, Text } from "react-native";
 import { ApiError } from "@/lib/api";
 import { useDeleteProject, useProjects, useSaveProjectOrder, type ProjectSummary } from "@/queries/projects";
 import { usePreferences } from "@/preferences";
@@ -72,13 +71,15 @@ export function ProjectActionsSheet({
     );
 
   return (
-    <ActionSheet visible={project !== null} title={shown?.name} onClose={onClose}>
+    <ActionSheet visible={project !== null} onClose={onClose}>
       {shown ? (
         <>
+          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
+            {shown.name}
+          </Text>
           {canMove(shown, -1) ? (
             <ActionSheetOption
               label="Move up"
-              icon={<ArrowUp size={20} color={colors.text} />}
               onPress={() => {
                 onClose();
                 moveBy(shown, -1);
@@ -88,7 +89,6 @@ export function ProjectActionsSheet({
           {canMove(shown, 1) ? (
             <ActionSheetOption
               label="Move down"
-              icon={<ArrowDown size={20} color={colors.text} />}
               onPress={() => {
                 onClose();
                 moveBy(shown, 1);
@@ -97,7 +97,6 @@ export function ProjectActionsSheet({
           ) : null}
           <ActionSheetOption
             label="Edit"
-            icon={<Pencil size={20} color={colors.text} />}
             onPress={() => {
               onClose();
               onEdit(shown);
@@ -105,7 +104,6 @@ export function ProjectActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
-            icon={<Trash2 size={20} color={colors.danger} />}
             destructive
             onPress={() => {
               onClose();
@@ -118,3 +116,6 @@ export function ProjectActionsSheet({
   );
 }
 
+const styles = StyleSheet.create({
+  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
+});

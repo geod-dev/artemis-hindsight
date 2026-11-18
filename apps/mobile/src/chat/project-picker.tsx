@@ -61,13 +61,13 @@ export function ProjectPicker({
         <Text style={[styles.pillText, { color: colors.text }]}>Select project</Text>
       </Pressable>
 
-      <ActionSheet visible={open} title="Project" onClose={() => setOpen(false)}>
+      <ActionSheet visible={open} onClose={() => setOpen(false)}>
+        <Text style={[styles.title, { color: colors.muted }]}>Project</Text>
         <ActionSheetOption label="No project" onPress={() => setOpen(false)} />
         {projects.map((project) => (
           <ActionSheetOption
             key={project.id}
             label={project.name}
-            icon={<ProjectIcon project={project} size={20} />}
             onPress={() => {
               setOpen(false);
               onSelect(project.id);
@@ -108,4 +108,5 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   badgeName: { fontSize: 14, fontWeight: "600", flexShrink: 1 },
+  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
 });

@@ -1,4 +1,3 @@
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { setStatusBarStyle, StatusBar } from "expo-status-bar";
@@ -56,17 +55,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
-        <SafeAreaProvider>
-          <QueryClientProvider client={queryClient}>
-            <PreferencesProvider>
-              <AuthProvider>
-                <BottomSheetModalProvider>
-                  <Shell />
-                </BottomSheetModalProvider>
-              </AuthProvider>
-            </PreferencesProvider>
-          </QueryClientProvider>
-        </SafeAreaProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <PreferencesProvider>
+            <AuthProvider>
+              <Shell />
+            </AuthProvider>
+          </PreferencesProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
