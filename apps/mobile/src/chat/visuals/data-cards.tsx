@@ -1,6 +1,6 @@
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { usePreferences } from "@/preferences";
-import { VisualCard } from "./shared";
+import { HorizontalRow, VisualCard } from "./shared";
 import type { ComparisonValue, SpecSheetValue } from "./schemas";
 
 /** Options as columns, traits as rows; the recommended option is highlighted. Scrolls sideways on narrow screens. */
@@ -9,7 +9,7 @@ export function ComparisonVisual({ value }: { value: ComparisonValue }) {
   const columnWidth = 132;
   return (
     <VisualCard>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <HorizontalRow>
         <View>
           <View style={{ flexDirection: "row" }}>
             <View style={{ width: 110 }} />
@@ -46,7 +46,7 @@ export function ComparisonVisual({ value }: { value: ComparisonValue }) {
             </View>
           ))}
         </View>
-      </ScrollView>
+      </HorizontalRow>
       {value.reason ? (
         <Text style={{ color: colors.muted, fontSize: 13, marginTop: 8 }}>
           <Text style={{ color: colors.accent, fontWeight: "600" }}>{value.recommended} · </Text>

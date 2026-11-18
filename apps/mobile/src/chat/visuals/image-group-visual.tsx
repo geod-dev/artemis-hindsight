@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Image, Linking, Pressable, ScrollView, Text } from "react-native";
+import { Image, Pressable } from "react-native";
 import { apiFetch, absoluteUrl, authHeaders } from "@/lib/api";
 import { usePreferences } from "@/preferences";
-import { VisualError, VisualSkeleton } from "./shared";
+import { HorizontalRow, VisualError, VisualSkeleton } from "./shared";
+import { openImageViewer } from "./image-viewer";
 import type { AspectRatio, ImageResult } from "./schemas";
 
 export interface ImageGroupSpec {
@@ -12,8 +13,9 @@ export interface ImageGroupSpec {
 }
 
 const RATIO_VALUE: Record<AspectRatio, number> = { "1:1": 1, "5:4": 5 / 4, "16:9": 16 / 9 };
+const TILE_WIDTH = 150;
 
-/** Searches the group's queries through the server (the key stays there) and shows the results in one row. */
+/** Searches the group's queries through the server (the key stays there) and shows the results in one row of pictures. */
 export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
   const { colors } = usePreferences();
   const query = useQuery({
@@ -28,8 +30,7 @@ export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
     retry: 1,
   });
 
-  const tileWidth = 150;
-  const tileHeight = tileWidth / RATIO_VALUE[spec.aspectRatio];
+  const tileHeight = TILE_WIDTH / RATIO_VALUE[spec.aspectRatio];
 
   if (query.isPending) return <VisualSkeleton label="Loading images" height={tileHeight + 16} />;
   if (query.isError) {
@@ -38,27 +39,23 @@ export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
   if (query.data.length === 0) return <VisualError title="No images" message={spec.queries.join(", ")} />;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+    <HorizontalRow gap={8}>
       {query.data.map((result, index) => (
         <Pressable
           key={`${result.thumbnailUrl}-${index}`}
-          accessibilityRole="link"
-          accessibilityLabel={result.title || "Image result"}
-          onPress={() => void Linking.openURL(result.pageUrl ?? result.imageUrl)}
-          style={{ width: tileWidth }}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={result.title || "Open image"}
+          onPress={() => openImageViewer(query.data, index)}
+          onLongPress={() => openImageViewer(query.data, index)}
+          style={{ width: TILE_WIDTH }}
         >
           <Image
             source={{ uri: absoluteUrl(result.thumbnailUrl), headers: authHeaders() }}
-            style={{ width: tileWidth, height: tileHeight, borderRadius: 12, backgroundColor: colors.surface }}
+            style={{ width: TILE_WIDTH, height: tileHeight, borderRadius: 12, backgroundColor: colors.surface }}
             resizeMode="cover"
           />
-          {result.title ? (
-            <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
-              {result.title}
-            </Text>
-          ) : null}
         </Pressable>
       ))}
-    </ScrollView>
+    </HorizontalRow>
   );
 }

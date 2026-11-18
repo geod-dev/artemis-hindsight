@@ -1,8 +1,11 @@
+import { useEffect, useMemo, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector, ScrollView } from "react-native-gesture-handler";
 import { usePreferences } from "@/preferences";
+import { registerSidewaysScroll } from "@/lib/sideways-scroll";
 
 /** A bordered card for a visual. */
-export function VisualCard({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+export function VisualCard({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const { colors } = usePreferences();
   return <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }, style]}>{children}</View>;
 }
@@ -30,6 +33,23 @@ export function VisualError({ title, message, onRetry }: { title: string; messag
         </Pressable>
       ) : null}
     </VisualCard>
+  );
+}
+
+/**
+ * A row of visuals that scrolls sideways inside a message. Its scroll is a gesture-handler scroll, registered so the drawer's
+ * swipe waits for it (lib/sideways-scroll.ts). The row's children are ordinary presses: a tap or a long press on them is theirs.
+ */
+export function HorizontalRow({ children, gap = 0 }: { children: ReactNode; gap?: number }) {
+  const scroll = useMemo(() => Gesture.Native(), []);
+  useEffect(() => registerSidewaysScroll(scroll), [scroll]);
+
+  return (
+    <GestureDetector gesture={scroll}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={gap ? { gap } : undefined}>
+        {children}
+      </ScrollView>
+    </GestureDetector>
   );
 }
 
