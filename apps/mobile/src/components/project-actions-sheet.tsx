@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text } from "react-native";
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react-native";
 import { ApiError } from "@/lib/api";
 import { useDeleteProject, useProjects, useSaveProjectOrder, type ProjectSummary } from "@/queries/projects";
 import { usePreferences } from "@/preferences";
@@ -80,6 +81,7 @@ export function ProjectActionsSheet({
           {canMove(shown, -1) ? (
             <ActionSheetOption
               label="Move up"
+              icon={ArrowUp}
               onPress={() => {
                 onClose();
                 moveBy(shown, -1);
@@ -89,6 +91,7 @@ export function ProjectActionsSheet({
           {canMove(shown, 1) ? (
             <ActionSheetOption
               label="Move down"
+              icon={ArrowDown}
               onPress={() => {
                 onClose();
                 moveBy(shown, 1);
@@ -97,6 +100,7 @@ export function ProjectActionsSheet({
           ) : null}
           <ActionSheetOption
             label="Edit"
+            icon={Pencil}
             onPress={() => {
               onClose();
               onEdit(shown);
@@ -104,6 +108,7 @@ export function ProjectActionsSheet({
           />
           <ActionSheetOption
             label="Delete"
+            icon={Trash2}
             destructive
             onPress={() => {
               onClose();
@@ -117,5 +122,5 @@ export function ProjectActionsSheet({
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
+  title: { fontSize: 13, paddingHorizontal: 24, marginBottom: 4 },
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { X } from "lucide-react-native";
+import { Folder, Plus, X } from "lucide-react-native";
 import { ActionSheet, ActionSheetOption } from "@/components/action-sheet";
 import { ProjectIcon } from "@/components/project-icon";
 import { paletteHex } from "@/lib/avatar";
@@ -63,11 +63,13 @@ export function ProjectPicker({
 
       <ActionSheet visible={open} onClose={() => setOpen(false)}>
         <Text style={[styles.title, { color: colors.muted }]}>Project</Text>
-        <ActionSheetOption label="No project" onPress={() => setOpen(false)} />
+        <ActionSheetOption label="No project" icon={X} onPress={() => setOpen(false)} />
         {projects.map((project) => (
           <ActionSheetOption
             key={project.id}
             label={project.name}
+            icon={Folder}
+            color={paletteHex(project.color)}
             onPress={() => {
               setOpen(false);
               onSelect(project.id);
@@ -76,6 +78,7 @@ export function ProjectPicker({
         ))}
         <ActionSheetOption
           label="New project"
+          icon={Plus}
           onPress={() => {
             setOpen(false);
             router.push("/projects/form" as Href);
@@ -108,5 +111,5 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   badgeName: { fontSize: 14, fontWeight: "600", flexShrink: 1 },
-  title: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
+  title: { fontSize: 13, paddingHorizontal: 24, marginBottom: 4 },
 });
