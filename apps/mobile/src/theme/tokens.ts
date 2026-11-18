@@ -4,7 +4,7 @@
 export const lightTokens = {
   "background": "#ffffff",
   "foreground": "#0a0a0a",
-  "card": "#ffffff",
+  "card": "#f5f5f5",
   "card-foreground": "#0a0a0a",
   "popover": "#ffffff",
   "popover-foreground": "#0a0a0a",
