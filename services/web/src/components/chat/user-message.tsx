@@ -3,11 +3,11 @@
 import { ActionBarPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react";
 import { CheckIcon, CopyIcon, PencilIcon } from "lucide-react";
 import { useState, type FC } from "react";
-import { UserMessageAttachments } from "@/components/assistant-ui/elements/attachment.aui";
 import { QuoteBlock } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
 import { MessageDebugMenu } from "./message-debug-menu";
+import { UserMessageAttachments } from "./user-attachments";
 
 /**
  * A user message: the bubble, then a row of actions underneath (copy, edit and the debug menu), like the assistant's.
