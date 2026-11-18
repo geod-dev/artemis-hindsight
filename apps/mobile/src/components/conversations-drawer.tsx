@@ -10,7 +10,7 @@ import { ActionSheet, ActionSheetOption } from "@/components/action-sheet";
 import { ConversationActionsSheet } from "@/components/conversation-actions-sheet";
 import { ProjectActionsSheet } from "@/components/project-actions-sheet";
 import { ProjectBar, ProjectIcon } from "@/components/project-icon";
-import { useNewChatProjectSelection } from "@/chat/new-chat-selection";
+import { useNewChatConversation, useNewChatProjectSelection } from "@/chat/new-chat-selection";
 import { useConversations, type ConversationSummary } from "@/queries/conversations";
 import { useProjects, type ProjectSummary } from "@/queries/projects";
 import { usePreferences } from "@/preferences";
@@ -58,6 +58,7 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
   const openProject = (projectId: string) => go(`/new?project=${projectId}&session=${Date.now()}`);
   // The project the new chat has selected, whether its picker or a row here chose it: the row of that project is highlighted.
   const pickedProject = useNewChatProjectSelection();
+  const newChatConversation = useNewChatConversation();
   const selectedProject = pathname === "/new" ? pickedProject : undefined;
 
   const projectsSection = (
@@ -130,7 +131,8 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
           )
         }
         renderItem={({ item }) => {
-          const active = pathname === `/c/${item.id}`;
+          // The conversation on screen: its route, or the new chat that is writing it (the route stays /new).
+          const active = pathname === `/c/${item.id}` || (pathname === "/new" && item.id === newChatConversation);
           const showUnread = item.unread && !active;
           return (
             <Pressable
@@ -154,6 +156,7 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
         <Text style={[styles.sheetTitle, { color: colors.muted }]}>Recents</Text>
         <ActionSheetOption
           label="Show project conversations"
+          icon={ArrowDownUp}
           checked={preferences.showProjectConversations}
           onPress={() => {
             setShowProjectConversations(!preferences.showProjectConversations);
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingTop: 4 },
   sectionLabel: { fontSize: 13, fontWeight: "500" },
   recentsRow: { paddingTop: 16, paddingBottom: 4 },
-  sheetTitle: { fontSize: 13, paddingHorizontal: 4, marginBottom: 4 },
+  sheetTitle: { fontSize: 13, paddingHorizontal: 24, marginBottom: 4 },
   sectionAction: { padding: 4 },
   hint: { padding: 12, fontSize: 14 },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 16, paddingHorizontal: 4, marginTop: "auto" },

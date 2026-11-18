@@ -26,7 +26,7 @@ export function ThreadView({
   projectPicker,
 }: {
   conversationId: string;
-  /** The new chat's project: its recent conversations show under the composer while the chat is empty. */
+  /** The new chat's project: its recent conversations show under the project picker while the chat is empty. */
   projectId?: string | null;
   /** The mascot's color in the empty chat, when a project is selected. */
   mascotTint?: string;
@@ -78,6 +78,7 @@ export function ThreadView({
               <Text style={[styles.emptyTitle, { color: colors.text }]}>What do you want to know?</Text>
               <Text style={[styles.emptyBody, { color: colors.muted }]}>Ask a question, add a file, or dictate your message.</Text>
               {projectPicker}
+              {projectId ? <ProjectRecents projectId={projectId} /> : null}
             </View>
           </ThreadPrimitive.Empty>
           <View style={styles.list}>
@@ -118,11 +119,6 @@ export function ThreadView({
             }}
           >
             <Composer conversationId={conversationId} />
-            {projectId ? (
-              <ThreadPrimitive.Empty>
-                <ProjectRecents projectId={projectId} />
-              </ThreadPrimitive.Empty>
-            ) : null}
           </View>
         </ThreadPrimitive.Root>
       </Animated.View>

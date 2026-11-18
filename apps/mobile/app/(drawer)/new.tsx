@@ -3,7 +3,7 @@ import { randomUUID } from "expo-crypto";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { ChatScreen } from "@/chat/chat-screen";
 import { ProjectPicker } from "@/chat/project-picker";
-import { setNewChatProjectSelection } from "@/chat/new-chat-selection";
+import { setNewChatConversation, setNewChatProjectSelection } from "@/chat/new-chat-selection";
 import { ConversationTitleBar } from "@/components/conversation-title-bar";
 import { useProjects } from "@/queries/projects";
 
@@ -30,6 +30,12 @@ function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
   const list = projects.data ?? [];
   // Only a project that still exists is used, as on the web: a project deleted meanwhile is never sent.
   const selected = list.find((project) => project.id === pickedId) ?? null;
+
+  // The drawer highlights this chat's conversation once it exists in the list: the route stays /new, so it is told here.
+  useEffect(() => {
+    setNewChatConversation(conversationId);
+    return () => setNewChatConversation(null);
+  }, [conversationId]);
 
   // The drawer highlights the selected project: it reads the selection from here, as the web's sidebar does.
   useEffect(() => {
