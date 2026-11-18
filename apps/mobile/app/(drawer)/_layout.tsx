@@ -4,10 +4,12 @@ import { Redirect, usePathname, useRouter } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { ConversationsDrawer } from "@/components/conversations-drawer";
 import { BackButton } from "@/components/back-button";
+import { renderTopBar, topBarOptions } from "@/components/top-bar";
 import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
 import { getReturnTo } from "@/lib/return-to";
-import { usePushToTalkHeld } from "@/chat/push-to-talk";
+import { useSwipeLocked } from "@/lib/swipe-lock";
+import { awaitSidewaysScrolls, useSidewaysScrolls } from "@/lib/sideways-scroll";
 import { useLiveListUpdates } from "@/queries/live-updates";
 
 /** Everything after sign-in: the chat (with the conversation list as a drawer) and the settings. */
@@ -16,8 +18,10 @@ export default function DrawerLayout() {
   const { colors } = usePreferences();
   // The lists follow the server while the app is open (a change made in the web app or on another device shows here).
   useLiveListUpdates(state.status === "signedIn");
-  // While a push-to-talk press is held, the drawer's swipe is off: a slide towards cancel or send must not open it.
-  const pushToTalk = usePushToTalkHeld();
+  // The drawer's swipe is off while a dictate press is held (see lib/swipe-lock.ts).
+  const swipeLocked = useSwipeLocked();
+  // The drawer's pan waits for every sideways scroll on screen to fail, natively (lib/sideways-scroll.ts).
+  const scrolls = useSidewaysScrolls();
   const pathname = usePathname();
   const router = useRouter();
   // On the settings' main page, the Android back button goes back to the page the settings were opened from. The subpages
@@ -37,15 +41,13 @@ export default function DrawerLayout() {
     <Drawer
       drawerContent={(props) => <ConversationsDrawer {...props} />}
       screenOptions={{
-        // Material 3 top app bar, as in the root stack: flat, left-aligned, larger medium title.
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTitleAlign: "left",
-        headerTitleStyle: { fontSize: 22, fontWeight: "500" },
-        headerTintColor: colors.text,
+        // The same top bar as the settings and the root stack (components/top-bar.ts).
+        ...topBarOptions(colors),
+        header: renderTopBar,
         sceneStyle: { backgroundColor: colors.background },
         drawerType: "front",
-        swipeEnabled: !pushToTalk,
+        swipeEnabled: !swipeLocked,
+        configureGestureHandler: (pan) => awaitSidewaysScrolls(pan, scrolls),
         // A swipe to the right opens the drawer from anywhere on the screen, not only from the left edge.
         swipeEdgeWidth: Dimensions.get("window").width,
         drawerStyle: { backgroundColor: colors.surface, width: 300 },

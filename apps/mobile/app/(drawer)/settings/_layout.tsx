@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { BackButton } from "@/components/back-button";
+import { topBarOptions } from "@/components/top-bar";
 import { usePreferences } from "@/preferences";
 
 /**
@@ -11,9 +12,10 @@ export default function SettingsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTintColor: colors.text,
+        // The same top bar as the chat and the new chat (components/top-bar.ts).
+        // The native header, so the system's back gesture and its predictive preview run as designed. The colours and the
+        // title style are the same as the other screens' (components/top-bar.tsx).
+        ...topBarOptions(colors),
         contentStyle: { backgroundColor: colors.background },
       }}
     >

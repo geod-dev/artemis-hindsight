@@ -29,6 +29,7 @@ export function ConversationTitleBar({ title, project }: { title: string; projec
 /** The project's badge: its name in a tint of its color. Tapping it opens the new chat in that project. */
 export function ProjectBadge({ project }: { project: ProjectRef }) {
   const router = useRouter();
+  const { colors } = usePreferences();
   const tint = paletteHex(project.color);
   return (
     <Pressable
@@ -39,7 +40,8 @@ export function ProjectBadge({ project }: { project: ProjectRef }) {
       style={[styles.badge, { backgroundColor: `${tint}26`, borderColor: tint }]}
     >
       <View style={[styles.dot, { backgroundColor: tint }]} />
-      <Text numberOfLines={1} style={styles.badgeName}>
+      {/* The name takes the theme's text colour, so it reads in light and dark mode; the project colour is the dot and the edge. */}
+      <Text numberOfLines={1} style={[styles.badgeName, { color: colors.text }]}>
         {project.name}
       </Text>
     </Pressable>

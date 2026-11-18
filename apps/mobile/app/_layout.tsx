@@ -9,6 +9,8 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/auth";
 import { PreferencesProvider, usePreferences } from "@/preferences";
+import { renderTopBar, topBarOptions } from "@/components/top-bar";
+import { ImageViewerHost } from "@/chat/visuals/image-viewer";
 
 function Shell() {
   const { colors, isDark } = usePreferences();
@@ -31,12 +33,9 @@ function Shell() {
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack
         screenOptions={{
-          // Material 3 top app bar: surface colour, no elevation shadow, title left-aligned in the larger medium style.
-          headerStyle: { backgroundColor: colors.background },
-          headerShadowVisible: false,
-          headerTitleAlign: "left",
-          headerTitleStyle: { fontSize: 22, fontWeight: "500" },
-          headerTintColor: colors.text,
+          // The same top bar as the chat and the settings (components/top-bar.ts).
+          ...topBarOptions(colors),
+          header: renderTopBar,
           contentStyle: { backgroundColor: colors.background },
         }}
       >
@@ -45,6 +44,8 @@ function Shell() {
         <Stack.Screen name="setup-profile" options={{ title: "Your profile" }} />
         <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       </Stack>
+      {/* The full-screen pictures of a gallery: mounted here, above every screen, not inside a message. */}
+      <ImageViewerHost />
     </>
   );
 }
