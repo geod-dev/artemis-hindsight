@@ -1,5 +1,5 @@
 import { ThreadPrimitive } from "@assistant-ui/react-native";
-import { useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
@@ -62,6 +62,13 @@ export function ThreadView({
     setAtBottom(contentSize.height - layoutMeasurement.height - contentOffset.y <= AT_BOTTOM_PX);
   };
 
+  // A conversation opens at its newest message. The messages arrive after the list has opened, so the list is pinned to the
+  // end while its content grows, until the user drags it (then it is theirs to scroll).
+  const pinnedToEnd = useRef(true);
+  useEffect(() => {
+    pinnedToEnd.current = true;
+  }, [conversationId]);
+
   return (
     <View
       style={styles.clip}
@@ -92,9 +99,13 @@ export function ThreadView({
               scrollToBottomOnThreadSwitch
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
+              onScrollBeginDrag={() => {
+                pinnedToEnd.current = false;
+              }}
               onContentSizeChange={(_width, height) => {
                 sizes.current.content = height;
                 updateFreeSpace();
+                if (pinnedToEnd.current) list.current?.scrollToEnd({ animated: false });
               }}
             >
               {() => <MessageView />}
