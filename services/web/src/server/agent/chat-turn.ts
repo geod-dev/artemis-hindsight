@@ -37,6 +37,7 @@ import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
 import { createTurnTiming, observeTurnTiming, snapshotTiming } from "./turn-timing";
 import { acquireTurn, endTurn, hasViewers, resumable, startTurn, watchViewers } from "./turn-registry";
+import { announceListChange } from "../events/list-events";
 
 /**
  * Handles one user message in a conversation. The turn is owned by the server: it keeps running when
@@ -154,6 +155,8 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
 
   const streamId = crypto.randomUUID();
   const turn = startTurn(conversationId, streamId, user.id);
+  // The lists show the running spinner from the start of the turn, so they are read again now.
+  announceListChange(user.id);
   const timing = createTurnTiming(Date.now());
 
   const uiStream = createUIMessageStream<UIMessage>({
@@ -210,6 +213,8 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       const delivered = hasViewers(streamId);
       await setConversationUnread(conversationId, user.id, !delivered);
       endTurn(conversationId, streamId);
+      // After endTurn: a list read on this announcement must no longer see the turn as running.
+      announceListChange(user.id);
       release();
       // Not awaited. A reply that called flush_memory saves its conversation now, the reply being stored above. Otherwise,
       // if another conversation took over while this turn streamed, its messages reach memory now.

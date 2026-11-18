@@ -39,7 +39,11 @@ export function ProjectRecents({ projectId }: { projectId: string }) {
           <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
             {conversation.title}
           </Text>
-          {conversation.unread ? <View style={[styles.unread, { backgroundColor: colors.accent }]} /> : null}
+          {conversation.running ? (
+            <ActivityIndicator size="small" color={colors.muted} accessibilityLabel="Reply running" />
+          ) : conversation.unread ? (
+            <View style={[styles.unread, { backgroundColor: colors.accent }]} />
+          ) : null}
         </Pressable>
       ))}
       {total > conversations.length ? (

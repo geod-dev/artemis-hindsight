@@ -31,6 +31,7 @@ export function DraggableConversationRow({
   href,
   project,
   unread,
+  running,
   active,
   children,
 }: {
@@ -39,6 +40,7 @@ export function DraggableConversationRow({
   href: string;
   project: ConversationSummary["project"];
   unread: boolean;
+  running: boolean;
   active: boolean;
   children: ReactNode;
 }) {
@@ -57,7 +59,7 @@ export function DraggableConversationRow({
     >
       <SidebarMenuButton asChild isActive={active} tooltip={title}>
         <Link href={href}>
-          <ConversationRowContent title={title} project={project} unread={unread} />
+          <ConversationRowContent title={title} project={project} unread={unread} running={running} />
         </Link>
       </SidebarMenuButton>
       {children}

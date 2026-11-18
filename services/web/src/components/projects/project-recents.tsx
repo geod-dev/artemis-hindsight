@@ -73,6 +73,7 @@ export function ProjectRecents({ projectId }: { projectId: string }) {
                     title={conversation.title}
                     project={conversation.project}
                     unread={conversation.unread}
+                    running={conversation.running}
                     meta={
                       <time dateTime={conversation.updatedAt} className="shrink-0 text-xs text-muted-foreground">
                         {formatDay(conversation.updatedAt)}

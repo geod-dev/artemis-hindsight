@@ -389,6 +389,7 @@ export function AppSidebar({
                       href={href}
                       project={conversation.project}
                       unread={showUnread}
+                      running={conversation.running}
                       active={pathname === href}
                     >
                       <DropdownMenu>

@@ -9,6 +9,8 @@ export interface ConversationSummary {
   updatedAt: string;
   /** A reply finished here while nobody was watching: the drawer shows a dot until it is opened. */
   unread: boolean;
+  /** A reply is running in this conversation right now: the list shows a spinner on its row. */
+  running: boolean;
   /** The project the conversation belongs to, or null outside any project. Its color is the bar before the title. */
   project: { id: string; name: string; color: string } | null;
 }

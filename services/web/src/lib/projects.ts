@@ -23,6 +23,7 @@ export interface ConversationSummary {
   title: string;
   updatedAt: string;
   unread: boolean;
+  running: boolean;
   project: ProjectRef | null;
 }
 

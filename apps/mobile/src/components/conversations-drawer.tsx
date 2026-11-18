@@ -146,7 +146,11 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
               <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
                 {item.title}
               </Text>
-              {showUnread ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
+              {item.running ? (
+                <ActivityIndicator size="small" color={colors.muted} accessibilityLabel="Reply running" />
+              ) : showUnread ? (
+                <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />
+              ) : null}
             </Pressable>
           );
         }}
