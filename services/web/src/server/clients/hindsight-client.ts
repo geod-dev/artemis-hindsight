@@ -179,6 +179,23 @@ export async function consolidateBank(bankId: string): Promise<string> {
   return body.operation_id;
 }
 
+/**
+ * Reads one of the bank's endpoints and returns its JSON, or null for a 404. For the memory explorer
+ * (server/memory/memory-explorer.ts), which validates the shape.
+ */
+export async function readBank(
+  bankId: string,
+  suffix: string,
+  query: Record<string, string | number> = {},
+): Promise<unknown> {
+  const url = bankUrl(bankId, suffix);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`hindsight ${suffix} failed for ${bankId}: HTTP ${res.status}`);
+  return res.json();
+}
+
 /** How many of the bank's facts consolidation has not turned into observations yet. */
 export async function pendingConsolidation(bankId: string): Promise<number> {
   const res = await fetch(bankUrl(bankId, "/stats"), { headers: headers(), signal: AbortSignal.timeout(15_000) });

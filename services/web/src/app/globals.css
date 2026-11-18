@@ -44,6 +44,12 @@
   --memory-experience: #d97706;
   --memory-observation: #059669;
   --memory-mental-model: #9333ea;
+  --memory-entity: #0891b2;
+  /* Links between memories, in the memory graph. Distinct from the fact type colors above. */
+  --memory-link-semantic: #db2777;
+  --memory-link-temporal: #64748b;
+  --memory-link-entity: #0891b2;
+  --memory-link-causal: #dc2626;
   /* The 16 avatar colors a user can pick. The same in both themes. */
   --avatar-rose: #f43f5e;
   --avatar-pink: #ec4899;
@@ -85,6 +91,11 @@
   --memory-experience: #fbbf24;
   --memory-observation: #34d399;
   --memory-mental-model: #c084fc;
+  --memory-entity: #22d3ee;
+  --memory-link-semantic: #f472b6;
+  --memory-link-temporal: #94a3b8;
+  --memory-link-entity: #22d3ee;
+  --memory-link-causal: #f87171;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);

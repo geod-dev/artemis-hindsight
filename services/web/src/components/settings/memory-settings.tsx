@@ -1,7 +1,6 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
   AlertDialog,
@@ -15,16 +14,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-
-const MemoryGraph = dynamic(() => import("./memory-graph").then((m) => m.MemoryGraph), {
-  ssr: false,
-  loading: () => <Skeleton className="h-full w-full rounded-xl" />,
-});
+import { MemoryExplorer } from "./memory/memory-explorer";
 
 export function MemorySettings() {
-  // Bumped after the memory is cleared, so the graph loads again.
-  const [graphVersion, setGraphVersion] = useState(0);
+  // Bumped when the memory changes (cleared, or a memory forgotten), so every tab loads again.
+  const [version, setVersion] = useState(0);
+  const changed = () => setVersion((value) => value + 1);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 px-6 py-10">
@@ -32,14 +27,12 @@ export function MemorySettings() {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">Memory</h1>
           <p className="text-sm text-muted-foreground">
-            What Artemis remembers about you, as a graph. Click a memory to see it or delete it.
+            What Artemis remembers about you. Open any memory to see where it comes from.
           </p>
         </div>
-        <ClearMemoryButton onCleared={() => setGraphVersion((version) => version + 1)} />
+        <ClearMemoryButton onCleared={changed} />
       </header>
-      <div className="relative min-h-[60svh] flex-1 overflow-hidden rounded-xl border bg-card">
-        <MemoryGraph key={graphVersion} />
-      </div>
+      <MemoryExplorer version={version} onChanged={changed} />
     </div>
   );
 }
