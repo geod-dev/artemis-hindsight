@@ -6,18 +6,27 @@ import { fileKind } from "@/lib/file-icons";
 import { forwardRef, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
 import { usePreferences } from "@/preferences";
-import { setPushToTalkHeld } from "./push-to-talk";
+import { acquireSwipeLock } from "@/lib/swipe-lock";
 
 const ICON_SIZE = 18;
-// The button under a held finger grows to 1.5× and rises by half its 36 px size, on a spring that overshoots.
-const LIFT_SCALE = 1.5;
-const LIFT_PX = 18;
+// The room the send button takes when it is in: the 36 px button and the 8 px gap before it.
+const SEND_SLOT = 44;
+// The button under a held finger zooms by 75% (scale 1.75) and rises by 120% of its 36 px size, on a spring that overshoots.
+const LIFT_SCALE = 1 + 0.75;
+const LIFT_PX = 36 * 1.2;
 // A press shorter than this is a click: dictation keeps going after the finger lifts. Longer, it is push-to-talk.
 const HOLD_MS = 250;
 // The live waveform: one sample per tick, one 2 px bar per sample with a 2 px gap between bars.
@@ -74,6 +83,23 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const imageCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type === "image").length);
   const fileCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type !== "image").length);
   const canSend = text.trim().length > 0 || imageCount + fileCount > 0;
+  // The send button is shown while there is something to send (or a reply runs, when it is the stop button). Until then it
+  // takes no room: the dictate button is the one at the end of the bar, on the accent disc.
+  const sendShown = canSend || running;
+  // 0 = no send button (the dictate button is the accent disc), 1 = the send button is in (the dictate button is transparent).
+  const sendProgress = useSharedValue(sendShown ? 1 : 0);
+  useEffect(() => {
+    sendProgress.value = withTiming(sendShown ? 1 : 0, { duration: 220 });
+  }, [sendShown, sendProgress]);
+  const dictateStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(sendProgress.value, [0, 1], [colors.accent, "rgba(0,0,0,0)"]),
+  }));
+  // The send slot grows from the right edge: its width pushes the dictate button to the left.
+  const sendSlotStyle = useAnimatedStyle(() => ({ width: sendProgress.value * SEND_SLOT }));
+  const sendInnerStyle = useAnimatedStyle(() => ({
+    opacity: sendProgress.value,
+    transform: [{ translateX: (1 - sendProgress.value) * SEND_SLOT }],
+  }));
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   // Set by "send dictated message": the send happens after the transcript is in the input (see finishVoice).
   const sendAfter = useRef(false);
@@ -92,7 +118,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const sendRef = useRef<ViewRef>(null);
   const inverted = voice !== "idle";
   // Icons on the inverted card take the surface colour; on the normal card they are muted, as before.
-  const tone = inverted ? colors.background : colors.muted;
+  const tone = inverted ? colors.accentText : colors.muted;
 
   // Several files at once; each one is checked on its own, so one too large does not stop the others.
   const addFiles = async () => {
@@ -184,14 +210,28 @@ export function Composer({ conversationId }: { conversationId: string }) {
     aui.composer().send();
   }, [voice, text, canSend, aui]);
 
+  // The button under a held finger is selected at once: when the hold starts, and when the buttons' positions arrive. It
+  // does not wait for the finger to move (the move handler keeps it up to date after that).
+  const refreshHover = () => {
+    const current = press.current;
+    if (!current || !current.held || current.onStop) return;
+    const target = hitTest(current.x, current.y);
+    if (target !== current.hover) {
+      current.hover = target;
+      setHover(target);
+    }
+  };
+
   // Once recording, the buttons are where they are on screen: measure them for the hit test. A press that ended before
   // the recording started acts now.
   useEffect(() => {
     if (voice !== "recording") return undefined;
     const id = setTimeout(() => {
+      // measureInWindow answers asynchronously, one button at a time: each answer re-checks the finger's button.
       const measure = (key: Target, node: ViewRef | null) =>
         node?.measureInWindow((x, y, width, height) => {
           targetRects.current[key] = { x, y, width, height };
+          refreshHover();
         });
       measure("cancel", cancelRef.current);
       measure("stop", stopRef.current);
@@ -215,6 +255,17 @@ export function Composer({ conversationId }: { conversationId: string }) {
     return null;
   };
 
+  // While a dictate press is held, nothing else takes the sideways swipe: the drawer's swipe is off until the press ends.
+  const swipeHold = useRef<(() => void) | null>(null);
+  const holdSwipe = () => {
+    swipeHold.current ??= acquireSwipeLock();
+  };
+  const releaseSwipe = () => {
+    swipeHold.current?.();
+    swipeHold.current = null;
+  };
+  useEffect(() => releaseSwipe, []);
+
   // The dictate button. A press starts dictation at once; see the Composer doc comment for the gesture.
   const onPressDown = (x: number, y: number) => {
     if (voice === "recording") {
@@ -225,7 +276,8 @@ export function Composer({ conversationId }: { conversationId: string }) {
     next.timer = setTimeout(() => {
       if (press.current === next) {
         next.held = true;
-        setPushToTalkHeld(true);
+        holdSwipe();
+        refreshHover();
       }
     }, HOLD_MS);
     press.current = next;
@@ -250,7 +302,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
   const onPressUp = (x: number, y: number) => {
     const current = press.current;
     press.current = null;
-    setPushToTalkHeld(false);
+    releaseSwipe();
     if (!current) return;
     if (current.timer) clearTimeout(current.timer);
     setHover(null);
@@ -266,25 +318,26 @@ export function Composer({ conversationId }: { conversationId: string }) {
     else pendingEnd.current = { target };
   };
 
-  // The gesture is created once and calls the handlers of the latest render, so they always see the current state.
-  // A pan gesture (not the responder system) keeps reporting the finger while it slides across the buttons, and blocks
-  // the drawer's swipe, which would otherwise take a sideways slide and end the press.
+  // The press follows the finger across the buttons: a pan from the first touch until the finger lifts. The handlers are
+  // read from a ref, so the gesture always calls the latest render's handlers.
   const pressHandlers = useRef({ down: onPressDown, move: onPressMove, up: onPressUp });
   pressHandlers.current = { down: onPressDown, move: onPressMove, up: onPressUp };
-  const pressGesture = useMemo(() => {
-    const call = (kind: "down" | "move" | "up", x: number, y: number) => pressHandlers.current[kind](x, y);
-    return Gesture.Pan()
-      .minDistance(0)
-      .onBegin((event) => {
-        scheduleOnRN(call, "down", event.absoluteX, event.absoluteY);
-      })
-      .onUpdate((event) => {
-        scheduleOnRN(call, "move", event.absoluteX, event.absoluteY);
-      })
-      .onFinalize((event) => {
-        scheduleOnRN(call, "up", event.absoluteX, event.absoluteY);
-      });
-  }, []);
+  const dispatch = (kind: "down" | "move" | "up", x: number, y: number) => pressHandlers.current[kind](x, y);
+  const pressGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        .onBegin((event) => {
+          scheduleOnRN(dispatch, "down", event.absoluteX, event.absoluteY);
+        })
+        .onUpdate((event) => {
+          scheduleOnRN(dispatch, "move", event.absoluteX, event.absoluteY);
+        })
+        .onFinalize((event) => {
+          scheduleOnRN(dispatch, "up", event.absoluteX, event.absoluteY);
+        }),
+    [],
+  );
 
   return (
     <View>
@@ -293,7 +346,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
           style={[
             styles.card,
             inverted
-              ? { backgroundColor: colors.text, borderColor: colors.text }
+              ? { backgroundColor: colors.accent, borderColor: colors.accent }
               : { backgroundColor: composerSurface(colors, isDark), borderColor: colors.border },
           ]}
         >
@@ -314,9 +367,9 @@ export function Composer({ conversationId }: { conversationId: string }) {
             value={text}
             onChangeText={(value) => aui.composer().setText(value)}
             placeholder="Message Artemis"
-            placeholderTextColor={inverted ? colors.background : colors.muted}
+            placeholderTextColor={inverted ? colors.accentText : colors.muted}
             multiline
-            style={[styles.input, { color: inverted ? colors.background : colors.text }]}
+            style={[styles.input, { color: inverted ? colors.accentText : colors.text }]}
           />
 
           <View style={styles.toolbar}>
@@ -339,29 +392,29 @@ export function Composer({ conversationId }: { conversationId: string }) {
             {/* The live waveform sits between cancel and stop, as on the web. */}
             <View style={styles.middle}>
               {voice === "idle" ? null : (
-                <DictationWaveform recorder={recorder} transcribing={voice === "transcribing"} tone={colors.background} />
+                <DictationWaveform recorder={recorder} transcribing={voice === "transcribing"} tone={colors.accentText} />
               )}
             </View>
 
-            <View style={styles.toolbarGroup}>
+            <View style={[styles.toolbarGroup, voice !== "idle" && styles.dictatingGroup]}>
               {/* The dictate button: while dictating it is the stop button, in the same place. */}
               <GestureDetector gesture={pressGesture}>
-                <View
+                <Animated.View
                   accessibilityRole="button"
                   accessibilityLabel={voice === "idle" ? "Dictate" : "Stop dictation"}
                   accessibilityHint={voice === "idle" ? "Press and hold to dictate while holding" : undefined}
-                  style={[styles.iconButton, voice === "transcribing" && { opacity: 0.35 }]}
+                  style={[styles.iconButton, voice === "idle" && dictateStyle, voice === "transcribing" && { opacity: 0.35 }]}
                 >
                   <View ref={stopRef} collapsable={false} style={styles.fill}>
                     <Lift active={hover === "stop"} style={styles.fill}>
                       {voice === "idle" ? (
-                        <Mic size={ICON_SIZE} color={colors.muted} />
+                        <Mic size={ICON_SIZE} color={sendShown ? colors.muted : colors.accentText} />
                       ) : (
                         <Square size={12} color={tone} fill={tone} />
                       )}
                     </Lift>
                   </View>
-                </View>
+                </Animated.View>
               </GestureDetector>
 
               {voice !== "idle" ? (
@@ -371,37 +424,43 @@ export function Composer({ conversationId }: { conversationId: string }) {
                   disabled={voice === "transcribing"}
                   accessibilityRole="button"
                   accessibilityLabel="Send dictated message"
-                  // Reversed like the rest of the dictating composer: a light disc on the inverted card, with a dark arrow.
+                  // Reversed like the rest of the dictating composer: a disc in the card's text colour, with the primary arrow.
                   style={[styles.send, { opacity: voice === "transcribing" ? 0.5 : 1 }]}
                 >
-                  <Lift active={hover === "send"} style={[styles.send, { backgroundColor: colors.background }]}>
-                    <ArrowUp size={ICON_SIZE} color={colors.text} />
+                  <Lift active={hover === "send"} style={[styles.send, { backgroundColor: colors.accentText }]}>
+                    <ArrowUp size={ICON_SIZE} color={colors.accent} />
                   </Lift>
                 </Pressable>
-              ) : running ? (
-                <Pressable
-                  onPress={stop}
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop generating"
-                  style={[styles.send, { backgroundColor: colors.text }]}
-                >
-                  <Square size={12} color={colors.background} fill={colors.background} />
-                </Pressable>
               ) : (
-                <Pressable
-                  onPress={() => {
-                    // Sending closes the keyboard: the reply is read, not typed into.
-                    Keyboard.dismiss();
-                    aui.composer().send();
-                  }}
-                  disabled={!canSend}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send message"
-                  // The web's send button: the primary colour, dimmed (half opacity) while there is nothing to send.
-                  style={[styles.send, { backgroundColor: colors.accent, opacity: canSend ? 1 : 0.5 }]}
-                >
-                  <ArrowUp size={ICON_SIZE} color={colors.accentText} />
-                </Pressable>
+                // The stop button while a reply runs, otherwise the send button: both slide in from the right.
+                <Animated.View style={[styles.sendSlot, sendSlotStyle]}>
+                  <Animated.View style={[styles.sendInner, sendInnerStyle]}>
+                    {running ? (
+                      <Pressable
+                        onPress={stop}
+                        accessibilityRole="button"
+                        accessibilityLabel="Stop generating"
+                        style={[styles.send, { backgroundColor: colors.text }]}
+                      >
+                        <Square size={12} color={colors.background} fill={colors.background} />
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          // Sending closes the keyboard: the reply is read, not typed into.
+                          Keyboard.dismiss();
+                          aui.composer().send();
+                        }}
+                        disabled={!canSend}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send message"
+                        style={[styles.send, { backgroundColor: colors.accent }]}
+                      >
+                        <ArrowUp size={ICON_SIZE} color={colors.accentText} />
+                      </Pressable>
+                    )}
+                  </Animated.View>
+                </Animated.View>
               )}
             </View>
           </View>
@@ -527,7 +586,7 @@ function AttachmentChip({ kind }: { kind: "image" | "file" }) {
 }
 
 /**
- * The button under a held finger. It springs up by half its size and grows to 1.5×; the spring overshoots, and a short
+ * The button under a held finger. It springs up by 120% of its size and zooms by 75%; the spring overshoots, and a short
  * squash-and-stretch wobble runs when it is picked up and again when it is let go, so the change reads as a physical bounce.
  * The first render is not animated: a button that appears does not bounce.
  */
@@ -585,7 +644,9 @@ const styles = StyleSheet.create({
   fileList: { gap: 6 },
   input: { minHeight: 44, maxHeight: 160, fontSize: 16, lineHeight: 22, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 6, textAlignVertical: "top" },
   toolbar: { flexDirection: "row", alignItems: "center", gap: 6 },
-  toolbarGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
+  // No gap here: a gap also counts the send slot while it is empty. The dictating pair sets its own (dictatingGroup).
+  toolbarGroup: { flexDirection: "row", alignItems: "center" },
+  dictatingGroup: { gap: 6 },
   middle: { flex: 1, minWidth: 0 },
   waveform: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 },
   recDot: { width: 8, height: 8, borderRadius: 4 },
@@ -594,6 +655,9 @@ const styles = StyleSheet.create({
   iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   fill: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  // The room of the send button: a slot that grows from the right edge, and the button inside it with the 8 px gap.
+  sendSlot: { height: 36, overflow: "hidden", justifyContent: "center" },
+  sendInner: { width: 36, marginLeft: 8 },
   error: { fontSize: 13, paddingHorizontal: 12 },
   chip: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingLeft: 6, paddingRight: 8, paddingVertical: 6 },
   chipIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
