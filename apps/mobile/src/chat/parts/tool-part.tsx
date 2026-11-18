@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text as RNText, View } from "react-native";
-import { Row, RNHostView, Text } from "@expo/ui";
-import { Glyph } from "@/components/glyph";
-import { M3Host } from "@/components/m3";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Check, ChevronDown, X } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 import { baseName } from "@/lib/sandbox-files";
 
@@ -66,33 +64,50 @@ export function ToolPart({ part }: { part: ToolCall }) {
 
   return (
     <View>
-      <Pressable onPress={() => setOpen((value) => !value)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <M3Host matchContents={{ vertical: true }}>
-          <Row alignment="center">
-            {running ? (
-              <RNHostView matchContents>
-                <ActivityIndicator size="small" color={colors.muted} />
-              </RNHostView>
-            ) : failed ? (
-              <Glyph name="close" color={colors.danger} />
-            ) : (
-              <Glyph name="check" color={colors.muted} />
-            )}
-            <Text>{labelOf(part, !running)}</Text>
-            <Glyph name={open ? "chevronDown" : "chevronRight"} />
-          </Row>
-        </M3Host>
+      <Pressable
+        onPress={() => setOpen((value) => !value)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.row}
+      >
+        <View style={styles.status}>
+          {running ? (
+            <ActivityIndicator size="small" color={colors.muted} />
+          ) : failed ? (
+            <X size={14} color={colors.danger} />
+          ) : (
+            <Check size={14} color={colors.muted} />
+          )}
+        </View>
+        <Text numberOfLines={open ? undefined : 1} style={[styles.label, { color: colors.muted }]}>
+          {labelOf(part, !running)}
+        </Text>
+        <View style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}>
+          <ChevronDown size={14} color={colors.muted} />
+        </View>
       </Pressable>
       {open ? (
-        <>
-          {command ? <RNText selectable style={{ fontFamily: "monospace", color: colors.text }}>{clip(command)}</RNText> : null}
-          {result ? (
-            <RNText selectable style={{ fontFamily: "monospace", color: failed ? colors.danger : colors.muted }}>
-              {clip(result)}
-            </RNText>
+        <View style={[styles.details, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {command ? (
+            <Text selectable style={[styles.code, { color: colors.text }]}>
+              {clip(command)}
+            </Text>
           ) : null}
-        </>
+          {result ? (
+            <Text selectable style={[styles.code, { color: failed ? colors.danger : colors.muted }]}>
+              {clip(result)}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  status: { width: 16, alignItems: "center" },
+  label: { flex: 1, fontSize: 14 },
+  details: { marginTop: 6, marginLeft: 24, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 10, gap: 8 },
+  code: { fontFamily: "monospace", fontSize: 12 },
+});

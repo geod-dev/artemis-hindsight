@@ -1,27 +1,36 @@
-import type { GlyphName } from "@/components/glyph";
+import {
+  Eye,
+  File,
+  FileArchive,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  Music,
+  Pencil,
+  Presentation,
+  Video,
+  type LucideIcon,
+} from "lucide-react-native";
 
 // The file icon system for every file the app shows: composer attachments, attachments in sent messages, files the agent
 // produces, and the file tools. Mirrors services/web/src/components/chat/file-kind.tsx: the same kinds, the same extensions,
 // the same type colours (Tailwind's 500 shades, as hex). Keep the two in step.
 
-export type FileKind = {
-  glyph: GlyphName;
-  /** The type colour. Undefined for plain text and unknown files: they take the theme's muted colour. */
-  tint?: string;
-};
+export type FileKind = { Icon: LucideIcon; /** The type colour. Undefined for plain text and unknown files: they take the theme's muted colour. */ tint?: string };
 
 const KINDS = {
-  image: { glyph: "fileImage", tint: "#0ea5e9" },
-  pdf: { glyph: "fileText", tint: "#ef4444" },
-  doc: { glyph: "fileText", tint: "#3b82f6" },
-  sheet: { glyph: "fileSheet", tint: "#10b981" },
-  slides: { glyph: "fileSlides", tint: "#f97316" },
-  archive: { glyph: "fileArchive", tint: "#f59e0b" },
-  code: { glyph: "fileCode", tint: "#8b5cf6" },
-  audio: { glyph: "fileAudio", tint: "#ec4899" },
-  video: { glyph: "fileVideo", tint: "#f43f5e" },
-  text: { glyph: "fileTextPlain", tint: undefined },
-  other: { glyph: "file", tint: undefined },
+  image: { Icon: FileImage, tint: "#0ea5e9" },
+  pdf: { Icon: FileText, tint: "#ef4444" },
+  doc: { Icon: FileText, tint: "#3b82f6" },
+  sheet: { Icon: FileSpreadsheet, tint: "#10b981" },
+  slides: { Icon: Presentation, tint: "#f97316" },
+  archive: { Icon: FileArchive, tint: "#f59e0b" },
+  code: { Icon: FileCode, tint: "#8b5cf6" },
+  audio: { Icon: Music, tint: "#ec4899" },
+  video: { Icon: Video, tint: "#f43f5e" },
+  text: { Icon: FileText, tint: undefined },
+  other: { Icon: File, tint: undefined },
 } satisfies Record<string, FileKind>;
 
 type KindName = keyof typeof KINDS;
@@ -60,7 +69,25 @@ export function fileKind(name?: string, mediaType?: string): FileKind {
   return KINDS.other;
 }
 
-/** The icon of a file tool in the activity line: read shows an eye, write and edit show a pencil. */
-export function fileToolGlyph(toolName: string): GlyphName {
-  return toolName === "read" ? "eye" : "edit";
+/** The icon for a file, from its name and, when the name has no known extension, its media type. */
+export function fileIconFor(name?: string, mediaType?: string): LucideIcon {
+  return fileKind(name, mediaType).Icon;
 }
+
+/** The icon of a file tool in the activity line: read shows the file, write and edit show a pencil. */
+export function fileToolIcon(toolName: string): LucideIcon {
+  return toolName === "read" ? Eye : Pencil;
+}
+
+/**
+ * The file card's geometry, as the web card (sandbox-file-link.tsx): an outer radius of 12, a 6px inset, and a tile whose
+ * radius is the outer radius minus that inset (the nested-radius rule), so the curves stay concentric.
+ */
+export const FILE_CARD = {
+  radius: 12,
+  padding: 6,
+  paddingRight: 10,
+  gap: 10,
+  tile: 36,
+  tileRadius: 12 - 6,
+} as const;

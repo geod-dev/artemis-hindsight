@@ -1,9 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert } from "react-native";
-import { Button, Column, ListItem, ScrollView, Text } from "@expo/ui";
-import { Glyph } from "@/components/glyph";
-import { M3Host } from "@/components/m3";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiError } from "@/lib/api";
 import {
   useArchiveAllConversations,
@@ -33,85 +30,93 @@ export default function DangerZone() {
     ]);
 
   return (
-    <M3Host style={{ flex: 1 }}>
-      <ScrollView>
-        <Column>
-          <Text textStyle={{ color: colors.muted }}>
-            Actions on all your chats and memory at once. Some of them cannot be undone.
-          </Text>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, gap: 10 }}>
+      <Text style={{ color: colors.muted, fontSize: 13, marginBottom: 4 }}>
+        Actions on all your chats and memory at once. Some of them cannot be undone.
+      </Text>
 
-          <ListItem onPress={() => router.navigate("/settings/danger/archived")}>
-            <Text>Archived chats</Text>
-            <ListItem.Supporting>
-              <Text textStyle={{ color: colors.muted }}>Restore them to the list, or delete them for good.</Text>
-            </ListItem.Supporting>
-            <ListItem.Trailing>
-              <Glyph name="chevronRight" />
-            </ListItem.Trailing>
-          </ListItem>
+      <Pressable
+        onPress={() => router.navigate("/settings/danger/archived")}
+        accessibilityRole="link"
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.text, fontSize: 16 }}>Archived chats</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Restore them to the list, or delete them for good.</Text>
+        </View>
+        <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+      </Pressable>
 
-          <ListItem
-            onPress={() =>
-              !busy &&
-              confirm("Archive all chats?", "Every chat leaves the list. You can restore them from archived chats.", "Archive all", () =>
-                archiveAll.mutate(undefined, {
-                  onSuccess: ({ archived }) => setNotice(`${archived} ${archived === 1 ? "chat" : "chats"} archived.`),
-                  onError: failed("Archive failed"),
-                }),
-              )
-            }
-          >
-            <Text>Archive all chats</Text>
-            <ListItem.Supporting>
-              <Text textStyle={{ color: colors.muted }}>Moves every chat out of the list. Nothing is deleted.</Text>
-            </ListItem.Supporting>
-          </ListItem>
+      <Pressable
+        disabled={busy}
+        onPress={() =>
+          confirm("Archive all chats?", "Every chat leaves the list. You can restore them from archived chats.", "Archive all", () =>
+            archiveAll.mutate(undefined, {
+              onSuccess: ({ archived }) => setNotice(`${archived} ${archived === 1 ? "chat" : "chats"} archived.`),
+              onError: failed("Archive failed"),
+            }),
+          )
+        }
+        accessibilityRole="button"
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, opacity: busy ? 0.5 : 1 }]}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.text, fontSize: 16 }}>Archive all chats</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Moves every chat out of the list. Nothing is deleted.</Text>
+        </View>
+      </Pressable>
 
-          <ListItem
-            onPress={() =>
-              !busy &&
-              confirm(
-                "Delete all chats?",
-                "Every chat and its messages will be removed, archived or not. Your memory stays. This cannot be undone.",
-                "Delete all chats",
-                () =>
-                  deleteAllChats.mutate(undefined, {
-                    onSuccess: () => setNotice("All chats deleted."),
-                    onError: failed("Delete failed"),
-                  }),
-              )
-            }
-          >
-            <Text textStyle={{ color: colors.danger }}>Delete all chats</Text>
-            <ListItem.Supporting>
-              <Text textStyle={{ color: colors.muted }}>Deletes every chat with its messages and files. Memory is kept.</Text>
-            </ListItem.Supporting>
-          </ListItem>
+      <Pressable
+        disabled={busy}
+        onPress={() =>
+          confirm(
+            "Delete all chats?",
+            "Every chat and its messages will be removed, archived or not. Your memory stays. This cannot be undone.",
+            "Delete all chats",
+            () =>
+              deleteAllChats.mutate(undefined, {
+                onSuccess: () => setNotice("All chats deleted."),
+                onError: failed("Delete failed"),
+              }),
+          )
+        }
+        accessibilityRole="button"
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, opacity: busy ? 0.5 : 1 }]}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.danger, fontSize: 16 }}>Delete all chats</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Deletes every chat with its messages and files. Memory is kept.</Text>
+        </View>
+      </Pressable>
 
-          <ListItem
-            onPress={() =>
-              !busy &&
-              confirm(
-                "Delete all your data?",
-                "Every chat and the whole memory will be erased. This cannot be undone.",
-                "Delete all data",
-                () =>
-                  deleteAllData.mutate(undefined, {
-                    onSuccess: () => setNotice("All your data was deleted."),
-                    onError: failed("Delete failed"),
-                  }),
-              )
-            }
-          >
-            <Text textStyle={{ color: colors.danger }}>Delete all data</Text>
-            <ListItem.Supporting>
-              <Text textStyle={{ color: colors.muted }}>Deletes every chat and everything Artemis remembers about you.</Text>
-            </ListItem.Supporting>
-          </ListItem>
+      <Pressable
+        disabled={busy}
+        onPress={() =>
+          confirm(
+            "Delete all your data?",
+            "Every chat and the whole memory will be erased. This cannot be undone.",
+            "Delete all data",
+            () =>
+              deleteAllData.mutate(undefined, {
+                onSuccess: () => setNotice("All your data was deleted."),
+                onError: failed("Delete failed"),
+              }),
+          )
+        }
+        accessibilityRole="button"
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, opacity: busy ? 0.5 : 1 }]}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.danger, fontSize: 16 }}>Delete all data</Text>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Deletes every chat and everything Artemis remembers about you.</Text>
+        </View>
+      </Pressable>
 
-          {notice ? <Text textStyle={{ color: colors.muted }}>{notice}</Text> : null}
-        </Column>
-      </ScrollView>
-    </M3Host>
+      {notice ? <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>{notice}</Text> : null}
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 16 },
+});

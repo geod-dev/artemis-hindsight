@@ -19,9 +19,8 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 - If one client cannot do it yet, say so in the final message and name the gap. Do not leave a silent difference.
 - Backend APIs used by the mobile app stay JSON and keep bearer-token auth working. `getCurrentUser` accepts
   `Authorization: Bearer <token>` or the web session cookie. Do not add a route that only works with cookies.
-- Shared behaviour (stream protocol, avatar colors, sandbox file links) must match on both sides. The web and mobile
-  copies say where they come from in a comment. The **look** is not shared: the mobile app is Material 3 (see "Mobile
-  UI" below), the web keeps its own design system (see "UI (web)").
+- Shared behaviour (stream protocol, visual languages, avatar colors, sandbox file links) must match on both sides.
+  The web and mobile copies say where they come from in a comment.
 
 ## Streaming and turns (backend)
 
@@ -46,8 +45,7 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 
 - Expo SDK 58, Expo Router, TypeScript. It is **not** an npm workspace: its React version differs from the web's, so
   it has its own `node_modules`. Run `npm install` inside `apps/mobile`. Keep `apps/mobile/.npmrc`
-  (`legacy-peer-deps`) until someone checks it again: it was added for `lucide-react-native` (a React 18 peer), which
-  the app no longer uses.
+  (`legacy-peer-deps`): `lucide-react-native` declares a React 18 peer, and EAS's clean install fails without it.
 - Chat: `@assistant-ui/react-native` primitives (`ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`, ...) with
   `@assistant-ui/ai-sdk` and the AI SDK transport. Install only `@assistant-ui/react-native` for the native side, never
   `@assistant-ui/react`.
@@ -63,28 +61,6 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 - Type check: `npm run typecheck` inside `apps/mobile`.
 - Run on a phone: `npm run android` (development build, USB debugging) for native changes. JS changes can be tested
   with `npm run start`.
-
-### Mobile UI: Material 3 only (`@expo/ui`)
-
-The mobile app is **full Material 3**. No shadcn, no custom design system, no hand-built controls when `@expo/ui`
-provides one.
-
-- Build with `@expo/ui` first: universal components (`Host`, `Column`, `Row`, `Text`, `Button`, `TextInput`, `Switch`,
-  `Slider`, `Picker`, `ListItem`, `BottomSheet`, `Icon`). They render natively (Material 3 on Android, SwiftUI on iOS).
-  Check `node_modules/@expo/ui` docs (`https://docs.expo.dev/versions/v58.0.0/sdk/ui/`) before writing a control.
-- Every universal subtree sits under a `Host`. A React Native view inside a `Host` switches back to RN rendering: wrap
-  the universal part in a new `Host`, or use `RNHostView`.
-- Override **only a few colours per theme**, defined in one place (`src/theme`, the light and dark values). Everything
-  else stays native: shape, typography, elevation, ripple, switch and button styles, and the default spacing of each
-  component. No custom `padding`, `margin`, `gap`, `radius`, font size or font weight. Keep the component defaults, and
-  accept that the look changes; do not tune it to match the web.
-- Follow the system theme choice through `Host colorScheme` (the app's Appearance setting: system, light, dark).
-- Icons come from the app's icon registry: SF Symbols on iOS, Material Symbols on Android. No lucide.
-- Stay in React Native only where `@expo/ui` has no equivalent: markdown (`react-native-marked`), charts
-  (`react-native-gifted-charts`), the Mermaid webview, long-press gestures (`onLongPress`), the keyboard animation
-  (`react-native-keyboard-controller`), the push-to-talk gesture, the assistant-ui primitives, and activity indicators.
-  Say in the final message which control stayed RN and why.
-- Do not add a UI library for one control. Check `@expo/ui` and `apps/mobile/package.json` first.
 
 ### Shipping a mobile change
 
@@ -194,15 +170,12 @@ URL), not `localhost`.
 
 ## Working conventions
 
-- Prefer libraries over hand-written UI, auth or protocol code. Web: shadcn and popular packages. Mobile: `@expo/ui`
-  (Material 3).
+- Prefer libraries over hand-written UI, auth or protocol code. Use shadcn and popular packages.
 - When the owner is away, make the calls, keep them small and list them in the final message.
 
-## UI (web): match the design system, reuse components
+## UI: match the design system, reuse components
 
-This section is for `services/web` only. The mobile app follows "Mobile UI: Material 3 only" above.
-
-The product is meant to look premium, so new web UI must look like the rest of the web app, not like a new one.
+The product is meant to look premium, so new UI must look like the rest of the app, not like a new one.
 
 - Before writing a control, look for an existing one: `services/web/src/components/ui` (shadcn: Button, Badge,
   Dialog, AlertDialog, DropdownMenu, Input, Textarea, Skeleton, Sheet, Tooltip) and the shared components of
@@ -215,3 +188,8 @@ The product is meant to look premium, so new web UI must look like the rest of t
   `--composer-radius`, 1rem); containers, settings sections and the memory graph panel use `rounded-xl`; badges and
   pills are `rounded-full`. Padding of a dialog or a section is `p-5`, not shadcn's default `p-6`. Check the nearest
   existing screen (settings, memory, the composer) before picking a value.
+- Mobile: no shadcn there. Reuse the shared components of `apps/mobile/src/components` (ActionSheet, ColorSwatches,
+  ProjectIcon) and the palette of `preferences.tsx`. Before writing a new control, check `apps/mobile/package.json` for
+  a library that already provides it, and say in the final message when a control is hand-built and why.
+- Web and mobile share the same look: a feature that exists on both uses the same radius, surfaces and colours, and
+  the same component structure where the platforms allow it.

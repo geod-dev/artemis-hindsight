@@ -1,7 +1,5 @@
-import { ActivityIndicator, Pressable, View } from "react-native";
-import { Button, Row, RNHostView, Text } from "@expo/ui";
 import { useRouter, type Href } from "expo-router";
-import { M3Host } from "@/components/m3";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ProjectBar } from "@/components/project-icon";
 import { useProjectRecents } from "@/queries/projects";
 import { usePreferences } from "@/preferences";
@@ -9,7 +7,6 @@ import { usePreferences } from "@/preferences";
 /**
  * The selected project's most recent conversations, under the new chat's composer: four of them, and "See more" for the
  * whole list. The web's ProjectRecents (services/web/src/components/projects/project-recents.tsx) shows the same.
- * The rows are React Native touch targets; their content is @expo/ui.
  */
 export function ProjectRecents({ projectId }: { projectId: string }) {
   const { colors } = usePreferences();
@@ -17,69 +14,56 @@ export function ProjectRecents({ projectId }: { projectId: string }) {
   const recents = useProjectRecents(projectId, true);
 
   if (recents.isPending) {
-    return (
-      <M3Host matchContents>
-        <RNHostView matchContents>
-          <ActivityIndicator color={colors.accent} />
-        </RNHostView>
-      </M3Host>
-    );
+    return <ActivityIndicator style={styles.loading} color={colors.accent} />;
   }
   if (recents.isError) {
-    return (
-      <M3Host matchContents>
-        <Text textStyle={{ color: colors.danger }}>The conversations could not be loaded.</Text>
-      </M3Host>
-    );
+    return <Text style={[styles.hint, { color: colors.danger }]}>The conversations could not be loaded.</Text>;
   }
   const { conversations, total } = recents.data;
   if (conversations.length === 0) {
-    return (
-      <M3Host matchContents>
-        <Text>No conversations in this project yet.</Text>
-      </M3Host>
-    );
+    return <Text style={[styles.hint, { color: colors.muted }]}>No conversations in this project yet.</Text>;
   }
 
   return (
-    <View>
-      <M3Host matchContents>
-        <Text>Recents</Text>
-      </M3Host>
+    <View style={styles.box}>
+      <Text style={[styles.label, { color: colors.muted }]}>Recents</Text>
       {conversations.map((conversation) => (
         <Pressable
           key={conversation.id}
           onPress={() => router.navigate(`/c/${conversation.id}`)}
           accessibilityRole="link"
           accessibilityLabel={conversation.unread ? `${conversation.title}, unread reply` : conversation.title}
+          style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceStrong }]}
         >
-          <M3Host matchContents={{ vertical: true }}>
-            <Row alignment="center">
-              {conversation.project ? (
-                <RNHostView matchContents>
-                  <ProjectBar color={conversation.project.color} />
-                </RNHostView>
-              ) : null}
-              <Text>{conversation.title}</Text>
-              {conversation.unread ? (
-                <RNHostView matchContents>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent }} />
-                </RNHostView>
-              ) : null}
-            </Row>
-          </M3Host>
+          {conversation.project ? <ProjectBar color={conversation.project.color} /> : null}
+          <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
+            {conversation.title}
+          </Text>
+          {conversation.unread ? <View style={[styles.unread, { backgroundColor: colors.accent }]} /> : null}
         </Pressable>
       ))}
       {total > conversations.length ? (
-        <M3Host matchContents>
-          <Button
-            variant="text"
-            label="See more"
-            // The project's full list is a route added with this change: typed routes learn it on the next type generation.
-            onPress={() => router.navigate(`/projects/${projectId}` as Href)}
-          />
-        </M3Host>
+        <Pressable
+          // The project's full list is a route added with this change: typed routes learn it on the next type generation.
+          onPress={() => router.navigate(`/projects/${projectId}` as Href)}
+          accessibilityRole="button"
+          style={styles.more}
+        >
+          <Text style={[styles.moreText, { color: colors.accent }]}>See more</Text>
+        </Pressable>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  box: { width: "100%", gap: 2, paddingHorizontal: 8, paddingBottom: 8 },
+  label: { fontSize: 13, fontWeight: "500", paddingHorizontal: 8, paddingBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
+  title: { flexShrink: 1, fontSize: 15 },
+  unread: { width: 8, height: 8, borderRadius: 4 },
+  more: { alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 8 },
+  moreText: { fontSize: 14, fontWeight: "600" },
+  hint: { paddingHorizontal: 16, paddingVertical: 10, fontSize: 14 },
+  loading: { paddingVertical: 12 },
+});

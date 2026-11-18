@@ -40,6 +40,8 @@ export default function DrawerLayout() {
         // Material 3 top app bar, as in the root stack: flat, left-aligned, larger medium title.
         headerStyle: { backgroundColor: colors.background },
         headerShadowVisible: false,
+        headerTitleAlign: "left",
+        headerTitleStyle: { fontSize: 22, fontWeight: "500" },
         headerTintColor: colors.text,
         sceneStyle: { backgroundColor: colors.background },
         drawerType: "front",

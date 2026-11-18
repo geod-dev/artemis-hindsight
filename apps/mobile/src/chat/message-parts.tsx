@@ -1,7 +1,6 @@
 import { useAuiState } from "@assistant-ui/react-native";
 import { type ReactNode } from "react";
-import { Text } from "@expo/ui";
-import { M3Host } from "@/components/m3";
+import { Text } from "react-native";
 import { usePreferences } from "@/preferences";
 import { RunActivity, type ActivityEntry } from "./activity/run-activity";
 import { FilePart, ImagePart } from "./parts/file-part";
@@ -136,11 +135,7 @@ function latestLabel(parts: Part[]): string | undefined {
 /** A user's typed text, in the bubble's colour. */
 function UserText({ text }: { text: string }) {
   const { colors } = usePreferences();
-  return (
-    <M3Host matchContents={{ vertical: true }}>
-      <Text textStyle={{ color: colors.onUser }}>{text}</Text>
-    </M3Host>
-  );
+  return <Text style={{ color: colors.onUser, fontSize: 16, lineHeight: 22 }}>{text}</Text>;
 }
 
 /**

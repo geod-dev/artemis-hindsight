@@ -1,3 +1,4 @@
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { setStatusBarStyle, StatusBar } from "expo-status-bar";
@@ -34,6 +35,8 @@ function Shell() {
           // Material 3 top app bar: surface colour, no elevation shadow, title left-aligned in the larger medium style.
           headerStyle: { backgroundColor: colors.background },
           headerShadowVisible: false,
+          headerTitleAlign: "left",
+          headerTitleStyle: { fontSize: 22, fontWeight: "500" },
           headerTintColor: colors.text,
           contentStyle: { backgroundColor: colors.background },
         }}
@@ -57,7 +60,9 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <PreferencesProvider>
               <AuthProvider>
-                <Shell />
+                <BottomSheetModalProvider>
+                  <Shell />
+                </BottomSheetModalProvider>
               </AuthProvider>
             </PreferencesProvider>
           </QueryClientProvider>

@@ -3,22 +3,19 @@ import { useColorScheme } from "react-native";
 import { darkTokens, lightTokens, type ThemeToken } from "@/theme/tokens";
 import { loadPreferences, savePreferences, type Appearance, type Preferences, type ReasoningEffort } from "@/lib/storage";
 
-// The only colours the app sets itself, per theme. Everything else is Material 3's own (see CLAUDE.md, "Mobile UI").
-// The values come from the web theme's tokens (src/theme/tokens.ts, generated from services/web/src/app/globals.css).
+// The colours come from the web theme's tokens (src/theme/tokens.ts, generated from services/web/src/app/globals.css).
+// The names below are the app's roles; each one reads the web token it corresponds to.
 export interface Palette {
-  /** The screen background. */
   background: string;
-  /** Sheets, drawer and cards. */
   surface: string;
-  /** Titles and body text. */
+  surfaceStrong: string;
+  border: string;
   text: string;
-  /** Secondary text and icons. */
   muted: string;
-  /** The brand colour: primary buttons and the accent of the screens. */
   accent: string;
-  /** Destructive actions and errors. */
+  accentText: string;
   danger: string;
-  /** The user's message bubble, with its text on top. */
+  /** The user's message bubble: the web's primary colour, with its foreground on top. */
   user: string;
   onUser: string;
 }
@@ -27,9 +24,12 @@ function paletteOf(tokens: Record<ThemeToken, string>): Palette {
   return {
     background: tokens.background,
     surface: tokens.card,
+    surfaceStrong: tokens.secondary,
+    border: tokens.border,
     text: tokens.foreground,
     muted: tokens["muted-foreground"],
     accent: tokens.primary,
+    accentText: tokens["primary-foreground"],
     danger: tokens.destructive,
     user: tokens.primary,
     onUser: tokens["primary-foreground"],

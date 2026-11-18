@@ -1,10 +1,8 @@
 import { Redirect } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
-import { Button, Column, Text } from "@expo/ui";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/auth";
 import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
-import { M3Host } from "@/components/m3";
 
 /** The entry point: sends the user to sign-in, profile setup or the chat, depending on the session. */
 export default function Gate() {
@@ -13,7 +11,7 @@ export default function Gate() {
 
   if (state.status === "loading") {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <BrandMark size={120} />
         <ActivityIndicator color={colors.accent} />
       </View>
@@ -27,16 +25,25 @@ export default function Gate() {
 
   // The server is unreachable: keep the session, let the user retry or change the server.
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
-      <M3Host matchContents={{ vertical: true }}>
-        <Column>
-          <Text textStyle={{ color: colors.text }}>Server unreachable</Text>
-          <Text textStyle={{ color: colors.muted }}>{state.serverUrl}</Text>
-          <Text textStyle={{ color: colors.muted }}>{state.message}</Text>
-          <Button variant="filled" label="Try again" style={{ backgroundColor: colors.accent }} onPress={retry} />
-          <Button variant="text" label="Sign out" onPress={() => void signOut()} />
-        </Column>
-      </M3Host>
+    <View style={[styles.center, { backgroundColor: colors.background, padding: 24 }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Server unreachable</Text>
+      <Text style={[styles.body, { color: colors.muted }]}>{state.serverUrl}</Text>
+      <Text style={[styles.body, { color: colors.muted }]}>{state.message}</Text>
+      <Pressable onPress={retry} style={[styles.button, { backgroundColor: colors.accent }]}>
+        <Text style={[styles.buttonText, { color: colors.accentText }]}>Try again</Text>
+      </Pressable>
+      <Pressable onPress={() => void signOut()} style={styles.link}>
+        <Text style={{ color: colors.muted }}>Sign out</Text>
+      </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  title: { fontSize: 20, fontWeight: "600" },
+  body: { fontSize: 14, textAlign: "center" },
+  button: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999, marginTop: 8 },
+  buttonText: { fontSize: 15, fontWeight: "600" },
+  link: { padding: 8 },
+});

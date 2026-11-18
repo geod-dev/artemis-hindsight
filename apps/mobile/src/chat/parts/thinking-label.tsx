@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { usePreferences } from "@/preferences";
 
 // The words and the timing of a thinking block, as the web app shows them (services/web/src/components/chat/thinking-label.tsx
@@ -44,8 +44,12 @@ export function useElapsed(startedAt: number | undefined, live: boolean): number
 export function PendingSpinner() {
   const { colors } = usePreferences();
   return (
-    <View accessibilityRole="progressbar" accessibilityLabel="Sending">
+    <View style={styles.pending} accessibilityRole="progressbar" accessibilityLabel="Sending">
       <ActivityIndicator size="small" color={colors.muted} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  pending: { alignSelf: "flex-start", paddingVertical: 6 },
+});

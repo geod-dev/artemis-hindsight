@@ -48,7 +48,7 @@ export function MermaidVisual({ code, closed }: { code: string; closed: boolean 
   };
 
   return (
-    <VisualCard>
+    <VisualCard style={{ padding: 8 }}>
       <View style={{ height }}>
         <WebView
           originWhitelist={["*"]}

@@ -1,11 +1,19 @@
-import { BottomSheet, Column, ListItem, RNHostView, Switch, Text } from "@expo/ui";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { Platform, Pressable, StyleSheet, Text } from "react-native";
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+  type BottomSheetBackdropProps,
+} from "@gorhom/bottom-sheet";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Check } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
-import { Glyph, type GlyphName } from "./glyph";
 
 /**
- * The bottom sheet every menu of the app uses: Material 3's modal sheet (@expo/ui), with the default drag handle and
- * scrim. Its content is universal @expo/ui components: ActionSheetOption rows, and an optional title.
+ * The bottom sheet every menu of the app uses, in the Material 3 style: a surface with 28 dp top corners and a drag
+ * handle, over a scrim that stays where it is while the sheet slides in. The title is centered; each option is a full
+ * width row with the platform's own touch feedback.
  */
 export function ActionSheet({
   visible,
@@ -19,21 +27,39 @@ export function ActionSheet({
   children: ReactNode;
 }) {
   const { colors } = usePreferences();
+  const insets = useSafeAreaInsets();
+  const sheet = useRef<BottomSheetModal>(null);
+
+  useEffect(() => {
+    if (visible) sheet.current?.present();
+    else sheet.current?.dismiss();
+  }, [visible]);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" opacity={0.32} />
+    ),
+    [],
+  );
+
   return (
-    <BottomSheet isPresented={visible} onDismiss={onClose} containerColor={colors.surface}>
-      <Column>
-        {title ? <Text textStyle={{ color: colors.muted }}>{title}</Text> : null}
+    <BottomSheetModal
+      ref={sheet}
+      enableDynamicSizing
+      onDismiss={onClose}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={[styles.background, { backgroundColor: colors.surface }]}
+      handleIndicatorStyle={{ backgroundColor: colors.border, width: 32 }}
+    >
+      <BottomSheetView style={[styles.content, { paddingBottom: insets.bottom + 16 }]}>
+        {title ? <Text style={[styles.title, { color: colors.muted }]}>{title}</Text> : null}
         {children}
-      </Column>
-    </BottomSheet>
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
 
-/**
- * One option of a sheet: a list row. `icon` is a glyph from the registry, or a React Native node (a project's picture)
- * shown through RNHostView. `selected` shows a picker's current choice with a check; `checked` makes the option a
- * switch row (its value is shown by the trailing switch). Destructive options take the danger colour.
- */
+/** One option of a sheet. `selected` shows a picker's current choice in the accent color; `checked` makes it a switch. */
 export function ActionSheetOption({
   label,
   icon,
@@ -43,34 +69,40 @@ export function ActionSheetOption({
   checked,
 }: {
   label: string;
-  icon?: GlyphName | ReactNode;
+  /** The leading icon, already sized and colored by the caller. */
+  icon?: ReactNode;
   onPress: () => void;
   destructive?: boolean;
   selected?: boolean;
   checked?: boolean;
 }) {
   const { colors } = usePreferences();
-  const leading =
-    typeof icon === "string" ? (
-      <Glyph name={icon as GlyphName} color={destructive ? colors.danger : undefined} />
-    ) : icon ? (
-      <RNHostView matchContents>
-        <>{icon}</>
-      </RNHostView>
-    ) : null;
+  const tint = destructive ? colors.danger : selected ? colors.accent : colors.text;
   return (
-    <ListItem onPress={onPress}>
-      <Text textStyle={destructive ? { color: colors.danger } : undefined}>{label}</Text>
-      {leading ? <ListItem.Leading>{leading}</ListItem.Leading> : null}
+    <Pressable
+      onPress={onPress}
+      android_ripple={{ color: colors.surfaceStrong }}
+      accessibilityRole={checked === undefined ? "button" : "checkbox"}
+      accessibilityState={checked === undefined ? { selected } : { checked }}
+      style={({ pressed }) => [
+        styles.option,
+        Platform.OS === "ios" && pressed && { backgroundColor: colors.surfaceStrong },
+      ]}
+    >
+      {icon}
+      <Text style={[styles.optionText, { color: tint }]}>{label}</Text>
       {checked !== undefined ? (
-        <ListItem.Trailing>
-          <Switch value={checked} onValueChange={onPress} />
-        </ListItem.Trailing>
-      ) : selected ? (
-        <ListItem.Trailing>
-          <Glyph name="check" color={colors.accent} />
-        </ListItem.Trailing>
+        <Check style={styles.check} size={18} color={checked ? colors.accent : "transparent"} />
       ) : null}
-    </ListItem>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  background: { borderTopLeftRadius: 28, borderTopRightRadius: 28 },
+  content: { paddingHorizontal: 8, paddingTop: 4, gap: 2 },
+  title: { fontSize: 14, fontWeight: "500", textAlign: "center", paddingVertical: 12 },
+  option: { height: 56, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16 },
+  optionText: { flexShrink: 1, fontSize: 16 },
+  check: { position: "absolute", right: 16, alignSelf: "center" },
+});

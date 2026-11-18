@@ -1,8 +1,5 @@
 import { useRouter } from "expo-router";
-import { View } from "react-native";
-import { Column, ListItem, Row, RNHostView, ScrollView, Text } from "@expo/ui";
-import { Glyph } from "@/components/glyph";
-import { M3Host } from "@/components/m3";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/auth";
 import { initialsOf, avatarHex } from "@/lib/avatar";
 import { usePreferences } from "@/preferences";
@@ -23,52 +20,47 @@ export default function SettingsIndex() {
   const user = state.status === "signedIn" ? state.user : null;
 
   return (
-    <M3Host style={{ flex: 1 }}>
-      <ScrollView>
-        <Column>
-          {user ? (
-            <Row alignment="center">
-              <RNHostView matchContents>
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 26,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: avatarHex(user.avatarColor, user.username),
-                  }}
-                >
-                  <M3Host matchContents>
-                    <Text textStyle={{ color: "#ffffff" }}>{initialsOf(user.displayName ?? user.username)}</Text>
-                  </M3Host>
-                </View>
-              </RNHostView>
-              <Column>
-                <Text>{user.displayName ?? user.username}</Text>
-                <Text textStyle={{ color: colors.muted }}>{`@${user.username}`}</Text>
-              </Column>
-            </Row>
-          ) : null}
-          {ITEMS.map((item) => (
-            <ListItem key={item.href} onPress={() => router.push(item.href)}>
-              <Text>{item.label}</Text>
-              <ListItem.Trailing>
-                <Glyph name="chevronRight" />
-              </ListItem.Trailing>
-            </ListItem>
-          ))}
-          <ListItem
-            onPress={() => {
-              void signOut();
-              // Settings are a screen of the app stack: leaving them for the gate sends the user to sign-in.
-              router.replace("/");
-            }}
-          >
-            <Text textStyle={{ color: colors.danger }}>Sign out</Text>
-          </ListItem>
-        </Column>
-      </ScrollView>
-    </M3Host>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, gap: 8 }}>
+      {user ? (
+        <View style={styles.header}>
+          <View style={[styles.avatar, { backgroundColor: avatarHex(user.avatarColor, user.username) }]}>
+            <Text style={styles.avatarText}>{initialsOf(user.displayName ?? user.username)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: "600" }}>{user.displayName ?? user.username}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>@{user.username}</Text>
+          </View>
+        </View>
+      ) : null}
+      {ITEMS.map((item) => (
+        <Pressable
+          key={item.href}
+          onPress={() => router.push(item.href)}
+          accessibilityRole="link"
+          style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <Text style={{ color: colors.text, fontSize: 16 }}>{item.label}</Text>
+          <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+        </Pressable>
+      ))}
+      <Pressable
+        onPress={() => {
+          void signOut();
+          // Settings are a screen of the app stack: leaving them for the gate sends the user to sign-in.
+          router.replace("/");
+        }}
+        accessibilityRole="button"
+        style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 16 }]}
+      >
+        <Text style={{ color: colors.danger, fontSize: 16 }}>Sign out</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  item: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 16 },
+});

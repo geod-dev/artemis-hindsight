@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable } from "react-native";
-import { Button, Column, Row, RNHostView, ScrollView, Text, TextInput } from "@expo/ui";
-import { M3Host } from "@/components/m3";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiFetch, ApiError } from "@/lib/api";
 import { usePreferences } from "@/preferences";
 
@@ -37,21 +35,17 @@ export default function SkillsSettings() {
   const queryClient = useQueryClient();
   const [repo, setRepo] = useState<string | null>(null);
   const [newRepo, setNewRepo] = useState("");
-  // Bumped after a source is added: the field remounts empty.
-  const [repoRound, setRepoRound] = useState(0);
 
   const installed = useQuery({
     queryKey: ["skills", "installed"],
     queryFn: () => apiFetch<{ skills: InstalledSkill[] }>("/api/skills/installed"),
     select: (data) => data.skills,
   });
-
   const sources = useQuery({
     queryKey: ["skills", "sources"],
     queryFn: () => apiFetch<{ sources: SkillSource[] }>("/api/skills/sources"),
     select: (data) => data.sources,
   });
-
   const catalog = useQuery({
     queryKey: ["skills", "catalog", repo],
     queryFn: () => apiFetch<{ skills: MarketplaceSkill[] }>(`/api/skills/marketplace?${new URLSearchParams({ repo: repo ?? "" })}`),
@@ -78,7 +72,6 @@ export default function SkillsSettings() {
     mutationFn: (value: string) => apiFetch<SkillSource>("/api/skills/sources", { method: "POST", json: { repo: value } }),
     onSuccess: (source) => {
       setNewRepo("");
-      setRepoRound((round) => round + 1);
       setRepo(source.repo);
       void queryClient.invalidateQueries({ queryKey: ["skills", "sources"] });
     },
@@ -97,85 +90,101 @@ export default function SkillsSettings() {
   const installedFolders = new Set((installed.data ?? []).map((skill) => skill.folder));
 
   return (
-    <M3Host style={{ flex: 1 }}>
-      <ScrollView>
-        <Column>
-          <Text textStyle={{ color: colors.muted }}>Installed</Text>
-          {installed.isPending ? (
-            <RNHostView matchContents>
-              <ActivityIndicator color={colors.accent} />
-            </RNHostView>
-          ) : null}
-          {installed.data?.length === 0 ? <Text textStyle={{ color: colors.muted }}>No skills installed.</Text> : null}
-          {installed.data?.map((skill) => (
-            <Column key={skill.folder}>
-              <Text>{skill.name}</Text>
-              <Text textStyle={{ color: skill.error ? colors.danger : colors.muted }}>{skill.error ?? skill.description}</Text>
-              <Button variant="text" label="Uninstall" onPress={() => uninstall.mutate(skill.folder)} />
-            </Column>
-          ))}
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, gap: 14 }}>
+      <Text style={[styles.section, { color: colors.muted }]}>Installed</Text>
+      {installed.isPending ? <ActivityIndicator color={colors.accent} /> : null}
+      {installed.data?.length === 0 ? <Text style={{ color: colors.muted }}>No skills installed.</Text> : null}
+      {installed.data?.map((skill) => (
+        <View key={skill.folder} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}>{skill.name}</Text>
+          <Text style={{ color: skill.error ? colors.danger : colors.muted, fontSize: 13 }}>
+            {skill.error ?? skill.description}
+          </Text>
+          <Pressable onPress={() => uninstall.mutate(skill.folder)} accessibilityRole="button" style={{ alignSelf: "flex-end" }}>
+            <Text style={{ color: colors.danger, fontSize: 13 }}>Uninstall</Text>
+          </Pressable>
+        </View>
+      ))}
 
-          <Text textStyle={{ color: colors.muted }}>Sources</Text>
-          <Row alignment="center">
-            {sources.data?.map((source) => {
-              const selected = repo === source.repo;
-              return (
-                <RNHostView key={source.repo} matchContents>
-                  {/* Long press removes a source: a touch target that @expo/ui does not offer, so it stays React Native. */}
-                  <Pressable
-                    onPress={() => setRepo(selected ? null : source.repo)}
-                    onLongPress={() => {
-                      if (!source.builtIn) {
-                        Alert.alert("Remove source", source.repo, [
-                          { text: "Cancel", style: "cancel" },
-                          { text: "Remove", style: "destructive", onPress: () => removeSource.mutate(source.repo) },
-                        ]);
-                      }
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <M3Host matchContents>
-                      <Text textStyle={{ color: selected ? colors.accent : colors.text }}>{source.repo}</Text>
-                    </M3Host>
-                  </Pressable>
-                </RNHostView>
-              );
-            })}
-          </Row>
-          <Row alignment="center">
-            <TextInput key={`repo-${repoRound}`} onChangeText={setNewRepo} placeholder="owner/repo" autoCapitalize="none" autoCorrect={false} />
-            <Button
-              variant="filled"
-              label={addSource.isPending ? "Adding…" : "Add"}
-              disabled={!newRepo.trim() || addSource.isPending}
-              onPress={() => newRepo.trim() && addSource.mutate(newRepo.trim())}
-            />
-          </Row>
+      <Text style={[styles.section, { color: colors.muted }]}>Sources</Text>
+      <View style={styles.wrap}>
+        {sources.data?.map((source) => {
+          const selected = repo === source.repo;
+          return (
+            <Pressable
+              key={source.repo}
+              onPress={() => setRepo(selected ? null : source.repo)}
+              onLongPress={() => {
+                if (!source.builtIn) {
+                  Alert.alert("Remove source", source.repo, [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Remove", style: "destructive", onPress: () => removeSource.mutate(source.repo) },
+                  ]);
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              style={[styles.chip, { borderColor: colors.border, backgroundColor: selected ? colors.accent : "transparent" }]}
+            >
+              <Text style={{ color: selected ? colors.accentText : colors.text, fontSize: 13 }}>{source.repo}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={styles.addRow}>
+        <TextInput
+          value={newRepo}
+          onChangeText={setNewRepo}
+          placeholder="owner/repo"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+        />
+        <Pressable
+          onPress={() => newRepo.trim() && addSource.mutate(newRepo.trim())}
+          disabled={!newRepo.trim() || addSource.isPending}
+          accessibilityRole="button"
+          style={[styles.addButton, { backgroundColor: colors.accent, opacity: newRepo.trim() ? 1 : 0.4 }]}
+        >
+          {addSource.isPending ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText }}>Add</Text>}
+        </Pressable>
+      </View>
 
-          {repo ? (
-            <>
-              <Text textStyle={{ color: colors.muted }}>{`Catalog · ${repo}`}</Text>
-              {catalog.isPending ? (
-                <RNHostView matchContents>
-                  <ActivityIndicator color={colors.accent} />
-                </RNHostView>
-              ) : null}
-              {catalog.isError ? <Text textStyle={{ color: colors.danger }}>{errorMessage(catalog.error)}</Text> : null}
-              {catalog.data?.map((skill) => {
-                const already = installedFolders.has(skill.folder);
-                return (
-                  <Column key={`${skill.path}-${skill.folder}`}>
-                    <Text>{skill.name}</Text>
-                    <Text textStyle={{ color: colors.muted }}>{skill.description}</Text>
-                    <Button variant="text" label={already ? "Installed" : "Install"} disabled={already || install.isPending} onPress={() => install.mutate(skill)} />
-                  </Column>
-                );
-              })}
-            </>
-          ) : null}
-        </Column>
-      </ScrollView>
-    </M3Host>
+      {repo ? (
+        <>
+          <Text style={[styles.section, { color: colors.muted }]}>Catalog · {repo}</Text>
+          {catalog.isPending ? <ActivityIndicator color={colors.accent} /> : null}
+          {catalog.isError ? <Text style={{ color: colors.danger }}>{errorMessage(catalog.error)}</Text> : null}
+          {catalog.data?.map((skill) => {
+            const already = installedFolders.has(skill.folder);
+            return (
+              <View key={`${skill.path}-${skill.folder}`} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}>{skill.name}</Text>
+                <Text style={{ color: colors.muted, fontSize: 13 }}>{skill.description}</Text>
+                <Pressable
+                  onPress={() => install.mutate(skill)}
+                  disabled={already || install.isPending}
+                  accessibilityRole="button"
+                  style={{ alignSelf: "flex-end" }}
+                >
+                  <Text style={{ color: already ? colors.muted : colors.accent, fontSize: 14 }}>{already ? "Installed" : "Install"}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  section: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 14, gap: 6 },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  addRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  input: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  addButton: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, minWidth: 80, alignItems: "center" },
+});

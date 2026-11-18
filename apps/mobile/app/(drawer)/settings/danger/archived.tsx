@@ -1,9 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
-import { Button, RNHostView, Text } from "@expo/ui";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ConversationActionsSheet } from "@/components/conversation-actions-sheet";
-import { M3Host } from "@/components/m3";
 import { useArchivedConversations, type ConversationSummary } from "@/queries/conversations";
 import { usePreferences } from "@/preferences";
 
@@ -14,20 +12,14 @@ export default function ArchivedChats() {
   const archived = useArchivedConversations();
   const [menuFor, setMenuFor] = useState<ConversationSummary | null>(null);
 
-  if (archived.isPending) {
-    return (
-      <RNHostView matchContents>
-        <ActivityIndicator color={colors.accent} />
-      </RNHostView>
-    );
-  }
+  if (archived.isPending) return <ActivityIndicator style={{ marginTop: 32 }} color={colors.accent} />;
   if (archived.isError) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
-        <M3Host matchContents={{ vertical: true }}>
-          <Text textStyle={{ color: colors.muted }}>Archived chats are unavailable right now.</Text>
-          <Button variant="text" label="Try again" onPress={() => void archived.refetch()} />
-        </M3Host>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.muted }}>Archived chats are unavailable right now.</Text>
+        <Pressable onPress={() => void archived.refetch()}>
+          <Text style={{ color: colors.accent, marginTop: 8 }}>Try again</Text>
+        </Pressable>
       </View>
     );
   }
@@ -37,11 +29,8 @@ export default function ArchivedChats() {
       <FlatList
         data={archived.data}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={
-          <M3Host matchContents>
-            <Text textStyle={{ color: colors.muted }}>No archived chats.</Text>
-          </M3Host>
-        }
+        contentContainerStyle={{ padding: 16, gap: 10 }}
+        ListEmptyComponent={<Text style={{ color: colors.muted, textAlign: "center", marginTop: 24 }}>No archived chats.</Text>}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.navigate(`/c/${item.id}`)}
@@ -49,10 +38,11 @@ export default function ArchivedChats() {
             delayLongPress={350}
             accessibilityRole="link"
             accessibilityHint="Long press for options"
+            style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <M3Host matchContents={{ vertical: true }}>
-              <Text>{item.title}</Text>
-            </M3Host>
+            <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15 }}>
+              {item.title}
+            </Text>
           </Pressable>
         )}
       />
@@ -60,3 +50,8 @@ export default function ArchivedChats() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 16 },
+});

@@ -1,25 +1,25 @@
-import { ListItem, RNHostView, Text } from "@expo/ui";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Image } from "react-native";
-import * as Sharing from "expo-sharing";
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Download, Eye } from "lucide-react-native";
 import { absoluteUrl, authHeaders } from "@/lib/api";
 import { extensionLabel, mediaTypeOf, baseName, sandboxFileUrl } from "@/lib/sandbox-files";
-import { fileKind } from "@/lib/file-icons";
-import { Glyph } from "@/components/glyph";
-import { M3Host } from "@/components/m3";
+import { FILE_CARD, fileKind } from "@/lib/file-icons";
+import { usePreferences } from "@/preferences";
 import { downloadToCache } from "./file-part";
+import * as Sharing from "expo-sharing";
 
 /**
- * A file the agent produced, as a row: a thumbnail for an image or the type's icon, the name, the type, and an action
- * icon. A tap downloads the file with the session and opens the share sheet. Drawn from the sandbox path the agent
- * wrote in its link.
+ * A file the agent produced, as a card (the web app's FileCard): a thumbnail for an image or the type's tile, the name,
+ * the type, and an action icon. A tap downloads the file with the session and opens the share sheet.
+ * Drawn from the sandbox path the agent wrote in its link.
  */
 export function SandboxFileCard({ conversationId, path }: { conversationId: string; path: string }) {
+  const { colors } = usePreferences();
   const [busy, setBusy] = useState(false);
   const name = baseName(path);
   const mediaType = mediaTypeOf(name);
   const isImage = mediaType.startsWith("image/");
-  const { glyph, tint } = fileKind(name, mediaType);
+  const { Icon, tint } = fileKind(name, mediaType);
   const url = sandboxFileUrl(conversationId, path);
   const type = extensionLabel(name) || "File";
 
@@ -37,31 +37,64 @@ export function SandboxFileCard({ conversationId, path }: { conversationId: stri
   };
 
   return (
-    <M3Host matchContents={{ vertical: true }}>
-      <ListItem onPress={() => void open()}>
-        <Text>{name}</Text>
-        <ListItem.Supporting>
-          <Text>{type}</Text>
-        </ListItem.Supporting>
-        <ListItem.Leading>
-          {isImage ? (
-            <RNHostView matchContents>
-              <Image source={{ uri: absoluteUrl(url), headers: authHeaders() }} style={{ width: 40, height: 40 }} resizeMode="cover" />
-            </RNHostView>
-          ) : (
-            <Glyph name={glyph} color={tint} />
-          )}
-        </ListItem.Leading>
-        <ListItem.Trailing>
-          {busy ? (
-            <RNHostView matchContents>
-              <ActivityIndicator />
-            </RNHostView>
-          ) : (
-            <Glyph name={isImage ? "eye" : "download"} />
-          )}
-        </ListItem.Trailing>
-      </ListItem>
-    </M3Host>
+    <Pressable
+      onPress={() => void open()}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${name}`}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
+      {isImage ? (
+        <Image source={{ uri: absoluteUrl(url), headers: authHeaders() }} style={styles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={[styles.tile, { backgroundColor: tint ? `${tint}26` : colors.surfaceStrong }]}>
+          <Icon size={18} color={tint ?? colors.muted} />
+        </View>
+      )}
+      <View style={styles.text}>
+        <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
+          {name}
+        </Text>
+        <Text numberOfLines={1} style={[styles.meta, { color: colors.muted }]}>
+          {type}
+        </Text>
+      </View>
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.muted} />
+      ) : isImage ? (
+        <Eye size={16} color={colors.muted} />
+      ) : (
+        <Download size={16} color={colors.muted} />
+      )}
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: FILE_CARD.gap,
+    maxWidth: 288,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: FILE_CARD.radius,
+    paddingVertical: FILE_CARD.padding,
+    paddingLeft: FILE_CARD.padding,
+    paddingRight: FILE_CARD.paddingRight,
+    marginVertical: 4,
+  },
+  thumb: { width: FILE_CARD.tile, height: FILE_CARD.tile, borderRadius: FILE_CARD.tileRadius },
+  tile: {
+    width: FILE_CARD.tile,
+    height: FILE_CARD.tile,
+    borderRadius: FILE_CARD.tileRadius,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  text: { flexShrink: 1, gap: 2 },
+  name: { fontSize: 13, fontWeight: "500" },
+  meta: { fontSize: 11 },
+});
