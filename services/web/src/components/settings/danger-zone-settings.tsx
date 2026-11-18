@@ -16,6 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DeveloperSettingsDialog } from "./developer-settings-dialog";
 
 // The danger zone: bulk actions on the user's chats and memory. The same routes serve the mobile app.
 
@@ -82,6 +83,13 @@ export function DangerZoneSettings() {
             return "All your data was deleted.";
           }}
         />
+
+        <DangerRow
+          title="Developer settings"
+          description="Show the developer actions and settings"
+        >
+          <DeveloperSettingsDialog />
+        </DangerRow>
       </section>
     </div>
   );

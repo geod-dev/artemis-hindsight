@@ -179,6 +179,13 @@ export async function consolidateBank(bankId: string): Promise<string> {
   return body.operation_id;
 }
 
+/** How many of the bank's facts consolidation has not turned into observations yet. */
+export async function pendingConsolidation(bankId: string): Promise<number> {
+  const res = await fetch(bankUrl(bankId, "/stats"), { headers: headers(), signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`hindsight stats failed for ${bankId}: HTTP ${res.status}`);
+  return z.object({ pending_consolidation: z.number() }).parse(await res.json()).pending_consolidation;
+}
+
 export interface MemoryGraph {
   nodes: {
     id: string;

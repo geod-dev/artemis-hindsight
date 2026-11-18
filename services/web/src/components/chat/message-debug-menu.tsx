@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useShowMessageDebug } from "@/lib/developer-prefs";
 import { ConversationIdContext } from "./conversation-context";
 import { MessageDebugDialog } from "./message-debug-dialog";
 
@@ -26,8 +27,10 @@ export function MessageDebugMenu({ messageId, onMenuOpenChange }: MessageDebugMe
   const conversationId = useContext(ConversationIdContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  // Hidden unless turned on in the developer settings (Settings, Danger zone).
+  const showDebug = useShowMessageDebug();
 
-  if (!conversationId) return null;
+  if (!conversationId || !showDebug) return null;
 
   const changeMenuOpen = (open: boolean) => {
     setMenuOpen(open);

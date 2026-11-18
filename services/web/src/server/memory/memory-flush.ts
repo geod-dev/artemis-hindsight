@@ -116,6 +116,21 @@ async function flushNow(conversationId: string, username: string): Promise<void>
     );
 }
 
+/**
+ * Flushes now every conversation of the user that has messages not in memory yet, the active one included, instead of
+ * waiting for a switch or an hour of silence. A reply still streaming is left for the flush after its turn.
+ * Returns how many conversations had something to save.
+ */
+export async function flushUnsavedConversations(userId: string, username: string): Promise<number> {
+  const rows = await getDb()
+    .selectDistinct({ id: messages.conversationId })
+    .from(messages)
+    .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+    .where(and(eq(conversations.userId, userId), isNull(messages.memorizedAt), ne(messages.status, "streaming")));
+  for (const row of rows) await flushConversation(row.id, username);
+  return rows.length;
+}
+
 /** Flushes the conversations whose last user message is an hour old, and forgets them as active. */
 export async function flushIdleConversations(now = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - IDLE_FLUSH_MS);
