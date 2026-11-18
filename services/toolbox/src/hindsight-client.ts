@@ -31,11 +31,15 @@ const recallResponse = z.object({
   results: z.array(z.object({ text: z.string(), type: z.string().optional() })),
 });
 
-// Hindsight sends based_on as null when the answer used no memory, so both the object and its list can be null.
+// based_on is only sent when the request sets include.facts. It is null when the answer used no memory, so the object
+// and each of its lists can be null.
 const reflectResponse = z.object({
   text: z.string(),
   based_on: z
-    .object({ memories: z.array(z.object({ text: z.string() })).nullish() })
+    .object({
+      memories: z.array(z.object({ text: z.string() })).nullish(),
+      mental_models: z.array(z.object({ id: z.string() })).nullish(),
+    })
     .nullish(),
 });
 
@@ -46,28 +50,35 @@ export interface RecalledFact {
 
 export interface Reflection {
   answer: string;
+  /** The memories the answer relied on. */
   sources: string[];
+  /** The ids of the mental models (pre-computed summaries such as the user profile) the answer relied on. */
+  mentalModels: string[];
 }
 
 export class HindsightClient {
   constructor(private readonly config: HindsightConfig) {}
 
-  async recall(bank: string, query: string): Promise<RecalledFact[]> {
+  /** `now` anchors relative dates in the query ("last week") and recency scoring. */
+  async recall(bank: string, query: string, now = new Date()): Promise<RecalledFact[]> {
     const res = await this.send("POST", bank, "/memories/recall", {
       query,
       budget: this.config.toolRecallBudget,
       max_tokens: this.config.recallMaxTokens,
+      query_timestamp: now.toISOString(),
     }, 30_000);
     return recallResponse.parse(res).results;
   }
 
   /** Answers a question from the bank's memories, with the memories it relied on. */
   async reflect(bank: string, query: string): Promise<Reflection> {
-    const res = await this.send("POST", bank, "/reflect", { query }, 120_000);
+    // include.facts makes Hindsight send the evidence; without it based_on is always missing.
+    const res = await this.send("POST", bank, "/reflect", { query, include: { facts: {} } }, 120_000);
     const parsed = reflectResponse.parse(res);
     return {
       answer: parsed.text,
       sources: (parsed.based_on?.memories ?? []).map((memory) => memory.text),
+      mentalModels: (parsed.based_on?.mental_models ?? []).map((model) => model.id),
     };
   }
 

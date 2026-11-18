@@ -1,5 +1,5 @@
 import { usernameSchema } from "@artemis/contracts";
-import { createBank, deleteBank } from "../clients/hindsight-client";
+import { createBank, deleteBank } from "../memory/bank-template";
 import { ensureWorkspace, removeSession, removeWorkspace } from "../clients/toolbox-client";
 import { hashPassword, passwordProblem, verifyPassword } from "../auth/passwords";
 import { conversationIdsOf } from "../repositories/conversation-repository";

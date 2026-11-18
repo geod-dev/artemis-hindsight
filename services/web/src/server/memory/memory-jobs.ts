@@ -1,4 +1,5 @@
 import { consolidateBank, listBankIds } from "../clients/hindsight-client";
+import { ensureBankTemplate } from "./bank-template";
 import { flushIdleConversations } from "./memory-flush";
 
 // The background jobs of the memory, run by one timer in the web process:
@@ -6,6 +7,7 @@ import { flushIdleConversations } from "./memory-flush";
 //     first, so a second process never repeats it.
 //   - every day at 05:00 Paris time: consolidate every bank. Hindsight does not consolidate after a retain (see
 //     HINDSIGHT_API_ENABLE_AUTO_CONSOLIDATION in docker-compose.yml), so this is what turns new facts into observations.
+//     Each bank gets its template first (missions, mental models), and its mental models refresh after consolidating.
 
 const TICK_MS = 60_000;
 const CONSOLIDATION_TIME_ZONE = "Europe/Paris";
@@ -49,6 +51,7 @@ export async function consolidateAllBanks(): Promise<void> {
   let started = 0;
   for (const bankId of bankIds) {
     try {
+      await ensureBankTemplate(bankId);
       await consolidateBank(bankId);
       started++;
     } catch (error) {

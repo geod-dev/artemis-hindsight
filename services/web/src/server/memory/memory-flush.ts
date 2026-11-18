@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import type { UIMessage } from "ai";
 import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { messages, users } from "../db/schema";
-import { retainTranscript } from "../clients/hindsight-client";
-import { loadConversationRetainPrompt } from "./conversation-retain-prompt";
+import { conversations, messages, projects, users } from "../db/schema";
+import { retainTranscript, type TranscriptTurn } from "../clients/hindsight-client";
+import { DEFAULT_TITLE, titleFrom } from "../repositories/conversation-repository";
+import { CONVERSATION_STRATEGY, ensureBankTemplate } from "./bank-template";
 
 // Moving a user's conversation messages into their Hindsight bank.
 //
@@ -84,20 +85,25 @@ async function flushNow(conversationId: string, username: string): Promise<void>
     .orderBy(asc(messages.position));
   if (rows.length === 0) return;
 
-  const lines = rows.flatMap((row) => {
+  const turns = rows.flatMap((row): TranscriptTurn[] => {
     const text = textOfParts(row.parts);
-    if (!text) return [];
-    const speaker = row.role === "user" ? "User" : "Assistant";
-    return [`${speaker} (${row.createdAt.toISOString()}): ${text}`];
+    if (!text || (row.role !== "user" && row.role !== "assistant")) return [];
+    return [{ role: row.role, content: text, timestamp: row.createdAt.toISOString() }];
   });
 
-  if (lines.length > 0) {
-    await retainTranscript(username, {
-      documentId: conversationId,
-      content: lines.join("\n"),
-      operationId: operationIdFor(conversationId, rows.map((row) => row.id)),
-      mission: loadConversationRetainPrompt(),
-    });
+  if (turns.length > 0) {
+    const source = await sourceOf(conversationId);
+    if (source) {
+      await ensureBankTemplate(username);
+      await retainTranscript(username, {
+        documentId: conversationId,
+        turns,
+        context: source.context,
+        timestamp: source.startedAt,
+        strategy: CONVERSATION_STRATEGY,
+        operationId: operationIdFor(conversationId, rows.map((row) => row.id)),
+      });
+    }
   }
   await getDb()
     .update(messages)
@@ -128,6 +134,42 @@ export async function flushIdleConversations(now = new Date()): Promise<void> {
       .returning({ id: users.id });
     if (cleared.length > 0) await flushConversation(user.conversationId, user.username);
   }
+}
+
+/**
+ * What Hindsight is told about the transcript: who talks and in which conversation (the retain `context`, which steers
+ * extraction), and when the conversation started (the retain `timestamp`, which enables temporal recall).
+ * Null when the conversation no longer exists.
+ */
+async function sourceOf(conversationId: string): Promise<{ context: string; startedAt: Date } | null> {
+  const [row] = await getDb()
+    .select({ title: conversations.title, startedAt: conversations.createdAt, project: projects.name })
+    .from(conversations)
+    .leftJoin(projects, eq(projects.id, conversations.projectId))
+    .where(eq(conversations.id, conversationId))
+    .limit(1);
+  if (!row) return null;
+  // The user is not named: the assistant already gets their name and username from the user metadata of every
+  // conversation, and a name in the context was copied into the facts ("User (Ismael, username ismou) wants ...").
+  // A conversation saved before it was named still carries its placeholder (the start of its first message), which
+  // says nothing the transcript does not.
+  const named = row.title !== DEFAULT_TITLE && row.title !== titleFrom(await firstUserText(conversationId));
+  const conversation = named ? `, in the conversation "${row.title}"` : "";
+  const project = row.project ? `, in their project "${row.project}"` : "";
+  return {
+    context: `Private chat between the user and Artemis, their self-hosted family assistant${conversation}${project}.`,
+    startedAt: row.startedAt,
+  };
+}
+
+async function firstUserText(conversationId: string): Promise<string> {
+  const [row] = await getDb()
+    .select({ parts: messages.parts })
+    .from(messages)
+    .where(and(eq(messages.conversationId, conversationId), eq(messages.role, "user")))
+    .orderBy(asc(messages.position))
+    .limit(1);
+  return row ? textOfParts(row.parts) : "";
 }
 
 /** The operation id is derived from the batch, so retrying the same batch is a no-op on the Hindsight side. */

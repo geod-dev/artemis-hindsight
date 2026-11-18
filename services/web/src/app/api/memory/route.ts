@@ -1,5 +1,5 @@
 import { getCurrentUser, unauthorized } from "@/server/auth/session";
-import { clearMemory } from "@/server/clients/hindsight-client";
+import { clearMemory } from "@/server/memory/bank-template";
 
 export const runtime = "nodejs";
 

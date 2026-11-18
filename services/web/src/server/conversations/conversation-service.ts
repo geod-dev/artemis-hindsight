@@ -1,4 +1,4 @@
-import { clearMemory } from "../clients/hindsight-client";
+import { clearMemory } from "../memory/bank-template";
 import { removeSession } from "../clients/toolbox-client";
 import { stopTurn } from "../agent/turn-registry";
 import { deleteAllProjects } from "../projects/project-service";

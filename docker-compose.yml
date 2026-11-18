@@ -57,7 +57,8 @@ services:
       HINDSIGHT_API_RETAIN_LLM_PROVIDER: litellm
       HINDSIGHT_API_RETAIN_LLM_MODEL: anthropic/claude-haiku-5-5
       HINDSIGHT_API_RETAIN_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
-      HINDSIGHT_API_RETAIN_LLM_REASONING_EFFORT: "low"
+      # medium, not low: at low, about 1 run in 4 had a dense 3,000-character chunk come back with a single fact.
+      HINDSIGHT_API_RETAIN_LLM_REASONING_EFFORT: "medium"
       HINDSIGHT_API_REFLECT_LLM_PROVIDER: litellm
       HINDSIGHT_API_REFLECT_LLM_MODEL: anthropic/claude-haiku-5-5
       HINDSIGHT_API_REFLECT_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}

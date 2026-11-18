@@ -2,7 +2,8 @@ import { z } from "zod";
 import { getConfig } from "../config";
 
 // Client for the Hindsight memory server. Each user has one bank, named after their username.
-// Recall for each user message, retain for the conversation flushes, and the bank lifecycle.
+// Recall for each user message, retain for the conversation flushes, and the bank lifecycle. How a bank is set up
+// (missions, disposition, mental models) is in memory/bank-template.ts.
 
 const recallResponseSchema = z.object({
   results: z.array(
@@ -35,7 +36,8 @@ function headers(): Record<string, string> {
   };
 }
 
-export async function recallMemories(bankId: string, query: string): Promise<RecalledFact[]> {
+/** `now` anchors relative dates in the query ("last week") and recency scoring to the moment of the message. */
+export async function recallMemories(bankId: string, query: string, now = new Date()): Promise<RecalledFact[]> {
   const config = getConfig();
   const res = await fetch(bankUrl(bankId, "/memories/recall"), {
     method: "POST",
@@ -44,6 +46,7 @@ export async function recallMemories(bankId: string, query: string): Promise<Rec
       query,
       budget: config.MEMORY_RECALL_BUDGET,
       max_tokens: config.MEMORY_RECALL_MAX_TOKENS,
+      query_timestamp: now.toISOString(),
     }),
     signal: AbortSignal.timeout(8_000),
   });
@@ -55,53 +58,62 @@ export async function recallMemories(bankId: string, query: string): Promise<Rec
   return data.results;
 }
 
-/** Creates the user's memory bank. Hindsight answers the same way when the bank already exists, so this is idempotent. */
-export async function createBank(bankId: string): Promise<void> {
-  const res = await fetch(bankUrl(bankId), {
-    method: "PUT",
+/**
+ * Applies a bank template manifest (config overrides, mental models, directives), creating the bank when it does not
+ * exist. Idempotent: an unchanged mental model is not regenerated. See memory/bank-template.ts.
+ */
+export async function importBankTemplate(bankId: string, manifest: unknown): Promise<void> {
+  const res = await fetch(bankUrl(bankId, "/import"), {
+    method: "POST",
     headers: headers(),
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(15_000),
+    body: JSON.stringify(manifest),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!res.ok) throw new Error(`hindsight could not create bank ${bankId}: HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`hindsight could not set up bank ${bankId}: HTTP ${res.status} ${detail.slice(0, 300)}`);
+  }
 }
 
-/** The bank's retain strategy for conversation transcripts. */
-const CONVERSATION_STRATEGY = "conversation";
+/** One turn of a transcript, in Hindsight's conversation format. */
+export interface TranscriptTurn {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
 
 /**
- * Retains a transcript in the bank. The items go into the document named by `documentId` (one per conversation) and are
- * appended to it, so each call only adds what is new. Async with a caller-chosen operation id: a retry of the same batch
- * returns the original operation instead of extracting the memories twice.
+ * Retains a transcript in the bank. The turns go into the document named by `documentId` (one per conversation) and
+ * are appended to it, so each call only adds what is new; Hindsight merges the JSON arrays of successive appends.
+ * Async with a caller-chosen operation id: a retry of the same batch returns the original operation instead of
+ * extracting the memories twice.
  *
- * `mission` is the extraction instruction for this transcript. It is written to the bank as the retain mission of the
- * "conversation" strategy before each retain, so every bank, old or new, always has the current text.
+ * `context` describes the source (who talks, which conversation), `timestamp` is when the conversation started, and
+ * `strategy` names the retain strategy whose mission steers extraction.
  */
 export async function retainTranscript(
   bankId: string,
-  input: { documentId: string; content: string; operationId: string; mission: string },
+  input: {
+    documentId: string;
+    turns: TranscriptTurn[];
+    context: string;
+    timestamp: Date;
+    strategy: string;
+    operationId: string;
+  },
 ): Promise<void> {
-  const configRes = await fetch(bankUrl(bankId, "/config"), {
-    method: "PATCH",
-    headers: headers(),
-    body: JSON.stringify({
-      updates: { retain_strategies: { [CONVERSATION_STRATEGY]: { retain_mission: input.mission } } },
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!configRes.ok) throw new Error(`hindsight could not set the retain strategy: HTTP ${configRes.status}`);
-
   const res = await fetch(bankUrl(bankId, "/memories"), {
     method: "POST",
     headers: headers(),
     body: JSON.stringify({
       items: [
         {
-          content: input.content,
+          content: JSON.stringify(input.turns),
           document_id: input.documentId,
           update_mode: "append",
-          context: "chat conversation",
-          strategy: CONVERSATION_STRATEGY,
+          context: input.context,
+          timestamp: input.timestamp.toISOString(),
+          strategy: input.strategy,
         },
       ],
       async: true,
@@ -138,15 +150,6 @@ export async function forgetMemory(bankId: string, memoryId: string): Promise<bo
   if (res.status === 404) return false;
   if (!res.ok) throw new Error(`hindsight could not forget memory ${memoryId}: HTTP ${res.status}`);
   return true;
-}
-
-/**
- * Empties the user's memory: the bank is deleted and created again. Hindsight's own "clear memories" keeps the
- * conversation documents, so the next append to a conversation would extract the cleared facts again.
- */
-export async function clearMemory(bankId: string): Promise<void> {
-  await deleteBank(bankId);
-  await createBank(bankId);
 }
 
 /** The id of every bank on the server. */

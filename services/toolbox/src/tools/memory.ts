@@ -31,7 +31,9 @@ export function createMemoryTools(hindsight: HindsightClient): Tool<z.ZodType>[]
     name: "reflect",
     description:
       "Ask the user's long-term memory a question that needs reasoning across several memories, and get a grounded " +
-      "answer with the memories it relied on. Slower than recall; use it for questions like 'what do I know about X'.",
+      "answer with the memories it relied on. It also reads the memory's maintained summaries of the user's profile, " +
+      "family and close people, current plans and preferences. Slower than recall; use it for questions like " +
+      "'what do I know about X' or 'who is in the user's family'.",
     input: queryInput,
     async run({ query }, ctx) {
       return hindsight.reflect(bankOf(ctx), query);
