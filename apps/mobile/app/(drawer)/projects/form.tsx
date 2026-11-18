@@ -4,7 +4,7 @@ import { useRef, useState, type ComponentRef } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
-import { Folder, ImagePlus, X } from "lucide-react-native";
+import { Folder, X } from "lucide-react-native";
 import { ColorSwatches } from "@/components/color-swatches";
 import { ApiError } from "@/lib/api";
 import { useSetConversationProject } from "@/queries/conversations";
@@ -170,46 +170,46 @@ function ProjectForm({ existing }: { existing: ProjectSummary | null }) {
     <Animated.View style={[{ flex: 1, backgroundColor: colors.background }, keyboardPadding]}>
       <Stack.Screen options={{ title: isEdit ? "Edit project" : "New project" }} />
       <ScrollView ref={scroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.label, { color: colors.muted }]}>Icon</Text>
-        <View style={styles.iconRow}>
-          <View style={[styles.iconBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            {icon ? (
-              <Image source={{ uri: icon.uri }} style={styles.iconImage} accessibilityIgnoresInvertColors />
-            ) : keepsIcon && existing ? (
-              <Image source={projectIconSource(existing)} style={styles.iconImage} accessibilityIgnoresInvertColors />
-            ) : (
-              <Folder size={30} color={paletteHex(color)} fill={paletteHex(color)} />
-            )}
-          </View>
-          <View style={styles.iconActions}>
+        {/* The icon sits on the name's line (as on the web). Tapping the icon chooses it; its corner cross removes it. */}
+        <View style={styles.nameRow}>
+          <View style={styles.iconWrap}>
             <Pressable
               onPress={() => void pickIcon()}
               disabled={busy}
               accessibilityRole="button"
-              style={[styles.secondary, { borderColor: colors.border }]}
+              accessibilityLabel={hasPreview ? "Change icon" : "Choose icon"}
+              style={[styles.iconTile, { borderColor: colors.border, backgroundColor: colors.surface }]}
             >
-              <ImagePlus size={16} color={colors.text} />
-              <Text style={[styles.secondaryText, { color: colors.text }]}>{hasPreview ? "Change icon" : "Add icon"}</Text>
+              {icon ? (
+                <Image source={{ uri: icon.uri }} style={styles.iconImage} accessibilityIgnoresInvertColors />
+              ) : keepsIcon && existing ? (
+                <Image source={projectIconSource(existing)} style={styles.iconImage} accessibilityIgnoresInvertColors />
+              ) : (
+                <Folder size={22} color={paletteHex(color)} fill={paletteHex(color)} />
+              )}
             </Pressable>
             {hasPreview ? (
-              <Pressable onPress={dropIcon} disabled={busy} accessibilityRole="button" style={styles.textAction}>
-                <X size={14} color={colors.muted} />
-                <Text style={[styles.textActionText, { color: colors.muted }]}>Remove</Text>
+              <Pressable
+                onPress={dropIcon}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Remove icon"
+                style={[styles.iconRemove, { backgroundColor: colors.background, borderColor: colors.border }]}
+              >
+                <X size={10} color={colors.text} />
               </Pressable>
             ) : null}
           </View>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            maxLength={NAME_MAX}
+            placeholder="Name"
+            placeholderTextColor={colors.muted}
+            editable={!busy}
+            style={[...field, styles.nameInput]}
+          />
         </View>
-
-        <Text style={[styles.label, { color: colors.muted }]}>Name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          maxLength={NAME_MAX}
-          placeholder="Trip to Lisbon"
-          placeholderTextColor={colors.muted}
-          editable={!busy}
-          style={field}
-        />
 
         <Text style={[styles.label, { color: colors.muted }]}>Color</Text>
         <ColorSwatches value={color} onChange={setColor} disabled={busy} />
@@ -263,14 +263,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   form: { gap: 10, padding: 16, paddingBottom: 32 },
   label: { fontSize: 13, fontWeight: "500", marginTop: 8 },
-  iconRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  iconBox: { width: 72, height: 72, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  iconImage: { width: 72, height: 72 },
-  iconActions: { gap: 6, alignItems: "flex-start" },
-  secondary: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
-  secondaryText: { fontSize: 14, fontWeight: "500" },
-  textAction: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 4 },
-  textActionText: { fontSize: 13 },
+  // The icon and the name share a line: a 40 px tile (the web's size-10) and a 40 px field (h-10), 12 px apart.
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconWrap: { width: 40, height: 40 },
+  iconTile: { width: 40, height: 40, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  iconImage: { width: 40, height: 40 },
+  iconRemove: { position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center" },
+  nameInput: { flex: 1, height: 40, paddingVertical: 0 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
   textarea: { minHeight: 120 },
   hint: { fontSize: 12 },
