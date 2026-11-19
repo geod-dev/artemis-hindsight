@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ImageIcon } from "lucide-react";
 import { ImageGeneration } from "@/components/assistant-ui/elements/image-generation";
 
-/** The toolbox's image generation tool (GPT Image 2). Same name in apps/mobile/src/chat/parts/tool-part.tsx. */
+/** The toolbox's image generation tool (GPT Image 2.6 Flare). Same name in apps/mobile/src/chat/parts/tool-part.tsx. */
 export const IMAGE_TOOL = "generate_image";
 
 /** Its activity row: "Generating image" while it runs, "Generated image" with a picture icon once done. */

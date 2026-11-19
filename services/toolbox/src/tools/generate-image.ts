@@ -3,9 +3,9 @@ import { z } from "zod";
 import type { SandboxClient } from "../sandbox-client.js";
 import type { Tool } from "../registry.js";
 
-const MODEL = "gpt-image-2";
+const MODEL = "gpt-image-2.6-flare";
 
-// The sizes OpenAI lists for gpt-image-2 (any of them meets its size rules), and `auto`, which lets the model choose.
+// The sizes OpenAI lists for gpt-image-2.6-flare (any of them meets its size rules), and `auto`, which lets the model choose.
 const SIZES = [
   "auto",
   "1024x1024",
@@ -20,7 +20,7 @@ const SIZES = [
 
 const QUALITIES = ["auto", "low", "medium", "high"] as const;
 
-// The image types gpt-image-2 accepts as input, and its limit on input images.
+// The image types gpt-image-2.6-flare accepts as input, and its limit on input images.
 const SOURCE_MEDIA_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_SOURCES = 16;
 
@@ -67,7 +67,7 @@ const input = z.object({
 });
 
 /**
- * Draws an image with OpenAI's gpt-image-2, from the prompt alone or from source images in the sandbox, and saves it
+ * Draws an image with OpenAI's gpt-image-2.6-flare, from the prompt alone or from source images in the sandbox, and saves it
  * as a PNG in the conversation's images folder, under the name the model chose. The model gets the path and a ready-made file link, so it can show the
  * image in its reply and pass the path back as a source to change it on a later turn.
  */
@@ -75,7 +75,7 @@ export function createGenerateImageTool(sandbox: SandboxClient, openai: OpenAI):
   return {
     name: "generate_image",
     description:
-      "Generate an image with GPT Image 2 and save it as a PNG, under the file name you give, in the images folder of " +
+      "Generate an image with GPT Image 2.6 Flare and save it as a PNG, under the file name you give, in the images folder of " +
       "your session. " +
       "Give source images to edit or combine them: a photo the user attached, or an image you generated before. " +
       "To change an image you made, call this again with its path in sources and describe the change. " +

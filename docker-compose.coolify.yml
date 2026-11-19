@@ -110,7 +110,7 @@ services:
       HINDSIGHT_URL: http://hindsight:8888  # the memory tools: recall, reflect
       MEMORY_TOOL_RECALL_BUDGET: mid  # the agent's recall tool searches at medium effort (the automatic recall is low)
       EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}  # optional: enables the generate_image tool (GPT Image 2)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}  # optional: enables the generate_image tool (GPT Image 2.6 Flare)
     depends_on:
       sandbox:
         condition: service_healthy
