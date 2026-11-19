@@ -14,9 +14,12 @@ import {
   MusicIcon,
   PresentationIcon,
   VideoIcon,
+  XIcon,
 } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { formatFileSize } from "@/components/assistant-ui/elements/file";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -88,10 +91,33 @@ export function fileMeta(name: string, contentType: string, size: number | undef
 export const ImagePreview: FC<{ src: string; name: string; children: ReactNode }> = ({ src, name, children }) => (
   <Dialog>
     <DialogTrigger asChild>{children}</DialogTrigger>
-    <DialogContent className="p-2 sm:max-w-3xl">
-      <DialogTitle className="sr-only">Preview {name}</DialogTitle>
-      <img src={src} alt={name} className="mx-auto block max-h-[80vh] w-auto max-w-full rounded-sm object-contain" />
-    </DialogContent>
+    <DialogPortal>
+      <DialogOverlay className="bg-black/85 backdrop-blur-sm" />
+      {/* No dialog box: the picture floats over the backdrop. A click anywhere but the picture closes it, like the
+          phone's ImageLightbox (apps/mobile/src/chat/parts/file-part.tsx). */}
+      <DialogPrimitive.Content
+        aria-describedby={undefined}
+        className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 fixed inset-0 z-50 flex items-center justify-center p-4 duration-200 outline-none sm:p-10"
+      >
+        <DialogTitle className="sr-only">Preview {name}</DialogTitle>
+        <DialogClose aria-label="Close preview" className="absolute inset-0 cursor-zoom-out" tabIndex={-1} />
+        <img
+          src={src}
+          alt={name}
+          className="relative block max-h-full w-auto max-w-full rounded-xl object-contain shadow-2xl"
+        />
+        <DialogClose asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close"
+            className="absolute top-4 right-4 rounded-full bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 hover:text-white"
+          >
+            <XIcon />
+          </Button>
+        </DialogClose>
+      </DialogPrimitive.Content>
+    </DialogPortal>
   </Dialog>
 );
 
