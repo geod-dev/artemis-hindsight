@@ -14,5 +14,9 @@ export async function findImageSearch(query: string): Promise<StoredImageResult[
 
 /** Stores the results of an image query. A concurrent search of the same query that stored first wins. */
 export async function saveImageSearch(query: string, results: StoredImageResult[]): Promise<void> {
-  await getDb().insert(imageSearches).values({ query, results }).onConflictDoNothing();
+  // Replaces a search stored before the image sizes were kept (see searchImages).
+  await getDb()
+    .insert(imageSearches)
+    .values({ query, results })
+    .onConflictDoUpdate({ target: imageSearches.query, set: { results, createdAt: new Date() } });
 }

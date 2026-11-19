@@ -177,6 +177,9 @@ export interface StoredImageResult {
   pageUrl: string | null;
   title: string;
   source: string;
+  /** The image's size in pixels, when Brave gives it. Searches stored before these fields existed lack them. */
+  width?: number;
+  height?: number;
 }
 
 /**

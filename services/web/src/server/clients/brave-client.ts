@@ -12,8 +12,10 @@ const imageSearchSchema = z.object({
       title: z.string().nullish(),
       url: z.string().nullish(),
       source: z.string().nullish(),
-      thumbnail: z.object({ src: z.string() }).nullish(),
-      properties: z.object({ url: z.string().nullish() }).nullish(),
+      thumbnail: z.object({ src: z.string(), width: z.number().nullish(), height: z.number().nullish() }).nullish(),
+      properties: z
+        .object({ url: z.string().nullish(), width: z.number().nullish(), height: z.number().nullish() })
+        .nullish(),
     }),
   ),
 });
@@ -39,7 +41,8 @@ const storageKey = (query: string) => query.replace(/\s+/g, " ").trim().toLowerC
 export async function searchImages(query: string): Promise<ImageResult[]> {
   const key = storageKey(query);
   const stored = await findImageSearch(key);
-  if (stored) return stored;
+  // A search stored before the sizes were kept is searched once more, so its results can be picked by shape.
+  if (stored && (stored.length === 0 || stored.some((result) => result.width))) return stored;
 
   const pending = inFlight.get(key);
   if (pending) return pending;
@@ -53,13 +56,33 @@ export async function searchImages(query: string): Promise<ImageResult[]> {
   return search;
 }
 
+/** How many of a query's next results compete for each pick, when the group asks for a shape. */
+const PICK_AMONG = 4;
+
+const shapeGap = (result: ImageResult, ratio: number) =>
+  result.width && result.height ? Math.abs(Math.log(result.width / result.height / ratio)) : Number.POSITIVE_INFINITY;
+
+/**
+ * Takes the next result of a query out of `list`. With a `ratio` (width / height), the one closest to that shape among
+ * the next PICK_AMONG; results without a size lose to any with one, and among equals the earlier wins.
+ */
+function takeNext(list: ImageResult[], ratio: number | undefined): ImageResult | undefined {
+  if (ratio === undefined || list.length === 0) return list.shift();
+  let best = 0;
+  for (let index = 1; index < Math.min(PICK_AMONG, list.length); index++) {
+    if (shapeGap(list[index]!, ratio) < shapeGap(list[best]!, ratio)) best = index;
+  }
+  return list.splice(best, 1)[0];
+}
+
 /**
  * The images of an image group: `perQuery` results of each query, alternating between the queries (the first image
  * of each query in order, then the second of each, and so on), so the visible tiles show every query before the "+N".
+ * With a `ratio`, each pick is the result that best fits the tiles' shape among the query's next few (see takeNext).
  * An image already taken by another query is skipped for that query's next result. A query that fails, or has fewer
  * results, shows fewer images; the group fails only when every query fails.
  */
-export async function searchImageGroup(queries: string[], perQuery: number): Promise<ImageResult[]> {
+export async function searchImageGroup(queries: string[], perQuery: number, ratio?: number): Promise<ImageResult[]> {
   const settled = await Promise.allSettled(queries.map((query) => searchImages(query)));
   if (settled.every((outcome) => outcome.status === "rejected")) throw settled[0]!.reason;
 
@@ -75,8 +98,8 @@ export async function searchImageGroup(queries: string[], perQuery: number): Pro
   const picked: ImageResult[] = [];
   for (let round = 0; round < perQuery; round++) {
     for (const list of candidates) {
-      let next = list.shift();
-      while (next && seen.has(next.imageUrl)) next = list.shift();
+      for (let index = list.length - 1; index >= 0; index--) if (seen.has(list[index]!.imageUrl)) list.splice(index, 1);
+      const next = takeNext(list, ratio);
       if (!next) continue;
       seen.add(next.imageUrl);
       picked.push(next);
@@ -112,6 +135,9 @@ async function fetchBraveImages(query: string): Promise<ImageResult[]> {
   return body.results.flatMap((item): ImageResult[] => {
     const thumbnailUrl = item.thumbnail?.src;
     if (!thumbnailUrl) return [];
+    // The original's size, else the thumbnail's: either gives the shape.
+    const width = item.properties?.width ?? item.thumbnail?.width;
+    const height = item.properties?.height ?? item.thumbnail?.height;
     return [
       {
         thumbnailUrl,
@@ -119,6 +145,7 @@ async function fetchBraveImages(query: string): Promise<ImageResult[]> {
         pageUrl: item.url ?? null,
         title: item.title ?? "",
         source: item.source ?? "",
+        ...(width && height ? { width, height } : {}),
       },
     ];
   });

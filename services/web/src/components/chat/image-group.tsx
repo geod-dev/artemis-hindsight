@@ -91,9 +91,15 @@ class ImageSearchError extends Error {
   }
 }
 
-async function fetchImages({ queries, perQuery }: ImageGroupSpec, signal: AbortSignal): Promise<ImageResult[]> {
+async function fetchImages(
+  { queries, perQuery }: ImageGroupSpec,
+  aspectRatio: AspectRatio,
+  signal: AbortSignal,
+): Promise<ImageResult[]> {
   const params = new URLSearchParams(queries.map((query) => ["q", query]));
   params.set("n", String(perQuery));
+  // The server picks, for each image, the result whose shape best fits the tiles.
+  params.set("r", aspectRatio);
   const res = await fetch(`/api/image-search?${params}`, { signal });
   if (res.ok) return ((await res.json()) as { results: ImageResult[] }).results;
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -137,7 +143,7 @@ const ImageGroup: FC<{ spec: ImageGroupSpec; aspectRatio: AspectRatio }> = ({ sp
   useEffect(() => {
     const controller = new AbortController();
     setState({ status: "loading" });
-    fetchImages({ queries: queryKey.split("\n"), perQuery: spec.perQuery }, controller.signal)
+    fetchImages({ queries: queryKey.split("\n"), perQuery: spec.perQuery }, aspectRatio, controller.signal)
       .then((results) => setState({ status: "ready", images: results.map(toGalleryImage) }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -148,7 +154,7 @@ const ImageGroup: FC<{ spec: ImageGroupSpec; aspectRatio: AspectRatio }> = ({ sp
         });
       });
     return () => controller.abort();
-  }, [queryKey, spec.perQuery, attempt]);
+  }, [queryKey, spec.perQuery, aspectRatio, attempt]);
 
   if (state.status === "loading") {
     return (

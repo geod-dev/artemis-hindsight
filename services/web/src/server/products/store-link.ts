@@ -1,10 +1,10 @@
 import { searchWeb } from "../clients/brave-client";
 
-// The store page of a product the agent named without a link: the first result of a web search for "buy <name>" that
-// is not an obvious non-store site. Found once per product name and kept in memory; searches of the same name that
+// The store page of a product the agent named without a link: the first result of a web search for its name that is
+// not an obvious non-store site. Found once per product name and kept in memory; searches of the same name that
 // arrive together share one call.
 
-/** Sites that rank for "buy ..." without selling anything. */
+/** Sites that rank for a product name without selling anything. */
 const NOT_STORES = ["youtube.com", "wikipedia.org", "reddit.com", "quora.com", "facebook.com", "instagram.com", "tiktok.com"];
 const MAX_CACHED = 500;
 
@@ -31,7 +31,7 @@ export async function findStoreLink(name: string): Promise<string | null> {
 
   const search = (async () => {
     try {
-      const link = (await searchWeb(`buy ${name}`)).find(isStore) ?? null;
+      const link = (await searchWeb(name)).find(isStore) ?? null;
       links.set(key, link);
       if (links.size > MAX_CACHED) links.delete(links.keys().next().value!);
       return link;
