@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { MemoryExplorer } from "./memory/memory-explorer";
+import { SettingsPage } from "./settings-page";
 
 export function MemorySettings() {
   // Bumped when the memory changes (cleared, or a memory forgotten), so every tab loads again.
@@ -22,18 +23,14 @@ export function MemorySettings() {
   const changed = () => setVersion((value) => value + 1);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6 px-6 py-10">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Memory</h1>
-          <p className="text-sm text-muted-foreground">
-            What Artemis remembers about you. Open any memory to see where it comes from.
-          </p>
-        </div>
-        <ClearMemoryButton onCleared={changed} />
-      </header>
+    <SettingsPage
+      title="Memory"
+      description="What Artemis remembers about you. Open any memory to see where it comes from."
+      actions={<ClearMemoryButton onCleared={changed} />}
+      fill
+    >
       <MemoryExplorer version={version} onChanged={changed} />
-    </div>
+    </SettingsPage>
   );
 }
 
@@ -70,7 +67,7 @@ function ClearMemoryButton({ onCleared }: { onCleared: () => void }) {
       }}
     >
       <AlertDialogTrigger asChild>
-        <Button variant="outline" className="text-destructive hover:text-destructive">
+        <Button variant="outline-destructive">
           <Trash2 />
           Clear memory
         </Button>

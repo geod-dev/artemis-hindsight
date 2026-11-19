@@ -2,7 +2,7 @@
 
 import type { InstalledSkill } from "@artemis/contracts";
 import { Check, Download, ExternalLink, Loader2, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,9 +16,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { MarketplaceSkill } from "@/server/skills/marketplace";
+import { SettingsList, SettingsPage, SettingsRow } from "./settings-page";
 import type { SkillSource } from "@/server/skills/skills-service";
 
 type Loadable<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: string };
@@ -46,6 +57,7 @@ export function SkillsSettings() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"mine" | "marketplace">("mine");
 
   const loadInstalled = useCallback(async () => {
     try {
@@ -77,9 +89,10 @@ export function SkillsSettings() {
       .catch((error: unknown) => setActionError(errorText(error)));
   }, [loadInstalled]);
 
+  // Every marketplace is read, not only the open one: "Your skills" offers an update for any skill one of them provides.
   useEffect(() => {
-    if (selected && !catalogs[selected]) void loadCatalog(selected);
-  }, [selected, catalogs, loadCatalog]);
+    for (const source of sources) if (!catalogs[source.repo]) void loadCatalog(source.repo);
+  }, [sources, catalogs, loadCatalog]);
 
   async function run(key: string, action: () => Promise<void>) {
     setBusy((current) => ({ ...current, [key]: true }));
@@ -132,16 +145,20 @@ export function SkillsSettings() {
     [installed],
   );
 
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <p className="text-sm text-muted-foreground">
-          Instructions and scripts Artemis follows for specific tasks. They live in the <code>skills</code> folder of
-          your workspace: Artemis can also create and edit them for you.
-        </p>
-      </header>
+  // Where an installed skill can be updated from: the first marketplace (in the sources' order) with the same folder.
+  // A skill Artemis created matches none, so it has no update.
+  const updates = useMemo(() => {
+    const found = new Map<string, { repo: string; skill: MarketplaceSkill }>();
+    for (const source of sources) {
+      const catalog = catalogs[source.repo];
+      if (catalog?.status !== "ready") continue;
+      for (const skill of catalog.data) if (!found.has(skill.folder)) found.set(skill.folder, { repo: source.repo, skill });
+    }
+    return found;
+  }, [sources, catalogs]);
 
+  return (
+    <SettingsPage title="Skills" description="Teach Artemis how you like things done. Just ask it to create or change one.">
       {actionError && (
         <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <span>{actionError}</span>
@@ -151,82 +168,147 @@ export function SkillsSettings() {
         </div>
       )}
 
-      <InstalledSection installed={installed} busy={busy} onRemove={(folder) => void uninstall(folder)} />
+      <Tabs value={tab} onValueChange={(value) => setTab(value === "marketplace" ? "marketplace" : "mine")} className="gap-8">
+        <TabsList>
+          <TabsTrigger value="mine">
+            Your skills
+            {installed.status === "ready" && (
+              <span className="text-xs text-muted-foreground tabular-nums">{installed.data.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="marketplace">Marketplace</TabsTrigger>
+        </TabsList>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold tracking-tight">Marketplace</h2>
-          <p className="text-sm text-muted-foreground">Skills from GitHub repositories, installed into your own skills.</p>
-        </div>
-
-        <SourcePicker
-          sources={sources}
-          selected={selected}
-          busy={busy}
-          onSelect={setSelected}
-          onAdd={(repo) => void addSource(repo)}
-          onRemove={(repo) => void removeSource(repo)}
-        />
-
-        {selected && (
-          <Catalog
-            repo={selected}
-            source={sources.find((s) => s.repo === selected)}
-            catalog={catalogs[selected] ?? { status: "loading" }}
-            query={query}
-            onQueryChange={setQuery}
-            installedFolders={installedFolders}
+        <TabsContent value="mine">
+          <InstalledSection
+            installed={installed}
+            updates={updates}
             busy={busy}
-            onRefresh={() => void loadCatalog(selected, true)}
-            onInstall={(skill) => void install(selected, skill)}
+            onUpdate={(repo, skill) => void install(repo, skill)}
+            onRemove={(folder) => void uninstall(folder)}
           />
-        )}
-      </section>
-    </div>
+        </TabsContent>
+
+        <TabsContent value="marketplace" className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">Skills from GitHub repositories, installed into your own skills.</p>
+
+          <SourcePicker
+            sources={sources}
+            selected={selected}
+            busy={busy}
+            onSelect={setSelected}
+            onAdd={(repo) => void addSource(repo)}
+            onRemove={(repo) => void removeSource(repo)}
+          />
+
+          {selected && (
+            <Catalog
+              repo={selected}
+              source={sources.find((s) => s.repo === selected)}
+              catalog={catalogs[selected] ?? { status: "loading" }}
+              query={query}
+              onQueryChange={setQuery}
+              installedFolders={installedFolders}
+              busy={busy}
+              onRefresh={() => void loadCatalog(selected, true)}
+              onInstall={(skill) => void install(selected, skill)}
+              onShowInstalled={() => setTab("mine")}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+    </SettingsPage>
   );
 }
 
 function InstalledSection({
   installed,
+  updates,
   busy,
+  onUpdate,
   onRemove,
 }: {
   installed: Loadable<InstalledSkill[]>;
+  updates: Map<string, { repo: string; skill: MarketplaceSkill }>;
   busy: Record<string, boolean>;
+  onUpdate: (repo: string, skill: MarketplaceSkill) => void;
   onRemove: (folder: string) => void;
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight">Your skills</h2>
-        <p className="text-sm text-muted-foreground">Artemis sees these in every new message.</p>
-      </div>
+      <p className="text-sm text-muted-foreground">Artemis sees these in every new message.</p>
 
       {installed.status === "loading" && <Skeleton className="h-24 w-full rounded-xl" />}
       {installed.status === "error" && <p className="text-sm text-destructive">{installed.error}</p>}
       {installed.status === "ready" && installed.data.length === 0 && (
         <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          No skills yet. Install one from a marketplace below, or ask Artemis to create one.
+          No skills yet. Install one from the Marketplace tab, or ask Artemis to create one.
         </p>
       )}
       {installed.status === "ready" && installed.data.length > 0 && (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-          {installed.data.map((skill) => (
-            <li key={skill.folder} className="flex items-start gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{skill.name}</p>
-                  {skill.error && <Badge variant="destructive">{skill.error}</Badge>}
-                </div>
-                {skill.description && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{skill.description}</p>}
-                <p className="mt-1 truncate font-mono text-xs text-muted-foreground/80">skills/{skill.folder}</p>
-              </div>
-              <RemoveSkillButton name={skill.name} pending={busy[`remove:${skill.folder}`] === true} onConfirm={() => onRemove(skill.folder)} />
-            </li>
-          ))}
-        </ul>
+        <SettingsList>
+          {installed.data.map((skill) => {
+            const update = updates.get(skill.folder);
+            const updating = update !== undefined && busy[`install:${update.repo}:${update.skill.path}`] === true;
+            return (
+              <SettingsRow
+                key={skill.folder}
+                title={skill.name}
+                badges={skill.error && <Badge variant="destructive">{skill.error}</Badge>}
+                description={skill.description}
+                detail={`skills/${skill.folder}`}
+                actions={
+                  <>
+                    {update && (
+                      <ConfirmUpdate name={skill.name} folder={skill.folder} repo={update.repo} onConfirm={() => onUpdate(update.repo, update.skill)}>
+                        <Button size="sm" variant="outline" disabled={updating}>
+                          {updating ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                          {updating ? "Updating…" : "Update"}
+                        </Button>
+                      </ConfirmUpdate>
+                    )}
+                    <RemoveSkillButton name={skill.name} pending={busy[`remove:${skill.folder}`] === true} onConfirm={() => onRemove(skill.folder)} />
+                  </>
+                }
+              />
+            );
+          })}
+        </SettingsList>
       )}
     </section>
+  );
+}
+
+/** Asks before an update: the installed folder is replaced by the marketplace's version. `children` is the trigger. */
+function ConfirmUpdate({
+  name,
+  folder,
+  repo,
+  onConfirm,
+  children,
+}: {
+  name: string;
+  folder: string;
+  repo: string;
+  onConfirm: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Update {name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your skills/{folder} folder is replaced with the version from {repo}. Changes made to it are lost.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Update</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -234,8 +316,9 @@ function RemoveSkillButton({ name, pending, onConfirm }: { name: string; pending
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={pending} className="shrink-0 text-muted-foreground hover:text-destructive">
-          {pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        <Button variant="outline-destructive" size="sm" disabled={pending}>
+          {pending ? <Loader2 className="animate-spin" /> : <Trash2 />}
+          {pending ? "Removing…" : "Remove"}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent size="sm">
@@ -271,19 +354,17 @@ function SourcePicker({
   onAdd: (repo: string) => void;
   onRemove: (repo: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
   const adding = busy["add-source"] === true;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
         {sources.map((source) => {
           const active = source.repo === selected;
           return (
             <div key={source.repo} className="flex items-center">
               <Button
                 size="sm"
-                variant={active ? "secondary" : "outline"}
+                variant={active ? "default" : "outline"}
                 aria-pressed={active}
                 onClick={() => onSelect(source.repo)}
                 className={source.builtIn ? "" : "rounded-r-none"}
@@ -293,11 +374,11 @@ function SourcePicker({
               {!source.builtIn && (
                 <Button
                   size="icon-sm"
-                  variant={active ? "secondary" : "outline"}
+                  variant={active ? "default" : "outline"}
                   aria-label={`Remove marketplace ${source.repo}`}
                   disabled={busy[`remove-source:${source.repo}`] === true}
                   onClick={() => onRemove(source.repo)}
-                  className="rounded-l-none border-l-0 text-muted-foreground hover:text-destructive"
+                  className={active ? "rounded-l-none border-l-0" : "rounded-l-none border-l-0 text-muted-foreground hover:text-destructive"}
                 >
                   <X className="size-3.5" />
                 </Button>
@@ -305,31 +386,59 @@ function SourcePicker({
             </div>
           );
         })}
-      </div>
-
-      <form
-        className="flex max-w-md gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (draft.trim()) {
-            onAdd(draft.trim());
-            setDraft("");
-          }
-        }}
-      >
-        <Input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add a marketplace: owner/repo or GitHub URL"
-          aria-label="GitHub repository to add as a marketplace"
-          disabled={adding}
-        />
-        <Button type="submit" variant="outline" disabled={adding || !draft.trim()} className="gap-1.5">
-          {adding ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          Add
-        </Button>
-      </form>
+      <AddSourceDialog adding={adding} onAdd={onAdd} />
     </div>
+  );
+}
+
+/** The "+" after the marketplaces: a dialog asks for the GitHub repository. Errors show in the page's alert. */
+function AddSourceDialog({ adding, onAdd }: { adding: boolean; onAdd: (repo: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setDraft("");
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="icon-sm" variant="outline" aria-label="Add a marketplace" disabled={adding}>
+          {adding ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!draft.trim()) return;
+            onAdd(draft.trim());
+            setOpen(false);
+            setDraft("");
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Add a marketplace</DialogTitle>
+            <DialogDescription>A GitHub repository with skills in it.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="owner/repo or GitHub URL"
+            aria-label="GitHub repository"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button type="submit" disabled={!draft.trim()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -343,6 +452,7 @@ function Catalog({
   busy,
   onRefresh,
   onInstall,
+  onShowInstalled,
 }: {
   repo: string;
   source: SkillSource | undefined;
@@ -353,6 +463,7 @@ function Catalog({
   busy: Record<string, boolean>;
   onRefresh: () => void;
   onInstall: (skill: MarketplaceSkill) => void;
+  onShowInstalled: () => void;
 }) {
   const needle = query.trim().toLowerCase();
   const skills =
@@ -361,7 +472,7 @@ function Catalog({
       : [];
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <a
@@ -394,66 +505,44 @@ function Catalog({
       {catalog.status === "loading" && (
         <div className="flex flex-col gap-2">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       )}
       {catalog.status === "error" && <p className="text-sm text-destructive">{catalog.error}</p>}
       {catalog.status === "ready" && skills.length === 0 && (
-        <p className="py-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
           {catalog.data.length === 0 ? "This repository has no skill." : "No skill matches your search."}
         </p>
       )}
       {skills.length > 0 && (
-        <ul className="-mx-4 divide-y border-t">
+        <SettingsList>
           {skills.map((skill) => {
             const isInstalled = installedFolders.has(skill.folder);
             const pending = busy[`install:${repo}:${skill.path}`] === true;
             return (
-              <li key={skill.path} className="flex items-start gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{skill.name}</p>
-                  <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{skill.description}</p>
-                  {skill.path && <p className="mt-1 truncate font-mono text-xs text-muted-foreground/80">{skill.path}</p>}
-                </div>
-                {isInstalled ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={pending}
-                        title="Download it again, replacing your copy"
-                        className="shrink-0 gap-1.5 text-muted-foreground"
-                      >
-                        {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                        {pending ? "Updating…" : "Installed"}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent size="sm">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Update {skill.name}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Your skills/{skill.folder} folder is replaced with the version from {repo}. Changes made to it
-                          are lost.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => onInstall(skill)}>Update</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ) : (
-                  <Button size="sm" variant="outline" disabled={pending} onClick={() => onInstall(skill)} className="shrink-0 gap-1.5">
-                    {pending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                    {pending ? "Installing…" : "Install"}
-                  </Button>
-                )}
-              </li>
+              <SettingsRow
+                key={skill.path}
+                title={skill.name}
+                description={skill.description}
+                detail={skill.path || undefined}
+                actions={
+                  isInstalled ? (
+                    <Button size="sm" variant="ghost" disabled={pending} title="See it in your skills" onClick={onShowInstalled}>
+                      {pending ? <Loader2 className="animate-spin" /> : <Check />}
+                      {pending ? "Updating…" : "Installed"}
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" disabled={pending} onClick={() => onInstall(skill)}>
+                      {pending ? <Loader2 className="animate-spin" /> : <Download />}
+                      {pending ? "Installing…" : "Install"}
+                    </Button>
+                  )
+                }
+              />
             );
           })}
-        </ul>
+        </SettingsList>
       )}
     </div>
   );

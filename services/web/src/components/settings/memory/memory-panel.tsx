@@ -98,7 +98,7 @@ export function MemoryPanel({
                   value={linkType}
                   title={LINK_STYLE[linkType].description}
                   disabled={linkCounts[linkType] === 0}
-                  className="gap-2 rounded-full data-[state=off]:text-muted-foreground"
+                  className="gap-2"
                 >
                   <ColorDot token={LINK_STYLE[linkType].token} />
                   {LINK_STYLE[linkType].label}

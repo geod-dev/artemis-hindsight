@@ -97,7 +97,7 @@ export function MentalModelPanel({
                 key={type}
                 value={type}
                 disabled={evidenceCounts[type] === 0}
-                className="gap-2 rounded-full data-[state=off]:text-muted-foreground"
+                className="gap-2"
               >
                 <ColorDot token={TYPE_STYLE[type].token} />
                 {TYPE_STYLE[type].plural}

@@ -1,5 +1,6 @@
 "use client";
 
+import { SettingsPage } from "./settings-page";
 import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
@@ -48,13 +49,8 @@ export function AppearanceSettings() {
   const current = mounted ? ((theme as ThemeChoice | undefined) ?? "system") : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Appearance</h1>
-        <p className="text-sm text-muted-foreground">Choose how Artemis looks on this device.</p>
-      </header>
-
-      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <SettingsPage title="Appearance" description="Choose how Artemis looks on this device.">
+      <div role="radiogroup" aria-label="Theme" className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
         {CHOICES.map(({ value, label, description, icon: Icon }) => {
           const selected = current === value;
           return (
@@ -93,6 +89,6 @@ export function AppearanceSettings() {
           );
         })}
       </div>
-    </div>
+    </SettingsPage>
   );
 }

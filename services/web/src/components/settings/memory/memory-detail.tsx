@@ -220,7 +220,7 @@ function ForgetMemory({ id, navigation }: { id: string; navigation: DetailNaviga
         }}
       >
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+          <Button variant="outline-destructive" size="sm">
             <Trash2 />
             Forget this memory
           </Button>

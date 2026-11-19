@@ -2,7 +2,6 @@
 
 import { Code, Loader2, Save, Sparkles, type LucideIcon } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
-import { floating } from "@/components/assistant-ui/elements/surfaces";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,7 @@ export function DeveloperSettingsDialog() {
           Open developer settings
         </Button>
       </DialogTrigger>
-      <DialogContent className={cn(floating, "gap-4 rounded-2xl p-5 shadow-xl sm:max-w-md")}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Developer settings</DialogTitle>
           <DialogDescription>Tools for looking inside Artemis. The toggle applies to this browser only.</DialogDescription>

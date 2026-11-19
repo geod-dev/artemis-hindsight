@@ -3,7 +3,7 @@
 import { Archive, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,28 +17,26 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DeveloperSettingsDialog } from "./developer-settings-dialog";
+import { SettingsList, SettingsPage, SettingsRow } from "./settings-page";
 
 // The danger zone: bulk actions on the user's chats and memory. The same routes serve the mobile app.
 
 export function DangerZoneSettings() {
   return (
-    <div className="flex flex-col gap-6 px-6 py-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Danger zone</h1>
-        <p className="text-sm text-muted-foreground">
-          Actions on all your chats and memory at once. Some of them cannot be undone.
-        </p>
-      </header>
-
-      <section className="flex flex-col divide-y rounded-xl border bg-card">
-        <DangerRow
+    <SettingsPage
+      title="Danger zone"
+      description="Actions on all your chats and memory at once. Some of them cannot be undone."
+    >
+      <SettingsList>
+        <SettingsRow
           title="Archived chats"
           description="The chats you archived. Restore them to the list, or delete them for good."
-        >
-          <Button asChild variant="outline">
-            <Link href="/settings/danger/archived">View archived</Link>
-          </Button>
-        </DangerRow>
+          actions={
+            <Button asChild variant="outline">
+              <Link href="/settings/danger/archived">View archived</Link>
+            </Button>
+          }
+        />
 
         <ConfirmRow
           title="Archive all chats"
@@ -84,27 +82,13 @@ export function DangerZoneSettings() {
           }}
         />
 
-        <DangerRow
+        <SettingsRow
           title="Developer settings"
           description="Show the developer actions and settings"
-        >
-          <DeveloperSettingsDialog />
-        </DangerRow>
-      </section>
-    </div>
-  );
-}
-
-/** A non-interactive row: the explanation and a control on the right. */
-function DangerRow({ title, description, children }: { title: string; description: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </div>
+          actions={<DeveloperSettingsDialog />}
+        />
+      </SettingsList>
+    </SettingsPage>
   );
 }
 
@@ -153,12 +137,12 @@ function ConfirmRow({
   }
 
   return (
-    <div className="flex flex-col gap-2 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 className={destructive ? "text-sm font-medium text-destructive" : "text-sm font-medium"}>{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
+    <SettingsRow
+      title={title}
+      description={description}
+      destructive={destructive}
+      note={result}
+      actions={
         <AlertDialog
           open={open}
           onOpenChange={(next) => {
@@ -168,7 +152,7 @@ function ConfirmRow({
           }}
         >
           <AlertDialogTrigger asChild>
-            <Button variant="outline" className={destructive ? "text-destructive hover:text-destructive" : undefined}>
+            <Button variant={destructive ? "outline-destructive" : "outline"}>
               <Icon />
               {buttonLabel}
             </Button>
@@ -194,9 +178,8 @@ function ConfirmRow({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-      {result && <p className="text-sm text-muted-foreground">{result}</p>}
-    </div>
+      }
+    />
   );
 }
 

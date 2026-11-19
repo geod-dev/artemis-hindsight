@@ -3,7 +3,7 @@
 import { MAX_PROJECT_ICON_BYTES, PROJECT_DESCRIPTION_MAX, PROJECT_ICON_EXTENSIONS, PROJECT_NAME_MAX } from "@artemis/contracts";
 import { Folder, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { field, fieldInteractive, floating, ghostButton } from "@/components/assistant-ui/elements/surfaces";
+import { fieldInteractive, ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { ColorSwatches } from "@/components/profile/color-swatches";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,7 +37,7 @@ export function ProjectDialog(props: ProjectDialogProps) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       {/* Radix unmounts the content when the dialog closes, so the form starts from the project each time it opens. */}
-      <DialogContent className={cn(floating, "gap-0 rounded-2xl p-5 shadow-xl sm:max-w-md")}>
+      <DialogContent className="gap-0 sm:max-w-md">
         <ProjectForm {...props} />
       </DialogContent>
     </Dialog>
@@ -171,7 +171,7 @@ function ProjectForm({ project, usedColors, onSaved, onOpenChange }: ProjectDial
         </div>
 
         <Input
-          className={cn(field, "h-10 min-w-0 flex-1 rounded-xl border-transparent shadow-none")}
+          className="min-w-0 flex-1"
           id={nameId}
           aria-label="Name"
           placeholder="Name"
@@ -191,7 +191,6 @@ function ProjectForm({ project, usedColors, onSaved, onOpenChange }: ProjectDial
           Instructions <span className="font-normal text-muted-foreground">(optional)</span>
         </Label>
         <Textarea
-          className={cn(field, "rounded-xl border-transparent shadow-none")}
           id={descriptionId}
           maxLength={PROJECT_DESCRIPTION_MAX}
           value={description}

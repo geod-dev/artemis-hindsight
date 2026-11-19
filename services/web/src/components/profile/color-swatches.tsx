@@ -14,7 +14,7 @@ export function ColorSwatches({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label="Avatar color" className="grid grid-cols-8 gap-2">
+    <div role="radiogroup" aria-label="Avatar color" className="flex flex-wrap gap-3">
       {AVATAR_COLORS.map((color) => {
         const selected = value === color;
         return (

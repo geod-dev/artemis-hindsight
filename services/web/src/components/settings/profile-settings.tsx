@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isAvatarColorId, type AvatarColorId } from "@/lib/avatar-colors";
+import { SettingsPage } from "./settings-page";
 
 const MAX_NAME = 40;
 
@@ -58,13 +59,8 @@ export function ProfileSettings({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
-        <p className="text-sm text-muted-foreground">How you appear in the app and to the assistant.</p>
-      </header>
-
-      <section className="flex items-center gap-5 rounded-xl border bg-card p-5">
+    <SettingsPage title="Profile" description="How you appear in the app and to the assistant.">
+      <section className="flex items-center gap-5">
         <ProfileAvatar name={trimmed} username={username} color={color} size={64} />
         <div className="min-w-0">
           <p className="truncate text-lg font-medium">{trimmed || username}</p>
@@ -111,6 +107,6 @@ export function ProfileSettings({
           </div>
         </div>
       )}
-    </div>
+    </SettingsPage>
   );
 }

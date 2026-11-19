@@ -1,10 +1,8 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { floating } from "@/components/assistant-ui/elements/surfaces";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import { EntityDetailView } from "./entity-detail";
 import { MemoryDetailView } from "./memory-detail";
 import { MentalModelDetailView } from "./mental-model-detail";
@@ -47,7 +45,7 @@ export function DetailDialog({
     <Dialog open={current !== undefined} onOpenChange={(open) => !open && onStackChange([])}>
       <DialogContent
         aria-describedby={undefined}
-        className={cn(floating, "flex max-h-[85svh] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-xl sm:max-w-2xl")}
+        className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
       >
         {stack.length > 1 && (
           <div className="flex items-center px-3 pt-3">

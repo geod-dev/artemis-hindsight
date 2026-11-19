@@ -3,7 +3,6 @@
 import { List, Network } from "lucide-react";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { MemorySummary, MemoryType } from "@/lib/memory-explorer";
 import { oneOf, useStoredState } from "@/lib/use-stored-state";
 import { DetailDialog, type DetailTarget } from "./detail-dialog";
@@ -58,7 +57,7 @@ export function MemoryExplorer({ version, onChanged }: { version: number; onChan
           <div className="max-w-full overflow-x-auto">
             <TabsList>
               {TABS.map((item) => (
-                <TabsTrigger key={item.id} value={item.id} className="px-3">
+                <TabsTrigger key={item.id} value={item.id}>
                   {item.label}
                   {summary.status === "ready" && (
                     <span className="text-xs text-muted-foreground tabular-nums">{summary.data[item.count]}</span>
@@ -67,27 +66,25 @@ export function MemoryExplorer({ version, onChanged }: { version: number; onChan
               ))}
             </TabsList>
           </div>
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
+          {/* The panels below read `view`: this Tabs has no TabsContent. */}
+          <Tabs
             value={view}
             onValueChange={(value) => {
-              // Radix sends "" when the selected item is clicked again: the view stays as it is.
               const next = parseView(value);
               if (next) setView(next);
             }}
-            aria-label="View"
           >
-            <ToggleGroupItem value="graph" aria-label="Graph">
-              <Network />
-              Graph
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List">
-              <List />
-              List
-            </ToggleGroupItem>
-          </ToggleGroup>
+            <TabsList aria-label="View">
+              <TabsTrigger value="graph">
+                <Network />
+                Graph
+              </TabsTrigger>
+              <TabsTrigger value="list">
+                <List />
+                List
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {(["observation", "world", "experience"] as const).map((type) => (
