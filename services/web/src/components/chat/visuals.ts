@@ -1,6 +1,7 @@
-import { ChartBlock, ComparisonCardBlock, SpecSheetBlock } from "./data-visuals";
+import { ChartBlock, SpecSheetBlock } from "./data-visuals";
 import { IMAGE_GROUP_LANGUAGE, imageGroupBlock } from "./image-group";
 import { mermaidBlock } from "./mermaid-diagram";
+import { PRODUCT_GROUP_LANGUAGE, productGroupBlock } from "./product-group";
 import { visualLanguage } from "./visual-block";
 
 /**
@@ -10,7 +11,7 @@ import { visualLanguage } from "./visual-block";
  */
 export const visualComponentsByLanguage = {
   [IMAGE_GROUP_LANGUAGE]: visualLanguage(imageGroupBlock),
-  visual__comparison_card: visualLanguage(ComparisonCardBlock),
+  [PRODUCT_GROUP_LANGUAGE]: visualLanguage(productGroupBlock),
   visual__spec_sheet: visualLanguage(SpecSheetBlock),
   visual__chart: visualLanguage(ChartBlock),
   visual__diagram: visualLanguage(mermaidBlock("visual__diagram")),

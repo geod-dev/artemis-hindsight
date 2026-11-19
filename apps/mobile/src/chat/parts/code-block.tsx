@@ -50,7 +50,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           <Text style={[styles.language, { color: colors.muted }]}>{fence.toLowerCase()}</Text>
         </View>
       ) : null}
-      {/* The same sideways scroll as the image group and the comparison cards: the drawer's swipe waits for it. */}
+      {/* The same sideways scroll as the image group: the drawer's swipe waits for it. */}
       <HorizontalRow contentStyle={styles.body}>
         <Text selectable={false} style={[styles.code, { color: colors.text }]}>
           {lines

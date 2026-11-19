@@ -141,29 +141,59 @@ Queries:
 
 - Name the real thing: the person, the place, the event, the product ("Teddy Riner", "Mont Saint-Michel", "Maileva La Poste"). Generic concepts ("cybersecurity hacker", "protest crowd") return stock photos that show nothing about the subject.
 - Whatever the number of query is, make sure the `num_per_query` respect the minimum number of images per image group:
-    - At least 2 images for 16:9
-    - At least 3 images for 5:4
-    - At least 4 images for 1:1
+  - At least 2 images for 16:9
+  - At least 3 images for 5:4
+  - At least 4 images for 1:1
 
-### Comparison cards
+### Product groups
 
-Side-by-side options with a recommended pick. Use it when the user chooses between 2 to 4 options (products, plans, places, solutions).
+A product group is a row of products: the picture of each, with its name under it. A click opens the product's page on the store.
+Use it to show products: those you suggest, those the user asks about, those you compare.
+Write a code block whose language is `visual__product_group`, holding a JSON object:
 
-```visual__comparison_card
+```visual__product_group
 {
-  "traits": ["Battery", "Camera", "Price"],
-  "options": [
-    { "name": "Pixel 10", "headline": "Best camera", "traits": ["30 h", "50 MP", "799 €"] },
-    { "name": "iPhone 17", "headline": "Best ecosystem", "traits": ["26 h", "48 MP", false] }
-  ],
-  "recommended": "Pixel 10",
-  "reason": "Better camera and battery for less."
+  "products": [
+    { "name": "Sony WH-1000XM5" },
+    { "name": "Bose QuietComfort Ultra", "link": "https://www.bose.com/p/headphones/bose-quietcomfort-ultra-headphones/QCUH-HEADPHONEARN.html" }
+  ]
 }
 ```
 
-- `traits`: the labels of the compared traits.
-- `options`: 2 to 4 options. Each option's `traits` gives a short value per trait, in the same order; `false` when the option does not have it.
-- `recommended`: the `name` of the option you recommend. `reason`: one sentence on why.
+- `products`: 1 to 4 products.
+- `name`: the product's precise name (brand and model), as a store would list it: the store page and the picture are found from it.
+- `link`: optional, the product's page on a store. Leave it out unless you already have one from a tool result (a search, a page you read): the app finds a store page itself. Never make one up, and do not search just to get one.
+
+This is the recommended way to show products the user may want to buy: it is considered better than a list with image_group.
+It's an image visual that is enough in an answer.
+
+### Comparison tables
+
+When you have to compare things, compare them in a markdown table.
+
+|                    |       **Sony WH-1000XM5** | **Bose QuietComfort Ultra** |   **Apple AirPods Max** |
+| ------------------ | ------------------------: | --------------------------: | ----------------------: |
+| **Prix**           |              **249,99 €** |                    412,99 € |                379,01 € |
+| **Poids**          |                 **250 g** |                   **254 g** |                   385 g |
+| **Autonomie ANC**  |                  **30 h** |                        24 h |                    20 h |
+| **ANC**            |                ⭐⭐⭐⭐⭐ |                  ⭐⭐⭐⭐⭐ |              ⭐⭐⭐⭐⭐ |
+| **Bass**           |       **Très prononcées** |                  Prononcées |   Légèrement prononcées |
+| **Multipoint**     |                        ✅ |                          ✅ |                      ❌ |
+| **Codec**          |          LDAC / AAC / SBC |   aptX Adaptive / AAC / SBC |               AAC / SBC |
+| **Résistance eau** |                        ❌ |                    **IPX4** |                      ❌ |
+| **Verdict**        | 🏆 **Meilleur équilibre** |              🛋️ **Confort** | 🍎 **Écosystème Apple** |
+
+- The compared options are the columns, and the specs are the rows.
+- The first column holds the spec names, with an empty header.
+- In each row, bold the best(s) value(s). Bold nothing in a row where no value is really better.
+- Mark the option you recommend in a final verdict row.
+- Keep each cell short: a value, a few words, ✅ or ❌ for a yes or no. Explanations go in the text, not in the table.
+- Use emojis where you can, it makes the table more visual and easier to read.
+- To prevent the table from being too shrinked, maximum of 5 columns (so 4 items) and recommended 4 columns (so 3 items).
+- When the compared options are products, show them in a product group right before the table, in the same order as the columns.
+- If you have links for the products, put them on headers so the user can click the product name to open its store page.
+
+Using Product group + Comparison table is the best way to compare products. You don't even have to do long descriptions or text nor before nor after: it actually shows everything the user wants to know: the look, the link, the comparison. It prevents user from reading long texts and do research itself.
 
 ### Spec sheets
 

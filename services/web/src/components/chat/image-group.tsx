@@ -1,11 +1,11 @@
 "use client";
 
 import type { SyntaxHighlighterProps } from "@assistant-ui/react-markdown";
-import { useCallback, useEffect, useState, type CSSProperties, type FC } from "react";
+import { useEffect, useState, type FC } from "react";
 import { z } from "zod";
 import { ImageGallery, type GalleryImage } from "@/components/assistant-ui/elements/image-gallery";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { ASPECT_RATIOS, columnsFor, columnsStyle, SkeletonRow, useRowWidth, type AspectRatio } from "./image-row";
 import { ErrorCard, useFenceClosed } from "./visual-block";
 
 // An image group is a row of image search results the agent puts in its reply, written as a code block:
@@ -22,9 +22,6 @@ const MAX_PER_QUERY = 8;
 
 /** The most queries a group can have. The server answers 400 above. */
 const MAX_QUERIES = 8;
-
-const ASPECT_RATIOS = ["1:1", "5:4", "16:9"] as const;
-type AspectRatio = (typeof ASPECT_RATIOS)[number];
 
 const imageGroupSchema = z.object({
   query: z.union([z.string(), z.array(z.string())]),
@@ -104,12 +101,10 @@ async function fetchImages({ queries, perQuery }: ImageGroupSpec, signal: AbortS
 }
 
 // The registry gallery lays its tiles in a grid of two or three columns. An image group is one row across the full
-// content width: the gallery's grid (its first child) gets as many columns as tiles of about TILE_HEIGHT_PX fit, and
-// the tiles stretch to fill them. The gallery's own "+N" tile (its last visible tile, past maxVisible) stands for the
+// content width: the gallery's grid (its first child) gets the row's columns (see image-row.tsx), and the tiles stretch
+// to fill them. The gallery's own "+N" tile (its last visible tile, past maxVisible) stands for the
 // rest. The classes target the gallery's markup from outside, so the downloaded component stays untouched. The column
 // count goes through the --columns variable, set on the wrapper.
-const TILE_HEIGHT_PX = 160;
-const GAP_PX = 8; // gap-2
 const ONE_ROW =
   "max-w-full [&>div:first-child]:grid-cols-[repeat(var(--columns),minmax(0,1fr))] [&>div:first-child]:gap-2";
 
@@ -118,49 +113,11 @@ const ONE_ROW =
 const PLUS_BUBBLE =
   "[&>div:first-child>button>span.absolute]:top-auto [&>div:first-child>button>span.absolute]:left-auto [&>div:first-child>button>span.absolute]:right-2 [&>div:first-child>button>span.absolute]:bottom-2 [&>div:first-child>button>span.absolute]:rounded-full [&>div:first-child>button>span.absolute]:bg-black/70 [&>div:first-child>button>span.absolute]:px-2.5 [&>div:first-child>button>span.absolute]:py-0.5 [&>div:first-child>button>span.absolute]:text-sm [&>div:first-child>button>span.absolute]:font-semibold [&>div:first-child>button>span.absolute]:text-white [&>div:first-child>button>span.absolute]:shadow-md [&>div:first-child>button>span.absolute]:backdrop-blur-sm";
 
-/** Each ratio's tile shape, as full class names so Tailwind generates them, and the tile width at TILE_HEIGHT_PX. */
-const ASPECT: Record<AspectRatio, { tile: string; skeleton: string; widthPx: number }> = {
-  "1:1": { tile: "[&>div:first-child>button]:aspect-square", skeleton: "aspect-square", widthPx: TILE_HEIGHT_PX },
-  "5:4": { tile: "[&>div:first-child>button]:aspect-[5/4]", skeleton: "aspect-[5/4]", widthPx: TILE_HEIGHT_PX * 1.25 },
-  "16:9": { tile: "[&>div:first-child>button]:aspect-video", skeleton: "aspect-video", widthPx: (TILE_HEIGHT_PX * 16) / 9 },
-};
-
-/** How many columns a row this wide has. At least one, so a narrow row still shows the "+N" tile. */
-const columnsFor = (width: number, aspectRatio: AspectRatio) =>
-  Math.max(1, Math.floor((width + GAP_PX) / (ASPECT[aspectRatio].widthPx + GAP_PX)));
-
-const columnsStyle = (columns: number) => ({ "--columns": columns }) as CSSProperties;
-
-/** The row's width, measured and kept up to date as it resizes. Null until the row is mounted. */
-function useRowWidth(): [(node: HTMLDivElement | null) => void, number | null] {
-  const [width, setWidth] = useState<number | null>(null);
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? null));
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
-
-const SkeletonRow: FC<{ count: number; aspectRatio: AspectRatio; label: string }> = ({ count, aspectRatio, label }) => {
-  const [ref, width] = useRowWidth();
-  const columns = width === null ? 0 : columnsFor(width, aspectRatio);
-  return (
-    <div
-      ref={ref}
-      className="my-3 grid w-full grid-cols-[repeat(var(--columns),minmax(0,1fr))] gap-2 first:mt-0"
-      style={columnsStyle(columns)}
-      aria-busy
-      aria-label={label}
-    >
-      {Array.from({ length: Math.min(count, columns) }, (_, index) => (
-        <Skeleton key={index} className={cn("rounded-xl", ASPECT[aspectRatio].skeleton)} />
-      ))}
-      {/* Holds the row's height before it is measured, so nothing moves when the tiles appear. */}
-      {columns === 0 && <div className="h-40" />}
-    </div>
-  );
+/** Each ratio's tile shape on the gallery's tiles, as full class names so Tailwind generates them. */
+const GALLERY_TILE: Record<AspectRatio, string> = {
+  "1:1": "[&>div:first-child>button]:aspect-square",
+  "5:4": "[&>div:first-child>button]:aspect-[5/4]",
+  "16:9": "[&>div:first-child>button]:aspect-video",
 };
 
 type State =
@@ -223,7 +180,7 @@ const ImageRow: FC<{ images: GalleryImage[]; aspectRatio: AspectRatio; label: st
       <ImageGallery
         images={images}
         maxVisible={columns}
-        className={cn(ONE_ROW, PLUS_BUBBLE, ASPECT[aspectRatio].tile)}
+        className={cn(ONE_ROW, PLUS_BUBBLE, GALLERY_TILE[aspectRatio])}
         aria-label={`Images: ${label}`}
       />
     </div>

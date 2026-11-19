@@ -1,16 +1,17 @@
 import type { ReactNode } from "react";
 import type { z } from "zod";
 import { ChartVisual } from "./chart-visual";
-import { ComparisonVisual, SpecSheetVisual } from "./data-cards";
+import { SpecSheetVisual } from "./data-cards";
 import { ImageGroupVisual } from "./image-group-visual";
 import { MermaidVisual } from "./mermaid-visual";
-import { ASPECT_RATIOS, chartSchema, comparisonSchema, imageGroupSchema, MAX_IMAGE_QUERIES, specSheetSchema, type AspectRatio } from "./schemas";
+import { ProductGroupVisual } from "./product-group-visual";
+import { ASPECT_RATIOS, chartSchema, imageGroupSchema, productGroupSchema, MAX_IMAGE_QUERIES, specSheetSchema, type AspectRatio } from "./schemas";
 import { VisualError, VisualSkeleton } from "./shared";
 
 /** Every visual the agent can put in a reply, by code block language (same set as the web app). */
 export const VISUAL_LANGUAGES = new Set([
   "visual__image_group",
-  "visual__comparison_card",
+  "visual__product_group",
   "visual__spec_sheet",
   "visual__chart",
   "visual__diagram",
@@ -64,8 +65,8 @@ export function renderVisual(language: string, code: string, closed: boolean): R
       if (!group.ok) return <VisualError title="Image group unreadable" message={group.reason} />;
       return <ImageGroupVisual spec={{ queries: group.queries, perQuery: group.perQuery, aspectRatio: group.aspectRatio }} />;
     }
-    case "visual__comparison_card":
-      return jsonVisual(code, closed, comparisonSchema, "Comparison", 220, (value) => <ComparisonVisual value={value} />);
+    case "visual__product_group":
+      return jsonVisual(code, closed, productGroupSchema, "Products", 190, (value) => <ProductGroupVisual value={value} />);
     case "visual__spec_sheet":
       return jsonVisual(code, closed, specSheetSchema, "Spec sheet", 180, (value) => <SpecSheetVisual value={value} />);
     case "visual__chart":

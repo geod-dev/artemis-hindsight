@@ -1,61 +1,12 @@
 "use client";
 
 import { z } from "zod";
-import { ComparisonCard } from "@/components/assistant-ui/elements/comparison-card";
 import { SpecSheet } from "@/components/assistant-ui/elements/spec-sheet";
 import { TrendChart } from "./trend-chart";
 import { jsonVisual, VisualSkeleton } from "./visual-block";
 
-// The registry's comparison card and spec sheet, and our chart (TrendChart, the registry Chart's look), each written by the agent as a code block holding JSON. The
+// The registry's spec sheet and our chart (TrendChart, the registry Chart's look), each written by the agent as a code block holding JSON. The
 // JSON keys are snake_case, like image_group's.
-
-/**
- * ```visual__comparison_card
- * { "traits": ["Battery", "Camera"], "options": [{ "name": "Pixel 10", "headline": "Best camera",
- *   "traits": ["30 h", "50 MP"] }], "recommended": "Pixel 10", "reason": "Best camera for the price." }
- * ```
- * A trait value of false (or null) shows as missing.
- */
-const comparisonSchema = z
-  .object({
-    traits: z.array(z.string()).min(1),
-    options: z
-      .array(
-        z.object({
-          name: z.string().min(1),
-          headline: z.string().default(""),
-          traits: z.array(z.union([z.string(), z.literal(false), z.null()])),
-        }),
-      )
-      .min(2)
-      .max(4),
-    recommended: z.string(),
-    reason: z.string().default(""),
-  })
-  .refine((value) => value.options.some((option) => option.name === value.recommended), {
-    message: "recommended must be the name of one of the options",
-  });
-
-const ComparisonCardBlock = jsonVisual({
-  language: "visual__comparison_card",
-  name: "Comparison",
-  schema: comparisonSchema,
-  skeleton: <VisualSkeleton className="h-56" label="Loading comparison" />,
-  render: (value) => (
-    <ComparisonCard
-      className="my-3 max-w-full first:mt-0"
-      traitLabels={value.traits}
-      options={value.options.map((option) => ({
-        id: option.name,
-        name: option.name,
-        headline: option.headline,
-        traits: option.traits.map((trait) => trait ?? false),
-      }))}
-      recommendedId={value.recommended}
-      reason={value.reason}
-    />
-  ),
-});
 
 /**
  * ```visual__spec_sheet
@@ -130,4 +81,4 @@ const ChartBlock = jsonVisual({
   ),
 });
 
-export { ComparisonCardBlock, SpecSheetBlock, ChartBlock };
+export { SpecSheetBlock, ChartBlock };

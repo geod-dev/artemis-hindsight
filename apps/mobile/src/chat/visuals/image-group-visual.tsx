@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Image, Pressable } from "react-native";
 import { apiFetch, absoluteUrl, authHeaders } from "@/lib/api";
-import { usePreferences } from "@/preferences";
 import { HorizontalRow, VisualError, VisualSkeleton } from "./shared";
 import { openImageViewer } from "./image-viewer";
+import { ImageTile, TILE_WIDTH } from "./image-tile";
 import type { AspectRatio, ImageResult } from "./schemas";
 
 export interface ImageGroupSpec {
@@ -13,11 +12,9 @@ export interface ImageGroupSpec {
 }
 
 const RATIO_VALUE: Record<AspectRatio, number> = { "1:1": 1, "5:4": 5 / 4, "16:9": 16 / 9 };
-const TILE_WIDTH = 150;
 
 /** Searches the group's queries through the server (the key stays there) and shows the results in one row of pictures. */
 export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
-  const { colors } = usePreferences();
   const query = useQuery({
     queryKey: ["image-group", spec.queries, spec.perQuery],
     queryFn: async () => {
@@ -41,20 +38,13 @@ export function ImageGroupVisual({ spec }: { spec: ImageGroupSpec }) {
   return (
     <HorizontalRow gap={8}>
       {query.data.map((result, index) => (
-        <Pressable
+        <ImageTile
           key={`${result.thumbnailUrl}-${index}`}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={result.title || "Open image"}
+          source={{ uri: absoluteUrl(result.thumbnailUrl), headers: authHeaders() }}
+          height={tileHeight}
+          label={result.title || "Open image"}
           onPress={() => openImageViewer(query.data, index)}
-          onLongPress={() => openImageViewer(query.data, index)}
-          style={{ width: TILE_WIDTH }}
-        >
-          <Image
-            source={{ uri: absoluteUrl(result.thumbnailUrl), headers: authHeaders() }}
-            style={{ width: TILE_WIDTH, height: tileHeight, borderRadius: 12, backgroundColor: colors.surface }}
-            resizeMode="cover"
-          />
-        </Pressable>
+        />
       ))}
     </HorizontalRow>
   );

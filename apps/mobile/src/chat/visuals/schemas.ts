@@ -8,26 +8,19 @@ export const MAX_IMAGE_QUERIES = 4;
 export const ASPECT_RATIOS = ["1:1", "5:4", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 
-export const comparisonSchema = z
-  .object({
-    traits: z.array(z.string()).min(1),
-    options: z
-      .array(
-        z.object({
-          name: z.string().min(1),
-          headline: z.string().default(""),
-          traits: z.array(z.union([z.string(), z.literal(false), z.null()])),
-        }),
-      )
-      .min(2)
-      .max(4),
-    recommended: z.string(),
-    reason: z.string().default(""),
-  })
-  .refine((value) => value.options.some((option) => option.name === value.recommended), {
-    message: "recommended must be the name of one of the options",
-  });
-export type ComparisonValue = z.infer<typeof comparisonSchema>;
+/** A product group: 1 to 4 products, each a name and, optionally, its page on a store (http or https). */
+export const productGroupSchema = z.object({
+  products: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        link: z.url({ protocol: /^https?$/ }).max(2048).optional(),
+      }),
+    )
+    .min(1)
+    .max(4),
+});
+export type ProductGroupValue = z.infer<typeof productGroupSchema>;
 
 export const specSheetSchema = z.object({
   title: z.string().min(1),

@@ -3,7 +3,8 @@ import { getConfig } from "../config";
 import type { StoredImageResult } from "../db/schema";
 import { findImageSearch, saveImageSearch } from "../repositories/image-search-repository";
 
-// Image search through the Brave Search API, for the image groups the agent puts in its replies.
+// The Brave Search API: image search for the image groups the agent puts in its replies, and web search for the store
+// page of a product group's product when the agent gives none.
 
 const imageSearchSchema = z.object({
   results: z.array(
@@ -15,6 +16,10 @@ const imageSearchSchema = z.object({
       properties: z.object({ url: z.string().nullish() }).nullish(),
     }),
   ),
+});
+
+const webSearchSchema = z.object({
+  web: z.object({ results: z.array(z.object({ url: z.string() })) }).nullish(),
 });
 
 export type ImageResult = StoredImageResult;
@@ -120,10 +125,27 @@ async function fetchBraveImages(query: string): Promise<ImageResult[]> {
 }
 
 async function braveImageRequest(query: string, apiKey: string): Promise<Response> {
+  return braveRequest("images/search", query, IMAGE_RESULT_COUNT, apiKey);
+}
+
+/** The URLs of a web search's results, best first. Not stored: callers keep what they need. */
+export async function searchWeb(query: string, count = 10): Promise<string[]> {
+  const apiKey = getConfig().BRAVE_API_KEY;
+  if (!apiKey) throw new ImageSearchUnavailableError("BRAVE_API_KEY is not set");
+
+  // A 429 is retried once, in a later slot, as for images.
+  let res = await braveRequest("web/search", query, count, apiKey);
+  if (res.status === 429) res = await braveRequest("web/search", query, count, apiKey);
+  if (!res.ok) throw new Error(`brave web search failed with HTTP ${res.status}`);
+  return (webSearchSchema.parse(await res.json()).web?.results ?? []).map((result) => result.url);
+}
+
+/** One call to the Brave Search API, in its own rate-limit slot. */
+async function braveRequest(endpoint: "images/search" | "web/search", query: string, count: number, apiKey: string) {
   await waitForBraveSlot();
-  const url = new URL("https://api.search.brave.com/res/v1/images/search");
+  const url = new URL(`https://api.search.brave.com/res/v1/${endpoint}`);
   url.searchParams.set("q", query);
-  url.searchParams.set("count", String(IMAGE_RESULT_COUNT));
+  url.searchParams.set("count", String(count));
   return fetch(url, {
     headers: { accept: "application/json", "x-subscription-token": apiKey },
     signal: AbortSignal.timeout(8_000),

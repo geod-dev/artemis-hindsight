@@ -41,8 +41,8 @@ export function VisualError({ title, message, onRetry }: { title: string; messag
  * A row of visuals that scrolls sideways inside a message. Its scroll is a gesture-handler scroll, registered so the drawer's
  * swipe waits for it (lib/sideways-scroll.ts). The row's children are ordinary presses: a tap or a long press on them is theirs.
  *
- * The content sits in a Pressable inside the scroll. Without it, a touch on plain content (the comparison cards' text, a code
- * block) makes the message's long-press Pressable, outside the scroll, the touch's JS responder. On Android the responder's
+ * The content sits in a Pressable inside the scroll. Without it, a touch on plain content (a code block) makes the
+ * message's long-press Pressable, outside the scroll, the touch's JS responder. On Android the responder's
  * view then intercepts the moves (JSResponderHandler), so the scroll inside it never sees the swipe. Image tiles did not hit
  * this because each one is a Pressable inside the scroll. A long press on the row still opens the message's options.
  */
