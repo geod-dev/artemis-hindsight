@@ -193,10 +193,22 @@ The product is meant to look premium, so new UI must look like the rest of the a
 - Surfaces come from the design system's tokens: `components/assistant-ui/elements/surfaces.ts` (`floating` for
   popovers and dialogs, `field` for input backgrounds, `ghostButton` for icon buttons). Do not write a new background or
   border colour when a token exists.
-- Radius and padding follow what is already on screen. The composer and dialogs use `rounded-2xl` (the composer's
-  `--composer-radius`, 1rem); containers, settings sections and the memory graph panel use `rounded-xl`; badges and
-  pills are `rounded-full`. Padding of a dialog or a section is `p-5`, not shadcn's default `p-6`. Check the nearest
-  existing screen (settings, memory, the composer) before picking a value.
+- **The look lives in `components/ui`, not at call sites.** The shadcn files there are ours: their defaults are the
+  design system. A call site passes `className` only for layout (width, flex, gap, margin, overflow), never for colour,
+  radius, padding, border or shadow. If a screen needs a different look, add a variant to the primitive (as `pill` on
+  Button) and use it everywhere that look appears.
+- Radius tokens (`globals.css`): menus and dialogs are `rounded-surface` (1rem). The composer has its own radius,
+  concentric with its round buttons (`--composer-radius` in `thread.tsx`).
+  Every control (buttons, inputs, textareas, toggles, menu rows) is `rounded-control` (surface − `--surface-inset`), so
+  a row padded by the inset inside a menu is concentric with it. Containers and settings sections are `rounded-xl`;
+  badges, pills, tabs and picker triggers are `rounded-full`. Dialog padding is `p-5`. Never write a literal radius
+  such as `rounded-[10px]`.
+- Settings pages render `SettingsPage` (`components/settings/settings-page.tsx`): one full width, padding, header and
+  spacing for all of them. Rows of things (skills, danger zone actions, archived chats) are `SettingsList` +
+  `SettingsRow`, never a hand-built card. A button that removes something is `variant="outline-destructive"`.
+- One component per job. One choice out of a few (a page's sections, a view switch) is `Tabs`, even without
+  `TabsContent`; its selected pill slides (`sliding-indicator.tsx`). `ToggleGroup` is only for filters, where several
+  items can be on. A menu choice is a `DropdownMenuRadioItem`, shown by a check on the right, never a dot.
 - Mobile: no shadcn there. Reuse the shared components of `apps/mobile/src/components` (ActionSheet, ColorSwatches,
   ProjectIcon) and the palette of `preferences.tsx`. Before writing a new control, check `apps/mobile/package.json` for
   a library that already provides it, and say in the final message when a control is hand-built and why.

@@ -11,6 +11,10 @@
   /* Shiki's light-dark() code colors follow this, so highlighted code matches the theme. */
   color-scheme: light;
   --radius: 0.625rem;
+  /* Design system: menus and dialogs have the surface radius. A surface that holds rows
+     pads them by --surface-inset, and the rows are rounded by the difference, so inner and outer corners stay
+     concentric. Use rounded-surface / rounded-control / p-(--surface-inset); never a literal radius. */
+  --surface-inset: 0.375rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   /* The card is the grey of the composer in light mode (the secondary tone), so cards and rows stand out from the page. */
@@ -114,6 +118,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-surface: 1rem;
+  /* Buttons, inputs, toggles and menu rows share one radius: the surface minus its inset, so a row in a menu is concentric. */
+  --radius-control: calc(1rem - var(--surface-inset));
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
