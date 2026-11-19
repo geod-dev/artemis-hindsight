@@ -14,6 +14,7 @@ import {
 import { getConfig } from "../config";
 import { recallMemories } from "../clients/hindsight-client";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "@/lib/conversation-title-part";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 import { injectQuoteContext } from "@assistant-ui/ai-sdk";
 import type { StoredMessageMetadata, TurnTiming } from "@/server/db/schema";
 import type { CurrentUser } from "../auth/session";
@@ -33,8 +34,9 @@ import { activateConversation, flushConversation, flushIfInactive } from "../mem
 import { checkAttachments } from "./attachments";
 import { nameConversation } from "./conversation-title";
 import { flushMemoryTool } from "./flush-memory-tool";
-import { latestModelInput, loadUsableSkills, toModelHistory } from "./model-history";
+import { latestModelInput, loadUsableSkills, toModelHistory, type UserContext } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
+import type { ProjectContext } from "./project-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
 import { createTurnTiming, observeTurnTiming, snapshotTiming } from "./turn-timing";
@@ -56,6 +58,9 @@ import { announceListChange } from "../events/list-events";
  *   7. stream the model response into the resumable store; every completed step is written to the database
  *   8. while the conversation still has its placeholder title, name it in the background (see naming below)
  *
+ * Temporary chats are never made active, saved to memory or named. An unpersonalized one also skips step 4 and the
+ * user context: the agent gets no memory, profile, workspace, skills, project or memory tools.
+ *
  * Naming: the placeholder title (the first message) stays until a short model call answers with a name. That call
  * runs beside the agent and is never awaited. It runs on every turn whose conversation still carries a placeholder,
  * not only the first one: a first turn that failed before streaming (toolbox outage, restart) or a naming call that
@@ -65,12 +70,13 @@ import { announceListChange } from "../events/list-events";
  *
  * Returns the stream of this turn, and the stream id the browser keeps to reconnect after a reload.
  */
-/** The project the composer had selected. It only matters when this message creates the conversation. */
+/** The project and temporary mode the composer had selected. They only matter when this message creates the conversation. */
 export interface ChatTurnParams {
   conversationId: string;
   incoming: UIMessage;
   reasoningEffort?: "low" | "medium" | "high";
   projectId?: string | null;
+  temporary?: TemporaryMode | null;
   user: CurrentUser;
 }
 
@@ -100,13 +106,18 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
     throw new ProjectServiceError("project not found", 404);
   }
   const parts = await checkAttachments(conversationId, incoming.parts);
-  // A new conversation takes the requested project. An existing one keeps the project it was created in.
-  const conversation = await ensureConversation(conversationId, user.id, userText, params.projectId ?? null);
+  // A new conversation takes the requested project and temporary mode. An existing one keeps those it was created with.
+  const conversation = await ensureConversation(conversationId, user.id, userText, {
+    projectId: params.projectId ?? null,
+    temporary: params.temporary ?? null,
+  });
+  const { temporary } = conversation;
+  const personalized = temporary !== "unpersonalized";
   const project = conversation.projectId ? (await findProject(conversation.projectId, user.id)) ?? null : null;
   // Sending from a client means the user is looking at this conversation: it is read.
   await setConversationUnread(conversationId, user.id, false);
 
-  const [lookup, skills] = await Promise.all([lookupMemory(user.username, userText), loadUsableSkills(user.username)]);
+  const context = personalized ? await loadUserContext(user, userText, project) : null;
 
   const custom = (incoming.metadata as { custom?: StoredMessageMetadata["custom"] } | undefined)?.custom;
 
@@ -116,24 +127,18 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
     role: "user",
     parts,
     metadata: {
-      memory: {
-        query: lookup.query,
-        budget: lookup.budget,
-        status: lookup.status,
-        durationMs: lookup.durationMs,
-        ...(lookup.status === "unavailable" ? { reason: lookup.reason } : {}),
-        facts: lookup.status === "ok" ? lookup.facts : [],
-      },
+      ...(context ? { memory: memoryMetadata(context.lookup) } : {}),
       ...(custom ? { custom } : {}),
     },
     status: "complete",
   });
   // This conversation is now the user's active one. The previous active conversation is flushed to memory in the background.
-  await activateConversation(user.id, user.username, conversationId);
+  // A temporary chat never becomes active: it is never saved to memory.
+  if (!temporary) await activateConversation(user.id, user.username, conversationId);
 
   const history = (await listMessages(conversationId)).map(toUIMessage);
-  const naming = namingInput(conversation.title, history);
-  const modelHistory = await toModelHistory(conversationId, history, lookup, user, skills, project);
+  const naming = temporary ? undefined : namingInput(conversation.title, history);
+  const modelHistory = await toModelHistory(conversationId, history, context, temporary);
   // A quoted message reaches the model as a blockquote in front of its text.
   const quotedHistory = injectQuoteContext(modelHistory);
   // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.
@@ -148,15 +153,18 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   const modelMessages = await convertToModelMessages(quotedHistory);
 
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
-  const toolboxTools = await buildToolboxTools(conversationId, user.username);
-  // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd).
+  const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null);
+  // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd). A temporary chat,
+  // never saved, does not get it.
   let memoryFlushRequested = false;
-  const tools = {
-    ...toolboxTools,
-    flush_memory: flushMemoryTool(() => {
-      memoryFlushRequested = true;
-    }),
-  };
+  const tools = temporary
+    ? toolboxTools
+    : {
+        ...toolboxTools,
+        flush_memory: flushMemoryTool(() => {
+          memoryFlushRequested = true;
+        }),
+      };
 
   const streamId = crypto.randomUUID();
   const turn = startTurn(conversationId, streamId, user.id);
@@ -223,6 +231,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       release();
       // Not awaited. A reply that called flush_memory saves its conversation now, the reply being stored above. Otherwise,
       // if another conversation took over while this turn streamed, its messages reach memory now.
+      if (temporary) return;
       if (memoryFlushRequested) void flushConversation(conversationId, user.username);
       else void flushIfInactive(user.id, user.username, conversationId);
     },
@@ -261,6 +270,24 @@ function announceTitle(writer: UIMessageStreamWriter<UIMessage>, title: string):
   } catch {
     // The stream has already closed. The name is stored, so the sidebar shows it on the next load.
   }
+}
+
+/** What the agent is told about the user for this message: profile, recalled memory, skills and project. */
+async function loadUserContext(user: CurrentUser, userText: string, project: ProjectContext | null): Promise<UserContext> {
+  const [lookup, skills] = await Promise.all([lookupMemory(user.username, userText), loadUsableSkills(user.username)]);
+  return { user, lookup, skills, project };
+}
+
+/** The memory lookup as the user message stores it, for the message's debug view. */
+function memoryMetadata(lookup: MemoryLookup): NonNullable<StoredMessageMetadata["memory"]> {
+  return {
+    query: lookup.query,
+    budget: lookup.budget,
+    status: lookup.status,
+    durationMs: lookup.durationMs,
+    ...(lookup.status === "unavailable" ? { reason: lookup.reason } : {}),
+    facts: lookup.status === "ok" ? lookup.facts : [],
+  };
 }
 
 /** Recalls the user's memory for the message. The duration covers the recall call, failed or not. */

@@ -33,6 +33,8 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       id,
       title: conversation.title,
       project: project ? { id: project.id, name: project.name, color: project.color } : null,
+      // "personalized" or "unpersonalized" for a temporary chat, null otherwise.
+      temporary: conversation.temporary,
     },
     messages: toUiMessages(await listMessages(id)),
     activeStreamId: activeStreamOf(id),

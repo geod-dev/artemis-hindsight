@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import { TEMPORARY_MODES } from "@/lib/temporary-chat";
 import { runChatTurn } from "@/server/agent/chat-turn";
 import { AttachmentError } from "@/server/agent/attachments";
 import { getCurrentUser, unauthorized } from "@/server/auth/session";
@@ -21,6 +22,8 @@ const requestSchema = z.object({
   config: z.object({ reasoningEffort: z.enum(["low", "medium", "high"]).optional() }).optional(),
   // The project selected in the new chat. Used when this message creates the conversation.
   projectId: z.uuid().nullable().optional(),
+  // The temporary mode selected in the new chat, or null for a normal chat. Used when this message creates the conversation.
+  temporary: z.enum(TEMPORARY_MODES).nullable().optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -47,6 +50,7 @@ export async function POST(req: Request): Promise<Response> {
       incoming,
       reasoningEffort: parsed.data.config?.reasoningEffort,
       projectId: parsed.data.projectId,
+      temporary: parsed.data.temporary,
       user,
     });
   } catch (error) {

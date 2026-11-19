@@ -1,4 +1,5 @@
-import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { TEMPORARY_CHAT_TITLE, type TemporaryMode } from "@/lib/temporary-chat";
 import { getDb } from "../db/client";
 import { conversations, projects } from "../db/schema";
 import { announceListChange } from "../events/list-events";
@@ -20,6 +21,13 @@ export const DEFAULT_TITLE = "New conversation";
 export class ConversationOwnershipError extends Error {}
 
 // Every function here takes the owner's id. A conversation is only ever read or changed by the user who owns it.
+// Temporary chats are never listed: the list, project, archive and memory queries leave them out.
+
+/** Leaves the temporary chats out of a query. */
+const notTemporary = isNull(conversations.temporary);
+
+/** The new kept-alive time: now for a temporary chat, still null for any other conversation. */
+const keptAliveNow = sql`case when ${conversations.temporary} is null then null else now() end`;
 
 /** The user's listed conversations, or their archived ones, most recent first, each with its project when it has one. */
 export async function listConversations(userId: string, archived = false, limit = 200): Promise<ConversationListItem[]> {
@@ -32,7 +40,7 @@ export async function listConversations(userId: string, archived = false, limit 
     })
     .from(conversations)
     .leftJoin(projects, eq(projects.id, conversations.projectId))
-    .where(and(eq(conversations.userId, userId), archivedFilter(archived)))
+    .where(and(eq(conversations.userId, userId), notTemporary, archivedFilter(archived)))
     .orderBy(desc(conversations.updatedAt))
     .limit(limit);
   return rows.map(({ conversation, projectId, projectName, projectColor }) => ({
@@ -51,7 +59,12 @@ export async function listProjectConversations(
   limit: number,
   offset: number,
 ): Promise<{ conversations: ConversationRow[]; total: number }> {
-  const scope = and(eq(conversations.userId, userId), eq(conversations.projectId, projectId), isNull(conversations.archivedAt));
+  const scope = and(
+    eq(conversations.userId, userId),
+    eq(conversations.projectId, projectId),
+    notTemporary,
+    isNull(conversations.archivedAt),
+  );
   const [rows, [count]] = await Promise.all([
     getDb().select().from(conversations).where(scope).orderBy(desc(conversations.updatedAt)).limit(limit).offset(offset),
     getDb().select({ total: sql<number>`count(*)::int` }).from(conversations).where(scope),
@@ -93,7 +106,7 @@ export async function archiveAllConversations(userId: string): Promise<number> {
   const updated = await getDb()
     .update(conversations)
     .set({ archivedAt: sql`now()` })
-    .where(and(eq(conversations.userId, userId), isNull(conversations.archivedAt)))
+    .where(and(eq(conversations.userId, userId), notTemporary, isNull(conversations.archivedAt)))
     .returning({ id: conversations.id });
   if (updated.length > 0) announceListChange(userId);
   return updated.length;
@@ -121,31 +134,72 @@ export async function canUseConversation(id: string, userId: string): Promise<bo
   return !row || row.userId === userId;
 }
 
+/** How a new conversation is created. An existing conversation keeps what it was created with. */
+export interface NewConversationOptions {
+  /** The project it is created in, or null. A temporary chat never has one. */
+  projectId: string | null;
+  /** Set to create a temporary chat. */
+  temporary: TemporaryMode | null;
+}
+
 /**
- * Creates the conversation if it does not exist yet. The first user message becomes the placeholder title, and
- * `created` says whether this call created it (the naming step only runs for a new conversation).
- * A new conversation takes the project it is created in; an existing one keeps its project.
- * A message sent to an archived conversation takes it back into the list.
+ * Creates the conversation if it does not exist yet. The first user message becomes the placeholder title (a temporary
+ * chat, never named, is titled "Temporary chat"), and `created` says whether this call created it.
+ * A new conversation takes the project and the temporary mode it is created with; an existing one keeps its own.
+ * A message sent to an archived conversation takes it back into the list. A message keeps a temporary chat alive.
  */
 export async function ensureConversation(
   id: string,
   userId: string,
   firstUserText: string,
-  projectId: string | null = null,
-): Promise<{ title: string; created: boolean; projectId: string | null }> {
-  const title = titleFrom(firstUserText);
+  { projectId, temporary }: NewConversationOptions,
+): Promise<{ title: string; created: boolean; projectId: string | null; temporary: TemporaryMode | null }> {
+  const title = temporary ? TEMPORARY_CHAT_TITLE : titleFrom(firstUserText);
   const [row] = await getDb()
     .insert(conversations)
-    .values({ id, userId, title, projectId })
+    .values({
+      id,
+      userId,
+      title,
+      projectId: temporary ? null : projectId,
+      temporary,
+      keptAliveAt: temporary ? sql`now()` : null,
+    })
     .onConflictDoUpdate({
       target: conversations.id,
-      set: { updatedAt: sql`now()`, archivedAt: null },
+      set: { updatedAt: sql`now()`, archivedAt: null, keptAliveAt: keptAliveNow },
       setWhere: eq(conversations.userId, userId),
     })
     // xmax is 0 for a row this statement inserted and non-zero for a row it updated.
-    .returning({ title: conversations.title, created: sql<boolean>`(xmax = 0)`, projectId: conversations.projectId });
+    .returning({
+      title: conversations.title,
+      created: sql<boolean>`(xmax = 0)`,
+      projectId: conversations.projectId,
+      temporary: conversations.temporary,
+    });
   if (!row) throw new ConversationOwnershipError("conversation belongs to another user");
   return row;
+}
+
+/**
+ * Records that a client still shows this temporary chat, which keeps it from being deleted for another hour.
+ * Returns false when it is not one of the user's temporary chats (another user's, a normal one, or one already deleted).
+ */
+export async function keepTemporaryConversationAlive(id: string, userId: string): Promise<boolean> {
+  const updated = await getDb()
+    .update(conversations)
+    .set({ keptAliveAt: sql`now()` })
+    .where(and(eq(conversations.id, id), eq(conversations.userId, userId), isNotNull(conversations.temporary)))
+    .returning({ id: conversations.id });
+  return updated.length > 0;
+}
+
+/** The temporary chats nobody has kept alive since `cutoff`, with their owners. */
+export async function expiredTemporaryConversations(cutoff: Date): Promise<{ id: string; userId: string }[]> {
+  return getDb()
+    .select({ id: conversations.id, userId: conversations.userId })
+    .from(conversations)
+    .where(and(isNotNull(conversations.temporary), lt(conversations.keptAliveAt, cutoff)));
 }
 
 /**
@@ -169,10 +223,13 @@ export async function renameUntitledConversation(
 
 /**
  * Moves the conversation to the top of the lists: a turn touched it. Announced, so the other windows and devices list it
- * in its new place. The caller has checked that the conversation belongs to the user.
+ * in its new place. A temporary chat is kept alive. The caller has checked that the conversation belongs to the user.
  */
 export async function touchConversation(id: string, userId: string): Promise<void> {
-  await getDb().update(conversations).set({ updatedAt: sql`now()` }).where(eq(conversations.id, id));
+  await getDb()
+    .update(conversations)
+    .set({ updatedAt: sql`now()`, keptAliveAt: keptAliveNow })
+    .where(eq(conversations.id, id));
   announceListChange(userId);
 }
 

@@ -1,5 +1,6 @@
 import type { InstalledSkill } from "@artemis/contracts";
 import type { UIMessage } from "ai";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 import { listSkills } from "../clients/toolbox-client";
 import { getConfig } from "../config";
 import type { StoredModelInput } from "../db/schema";
@@ -92,18 +93,36 @@ export interface ModelUser {
 }
 
 /**
+ * Everything the agent is told about the user: who they are, what memory recalled for this message, their skills and
+ * the conversation's project. An unpersonalized temporary chat has none of it.
+ */
+export interface UserContext {
+  user: ModelUser;
+  lookup: MemoryLookup;
+  skills: InstalledSkill[];
+  project: ProjectContext | null;
+}
+
+/**
+ * The temporary chat tag, e.g. <temporary_chat personalized="false" />. It goes at the top of the first user message of
+ * a temporary chat; the system prompt says what each mode means for the agent.
+ */
+export function renderTemporaryChat(mode: TemporaryMode): string {
+  return `<temporary_chat personalized="${mode === "personalized"}" />`;
+}
+
+/**
  * The history as the model reads it. Each user message gets its attachment notice and its images and PDFs.
- * The first user message also gets the user metadata, the project tag (when the conversation has a project) and the
- * skills tags, and only the latest user message gets the current time and the memory block.
+ * The first user message also gets the temporary chat tag (in a temporary chat), the user metadata, the project tag
+ * (when the conversation has a project) and the skills tags, and only the latest user message gets the current time
+ * and the memory block. Without a user context (an unpersonalized temporary chat), nothing about the user is added.
  * The stored messages are not changed.
  */
 export async function toModelHistory(
   conversationId: string,
   history: UIMessage[],
-  lookup: MemoryLookup,
-  user: ModelUser,
-  skills: InstalledSkill[] = [],
-  project: ProjectContext | null = null,
+  context: UserContext | null,
+  temporary: TemporaryMode | null,
 ): Promise<UIMessage[]> {
   let first = -1;
   let latest = -1;
@@ -126,14 +145,15 @@ export async function toModelHistory(
     const text = textOf(message);
     const body =
       i === latest
-        ? [renderCurrentTime(), renderUserPrompt(text, lookup, notice)].join("\n")
+        ? [renderCurrentTime(), renderUserPrompt(text, context?.lookup ?? null, notice)].join("\n")
         : [notice, text].filter(Boolean).join("\n");
     const content =
       i === first
         ? [
-            renderUserMetadata(user),
-            project ? renderProjectMetadata(project, user.username) : "",
-            renderAvailableSkills(skills),
+            temporary ? renderTemporaryChat(temporary) : "",
+            context ? renderUserMetadata(context.user) : "",
+            context?.project ? renderProjectMetadata(context.project, context.user.username) : "",
+            context ? renderAvailableSkills(context.skills) : "",
             body,
           ]
             .filter(Boolean)

@@ -11,12 +11,19 @@ import { ProjectRecents } from "@/components/projects/project-recents";
 import { paletteColorCss } from "@/lib/avatar-colors";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "@/lib/conversation-title-part";
 import type { ProjectRef, ProjectSummary } from "@/lib/projects";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 import { ChatPageFrame } from "./chat-page-frame";
 import { createAttachmentAdapter } from "./attachment-adapter";
 import { ConversationHeading } from "./conversation-heading";
 import { ConversationIdContext, ProjectColorContext } from "./conversation-context";
 import { MessageTimesContext } from "./day-header";
 import { dictationAdapter } from "./server-dictation-adapter";
+import {
+  TemporaryChatControls,
+  TemporaryChatHeading,
+  TemporaryChatKeepAlive,
+  TemporaryChatNotice,
+} from "./temporary-chat";
 import { Thread } from "./thread";
 
 export interface ChatSessionProps {
@@ -36,6 +43,13 @@ export interface ChatSessionProps {
   onProjectChange?: (projectId: string | null) => void;
   /** The conversation's project, shown as a badge after its name in the top bar. Null outside any project. */
   project?: ProjectRef | null;
+  /**
+   * Set for a temporary chat: its mode. On the new-chat page, the mode the temporary switch selected, sent with the first
+   * message, which creates the conversation. Null for a normal chat.
+   */
+  temporary?: TemporaryMode | null;
+  /** The new chat's temporary switch. Only used on the new-chat page. */
+  onTemporaryChange?: (mode: TemporaryMode | null) => void;
 }
 
 /**
@@ -72,15 +86,19 @@ export function ChatSession({
   projectId = null,
   onProjectChange = () => undefined,
   project = null,
+  temporary = null,
+  onTemporaryChange = () => undefined,
 }: ChatSessionProps) {
   const router = useRouter();
   const { setTitle } = useConversationTitles();
 
-  // The transport is built once per conversation, so the selected project reaches it through a ref.
+  // The transport is built once per conversation, so the selected project and temporary mode reach it through refs.
   const projectRef = useRef(projectId);
+  const temporaryRef = useRef(temporary);
   useEffect(() => {
     projectRef.current = projectId;
-  }, [projectId]);
+    temporaryRef.current = temporary;
+  }, [projectId, temporary]);
 
   // The body id must be our conversation UUID. assistant-ui may otherwise send its own thread id.
   // The turn runs on the server: the browser keeps the stream id of the running turn and reconnects to it through
@@ -92,7 +110,8 @@ export function ChatSession({
         api: "/api/chat",
         prepareSendMessagesRequest: ({ messages, trigger, messageId, body }) => ({
           // config holds the model context's settings, such as the reasoning effort chosen in the composer.
-          // projectId only matters to the message that creates the conversation; the server ignores it otherwise.
+          // projectId and temporary only matter to the message that creates the conversation; the server ignores them
+          // otherwise.
           body: {
             id: conversationId,
             messages,
@@ -100,6 +119,7 @@ export function ChatSession({
             messageId,
             config: body?.config,
             projectId: projectRef.current,
+            temporary: temporaryRef.current,
           },
         }),
         resumable: {
@@ -149,22 +169,32 @@ export function ChatSession({
       <ConversationIdContext.Provider value={conversationId}>
         <ProjectColorContext.Provider value={mascotColor}>
           <MessageTimesContext.Provider value={times}>
+            {temporary && <TemporaryChatKeepAlive conversationId={conversationId} />}
             <ChatPageFrame
               title={
-                <ConversationHeading
-                  conversationId={conversationId}
-                  initialTitle={initialTitle}
-                  project={isNewConversation ? selectedProject : project}
-                />
+                temporary ? (
+                  <TemporaryChatHeading mode={temporary} />
+                ) : (
+                  <ConversationHeading
+                    conversationId={conversationId}
+                    initialTitle={initialTitle}
+                    project={isNewConversation ? selectedProject : project}
+                  />
+                )
+              }
+              actions={
+                isNewConversation ? <TemporaryChatControls value={temporary} onChange={onTemporaryChange} /> : undefined
               }
             >
               <div className="h-full min-h-0">
                 <Thread
                   mascotColor={mascotColor}
                   underMascot={
-                    isNewConversation ? (
+                    !isNewConversation ? undefined : temporary ? (
+                      <TemporaryChatNotice mode={temporary} />
+                    ) : (
                       <ProjectPicker projects={projects} value={projectId} onChange={onProjectChange} />
-                    ) : undefined
+                    )
                   }
                   belowComposer={
                     selectedProject ? <ProjectRecents key={selectedProject.id} projectId={selectedProject.id} /> : undefined

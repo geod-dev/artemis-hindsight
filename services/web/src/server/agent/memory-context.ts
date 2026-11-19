@@ -15,11 +15,13 @@ export type MemoryLookup =
  *   <attachments>...</attachments>
  *   <user_message>What does Alice do?</user_message>
  *
- * The model is told in the system prompt that <memory> is background context, not a request.
+ * The model is told in the system prompt that <memory> is background context, not a request. Without a lookup (an
+ * unpersonalized temporary chat), there is no memory block at all.
  */
-export function renderUserPrompt(userText: string, lookup: MemoryLookup, notice = ""): string {
-  const memory =
-    lookup.status === "ok"
+export function renderUserPrompt(userText: string, lookup: MemoryLookup | null, notice = ""): string {
+  const memory = !lookup
+    ? ""
+    : lookup.status === "ok"
       ? [
           `<memory source="hindsight" budget="${escapeAttr(lookup.budget)}">`,
           ...lookup.facts.map((fact) => {

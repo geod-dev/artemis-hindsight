@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { apiFetch } from "@/lib/api";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 
 // Mirrors services/web/src/server/conversations/conversation-json.ts (ConversationJson).
 export interface ConversationSummary {
@@ -17,7 +18,13 @@ export interface ConversationSummary {
 
 export interface ConversationPayload {
   /** The project the conversation belongs to, shown as a badge after its title. Null outside any project. */
-  conversation: { id: string; title: string; project: { id: string; name: string; color: string } | null };
+  conversation: {
+    id: string;
+    title: string;
+    project: { id: string; name: string; color: string } | null;
+    /** The mode of a temporary chat, or null for a normal one. */
+    temporary: TemporaryMode | null;
+  };
   messages: UIMessage[];
   /** The turn running in this conversation right now, if any. */
   activeStreamId: string | null;

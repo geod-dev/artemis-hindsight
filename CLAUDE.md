@@ -41,6 +41,15 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
   `announceListChange(userId)` (`server/events/list-events.ts`). A new write that changes a list must announce too.
   Clients read the lists again on `changed`: the web app in `LiveUpdates`, the phone in `useLiveListUpdates`.
 
+## Temporary chats
+
+- `conversations.temporary` is `personalized`, `unpersonalized` or null. A temporary chat is never listed, named, made
+  active or saved to memory. A new query that lists conversations or sends them to memory must leave them out.
+- Unpersonalized: the agent gets no `<user_metadata>`, memory, skills, project, memory tools or username
+  (`chat-turn.ts`). The sandbox has no path guard, so this hides the user from the agent's context; it is not isolation.
+- Open pages call `POST /api/conversations/[id]/keepalive` every 5 minutes (web `TemporaryChatKeepAlive`, phone the
+  same name). An hourly sweep (`server/conversations/temporary-chats.ts`) deletes chats not kept alive for an hour.
+
 ## Mobile app (`apps/mobile`)
 
 - Expo SDK 58, Expo Router, TypeScript. It is **not** an npm workspace: its React version differs from the web's, so

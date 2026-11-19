@@ -1,10 +1,12 @@
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { ChatScreen } from "@/chat/chat-screen";
 import { ProjectPicker } from "@/chat/project-picker";
 import { setNewChatConversation, setNewChatProjectSelection } from "@/chat/new-chat-selection";
+import { TemporaryChatButton, TemporaryChatNotice, TemporaryChatTitle } from "@/chat/temporary-chat";
 import { ConversationTitleBar } from "@/components/conversation-title-bar";
+import { TEMPORARY_CHAT_TITLE, type TemporaryMode } from "@/lib/temporary-chat";
 import { useProjects } from "@/queries/projects";
 
 const DEFAULT_TITLE = "New conversation";
@@ -21,15 +23,22 @@ export default function NewChatScreen() {
   return <NewChat key={`${session ?? "initial"}:${project ?? ""}`} initialProjectId={project ?? null} />;
 }
 
+/**
+ * The temporary switch sits on the right of the top bar until the first message. A temporary chat has no project: while
+ * the switch is on, the notice replaces the project picker, and no project is sent.
+ */
 function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
   const [conversationId] = useState(() => randomUUID());
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [pickedId, setPickedId] = useState<string | null>(initialProjectId);
+  const [temporary, setTemporary] = useState<TemporaryMode | null>(null);
+  const [started, setStarted] = useState(false);
+  const onStarted = useCallback(() => setStarted(true), []);
   const navigation = useNavigation();
   const projects = useProjects();
   const list = projects.data ?? [];
   // Only a project that still exists is used, as on the web: a project deleted meanwhile is never sent.
-  const selected = list.find((project) => project.id === pickedId) ?? null;
+  const selected = temporary ? null : (list.find((project) => project.id === pickedId) ?? null);
 
   // The drawer highlights this chat's conversation once it exists in the list: the route stays /new, so it is told here.
   useEffect(() => {
@@ -47,10 +56,12 @@ function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
   const badgeProject = title !== DEFAULT_TITLE ? selected : null;
   useLayoutEffect(() => {
     navigation.setOptions({
-      title,
-      headerTitle: () => <ConversationTitleBar title={title} project={badgeProject} />,
+      title: temporary ? TEMPORARY_CHAT_TITLE : title,
+      headerTitle: () =>
+        temporary ? <TemporaryChatTitle mode={temporary} /> : <ConversationTitleBar title={title} project={badgeProject} />,
+      headerRight: started ? undefined : () => <TemporaryChatButton value={temporary} onChange={setTemporary} />,
     });
-  }, [navigation, title, badgeProject]);
+  }, [navigation, title, badgeProject, temporary, started]);
 
   return (
     <ChatScreen
@@ -60,13 +71,19 @@ function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
       onTitle={setTitle}
       projectId={selected?.id ?? null}
       projectColor={selected?.color ?? null}
+      temporary={temporary}
+      onStarted={onStarted}
       projectPicker={
-        <ProjectPicker
-          projects={list}
-          selected={selected}
-          onSelect={(projectId) => setPickedId(projectId)}
-          onRemove={() => setPickedId(null)}
-        />
+        temporary ? (
+          <TemporaryChatNotice mode={temporary} />
+        ) : (
+          <ProjectPicker
+            projects={list}
+            selected={selected}
+            onSelect={(projectId) => setPickedId(projectId)}
+            onRemove={() => setPickedId(null)}
+          />
+        )
       }
     />
   );

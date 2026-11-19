@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useChatRuntime } from "@assistant-ui/ai-sdk";
 import type { UIMessage } from "ai";
 import { authorizedStreamFetch } from "@/lib/api";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 import { usePreferences } from "@/preferences";
 import { useAuth } from "@/auth";
 import { conversationsKey, messagesKey, projectConversationsKey } from "@/queries/conversations";
@@ -22,6 +23,8 @@ export interface ArtemisRuntimeOptions {
   onTitle?: (title: string) => void;
   /** The project selected in a new chat, or null. Sent with the first message, which creates the conversation. */
   projectId?: string | null;
+  /** The temporary mode of the chat, or null for a normal chat. Sent with the first message, which creates the conversation. */
+  temporary?: TemporaryMode | null;
 }
 
 /**
@@ -37,6 +40,7 @@ export function useArtemisRuntime({
   activeStreamId = null,
   onTitle,
   projectId = null,
+  temporary = null,
 }: ArtemisRuntimeOptions) {
   const queryClient = useQueryClient();
   const { preferences } = usePreferences();
@@ -45,11 +49,14 @@ export function useArtemisRuntime({
   const base = state.status === "signedIn" ? state.serverUrl : "";
   const effort = preferences.reasoningEffort;
 
-  // The transport is built once per conversation, so the selected project reaches it through a ref (as on the web).
+  // The transport is built once per conversation, so the selected project and temporary mode reach it through refs (as on
+  // the web).
   const projectRef = useRef(projectId);
+  const temporaryRef = useRef(temporary);
   useEffect(() => {
     projectRef.current = projectId;
-  }, [projectId]);
+    temporaryRef.current = temporary;
+  }, [projectId, temporary]);
 
   // Built once per conversation: a later refresh must not reset the storage of a turn in progress.
   const resumable = useMemo(() => createConversationResumableStorage(activeStreamId), [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -61,7 +68,8 @@ export function useArtemisRuntime({
         api: `${base}/api/chat`,
         fetch: authorizedStreamFetch,
         prepareSendMessagesRequest: ({ messages, trigger, messageId }) => ({
-          // projectId only matters to the message that creates the conversation; the server ignores it otherwise.
+          // projectId and temporary only matter to the message that creates the conversation; the server ignores them
+          // otherwise.
           body: {
             id: conversationId,
             messages,
@@ -69,6 +77,7 @@ export function useArtemisRuntime({
             messageId,
             config: { reasoningEffort: effort },
             projectId: projectRef.current,
+            temporary: temporaryRef.current,
           },
         }),
         resumable: {

@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import type { TemporaryMode } from "../../lib/temporary-chat";
 
 // Users, their conversations and their messages. Messages store the AI SDK UIMessage parts as JSON,
 // so every step (text, reasoning, tool calls and their results) is kept as it streamed.
@@ -79,6 +80,12 @@ export const conversations = pgTable(
     // Set when the owner archives the conversation: it leaves the list but keeps its messages. Null while it is listed.
     // Sending a message to an archived conversation clears it again.
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    // Set for a temporary chat (see lib/temporary-chat.ts): never listed, never saved to memory, never named, and
+    // deleted once no client has kept it alive for an hour. Null for every other conversation.
+    temporary: text("temporary").$type<TemporaryMode>(),
+    // When a client last showed this temporary chat (it calls /api/conversations/<id>/keepalive while it is open), or
+    // when a turn last touched it. Null for other conversations.
+    keptAliveAt: timestamp("kept_alive_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

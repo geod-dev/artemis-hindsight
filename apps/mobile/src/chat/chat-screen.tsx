@@ -2,7 +2,9 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react-native";
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
 import { paletteHex } from "@/lib/avatar";
+import type { TemporaryMode } from "@/lib/temporary-chat";
 import { ConversationIdProvider } from "./conversation-context";
+import { TemporaryChatKeepAlive, ThreadStartWatcher } from "./temporary-chat";
 import { useArtemisRuntime } from "./use-artemis-runtime";
 import { ThreadView } from "./thread-view";
 
@@ -18,8 +20,15 @@ export interface ChatScreenProps {
   projectId?: string | null;
   /** The project's palette color: the mascot of the empty chat takes it. */
   projectColor?: string | null;
-  /** The project picker of a new chat. Shown in the empty chat only, under the mascot and above the composer. */
+  /**
+   * What the empty chat shows under the mascot, above the composer: the new chat's project picker, or the temporary chat's
+   * notice.
+   */
   projectPicker?: ReactNode;
+  /** The temporary mode of the chat, or null for a normal chat. A temporary chat is kept alive while it is shown. */
+  temporary?: TemporaryMode | null;
+  /** Called once the chat has its first message. */
+  onStarted?: () => void;
 }
 
 /** One chat session bound to a conversation id: the runtime, then the thread (messages and composer). */
@@ -32,11 +41,23 @@ export function ChatScreen({
   projectId = null,
   projectColor = null,
   projectPicker,
+  temporary = null,
+  onStarted,
 }: ChatScreenProps) {
-  const runtime = useArtemisRuntime({ conversationId, initialMessages, isNewConversation, activeStreamId, onTitle, projectId });
+  const runtime = useArtemisRuntime({
+    conversationId,
+    initialMessages,
+    isNewConversation,
+    activeStreamId,
+    onTitle,
+    projectId,
+    temporary,
+  });
   return (
     <ConversationIdProvider value={conversationId}>
       <AssistantRuntimeProvider runtime={runtime}>
+        {temporary ? <TemporaryChatKeepAlive conversationId={conversationId} /> : null}
+        {onStarted ? <ThreadStartWatcher onStarted={onStarted} /> : null}
         <ThreadView
           conversationId={conversationId}
           projectId={projectId}

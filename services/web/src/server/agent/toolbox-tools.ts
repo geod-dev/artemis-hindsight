@@ -1,13 +1,17 @@
 import { jsonSchema, tool, type JSONValue, type ToolSet } from "ai";
 import { invokeToolboxTool, listToolboxTools } from "../clients/toolbox-client";
 
+/** The toolbox's memory tools (services/toolbox/src/tools/memory.ts). They read the user's Hindsight bank. */
+const MEMORY_TOOLS = new Set(["recall", "reflect"]);
+
 /**
  * Turns the toolbox registry into AI SDK tools for one conversation.
  * Every tool call is forwarded to the toolbox with the conversation id as the sandbox session and the user's
- * username, which the memory tools use as their Hindsight bank.
+ * username, which the memory tools use as their Hindsight bank. Without a username (an unpersonalized temporary chat),
+ * the memory tools are left out and the toolbox is never told who the user is.
  */
-export async function buildToolboxTools(sessionId: string, username: string): Promise<ToolSet> {
-  const definitions = await listToolboxTools();
+export async function buildToolboxTools(sessionId: string, username: string | null): Promise<ToolSet> {
+  const definitions = (await listToolboxTools()).filter((definition) => username || !MEMORY_TOOLS.has(definition.name));
 
   const entries = definitions.map((definition) => [
     definition.name,
@@ -15,7 +19,7 @@ export async function buildToolboxTools(sessionId: string, username: string): Pr
       description: definition.description,
       inputSchema: jsonSchema(definition.inputSchema as Parameters<typeof jsonSchema>[0]),
       execute: async (input: unknown) => {
-        const result = await invokeToolboxTool(definition.name, input, { sessionId, username });
+        const result = await invokeToolboxTool(definition.name, input, { sessionId, ...(username ? { username } : {}) });
         if (!result.ok) throw new Error(result.error);
         return result.output;
       },

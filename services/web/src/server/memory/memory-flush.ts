@@ -12,6 +12,7 @@ import { CONVERSATION_STRATEGY, ensureBankTemplate } from "./bank-template";
 // A message is retained once: messages.memorized_at records when it reached the bank. A flush sends every message
 // of one conversation that is not in memory yet, as one retain call. Each user has at most one active conversation;
 // it is flushed when another conversation of the user receives a message, or after an hour without a new user message.
+// Temporary chats never reach the bank: they are never made active, and a flush of one sends nothing.
 
 /** A conversation that has been silent this long is flushed. */
 export const IDLE_FLUSH_MS = 60 * 60 * 1000;
@@ -126,7 +127,14 @@ export async function flushUnsavedConversations(userId: string, username: string
     .selectDistinct({ id: messages.conversationId })
     .from(messages)
     .innerJoin(conversations, eq(conversations.id, messages.conversationId))
-    .where(and(eq(conversations.userId, userId), isNull(messages.memorizedAt), ne(messages.status, "streaming")));
+    .where(
+      and(
+        eq(conversations.userId, userId),
+        isNull(conversations.temporary),
+        isNull(messages.memorizedAt),
+        ne(messages.status, "streaming"),
+      ),
+    );
   for (const row of rows) await flushConversation(row.id, username);
   return rows.length;
 }
@@ -154,16 +162,21 @@ export async function flushIdleConversations(now = new Date()): Promise<void> {
 /**
  * What Hindsight is told about the transcript: who talks and in which conversation (the retain `context`, which steers
  * extraction), and when the conversation started (the retain `timestamp`, which enables temporal recall).
- * Null when the conversation no longer exists.
+ * Null when the conversation no longer exists, or is a temporary chat, which is never saved to memory.
  */
 async function sourceOf(conversationId: string): Promise<{ context: string; startedAt: Date } | null> {
   const [row] = await getDb()
-    .select({ title: conversations.title, startedAt: conversations.createdAt, project: projects.name })
+    .select({
+      title: conversations.title,
+      startedAt: conversations.createdAt,
+      project: projects.name,
+      temporary: conversations.temporary,
+    })
     .from(conversations)
     .leftJoin(projects, eq(projects.id, conversations.projectId))
     .where(eq(conversations.id, conversationId))
     .limit(1);
-  if (!row) return null;
+  if (!row || row.temporary) return null;
   // The user is not named: the assistant already gets their name and username from the user metadata of every
   // conversation, and a name in the context was copied into the facts ("User (Ismael, username ismou) wants ...").
   // A conversation saved before it was named still carries its placeholder (the start of its first message), which

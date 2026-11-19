@@ -35,6 +35,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       initialTitle={conversation.title}
       activeStreamId={activeStreamOf(id)}
       project={project ? { id: project.id, name: project.name, color: project.color } : null}
+      temporary={conversation.temporary}
     />
   );
 }

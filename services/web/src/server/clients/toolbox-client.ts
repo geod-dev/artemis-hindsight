@@ -26,10 +26,13 @@ export async function listToolboxTools(): Promise<ToolDefinition[]> {
 
 export type ToolboxInvokeResult = { ok: true; output: unknown } | { ok: false; error: string };
 
-/** Who the tool runs for: the conversation's session folder and the user whose memory the memory tools use. */
+/**
+ * Who the tool runs for: the conversation's session folder and the user whose memory the memory tools use. No username
+ * in an unpersonalized temporary chat, where the agent must not know who the user is.
+ */
 export interface ToolCallContext {
   sessionId: string;
-  username: string;
+  username?: string;
 }
 
 export async function invokeToolboxTool(
