@@ -15,12 +15,15 @@ export interface Palette {
   accent: string;
   accentText: string;
   danger: string;
-  /** The user's message bubble: the web's primary colour, with its foreground on top. */
+  /**
+   * The user's message bubble, as on the web (services/web/src/components/chat/user-message.tsx): primary with its
+   * foreground in light mode, a plain muted surface with the normal text in dark mode.
+   */
   user: string;
   onUser: string;
 }
 
-function paletteOf(tokens: Record<ThemeToken, string>): Palette {
+function paletteOf(tokens: Record<ThemeToken, string>, dark: boolean): Palette {
   return {
     background: tokens.background,
     surface: tokens.card,
@@ -31,14 +34,14 @@ function paletteOf(tokens: Record<ThemeToken, string>): Palette {
     accent: tokens.primary,
     accentText: tokens["primary-foreground"],
     danger: tokens.destructive,
-    user: tokens.primary,
-    onUser: tokens["primary-foreground"],
+    user: dark ? tokens.muted : tokens.primary,
+    onUser: dark ? tokens.foreground : tokens["primary-foreground"],
   };
 }
 
 export const palettes: Record<"light" | "dark", Palette> = {
-  light: paletteOf(lightTokens),
-  dark: paletteOf({ ...lightTokens, ...darkTokens }),
+  light: paletteOf(lightTokens, false),
+  dark: paletteOf({ ...lightTokens, ...darkTokens }, true),
 };
 
 interface PreferencesValue {
