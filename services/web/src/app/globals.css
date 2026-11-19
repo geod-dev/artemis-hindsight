@@ -170,3 +170,34 @@
 @custom-variant data-open (&:where([data-state="open"], [data-open]:not([data-open="false"])));
 
 @custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
+/*
+ * Tables in replies (the markdown tables of assistant-ui's markdown-text): transparent and clean. No header background,
+ * no lines between cells, one line under the header row only, text at 14px. Unlayered, so these rules win over the
+ * Tailwind utilities the downloaded markdown-text puts on the same elements, which stays untouched.
+ */
+.aui-md-table {
+  font-size: 14px;
+}
+.aui-md-th {
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+.aui-md-td {
+  border: 0;
+  border-radius: 0;
+}
+.aui-md-tr {
+  border: 0;
+}
+
+/* The sortable tables in replies (assistant-ui's DataTable), the same way: no card around them, text at 14px. */
+[data-slot="data-table"] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+[data-slot="data-table"] th,
+[data-slot="data-table"] td {
+  font-size: 14px;
+}

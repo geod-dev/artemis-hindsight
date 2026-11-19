@@ -9,13 +9,14 @@ import {
 import { cn } from "@/lib/utils";
 
 // Markdown tables render as the registry's DataTable (sortable columns, numbers aligned and formatted). The table
-// component receives the rendered table: sections (thead, tbody), their rows, and the rows' cells. A table with a
-// link in a cell stays a plain markdown table: DataTable cells are plain values, and the link would be lost.
+// component receives the rendered table: sections (thead, tbody), their rows, and the rows' cells. A table with any
+// formatting in a cell (bold, italics, code, a link) stays a plain markdown table: DataTable cells are plain values, and
+// the formatting would be lost. Comparison tables bold their best values, so they are plain tables.
 
 type Props = ComponentPropsWithoutRef<"table">;
 
 const elementsOf = (children: ReactNode) =>
-  Children.toArray(children).filter(isValidElement<{ children?: ReactNode; href?: unknown }>);
+  Children.toArray(children).filter(isValidElement<{ children?: ReactNode }>);
 
 /** The text of rendered cell content, without its formatting. */
 const textOf = (children: ReactNode): string =>
@@ -28,14 +29,14 @@ const textOf = (children: ReactNode): string =>
     .join("")
     .trim();
 
-const holdsLink = (children: ReactNode): boolean =>
-  elementsOf(children).some((child) => typeof child.props.href === "string" || holdsLink(child.props.children));
-
-/** The table's rows, each a list of cell texts, header row first. */
-const rowsOf = (children: ReactNode): string[][] =>
+/** The table's cells, header row first: each row a list of the cells' rendered content. */
+const cellsOf = (children: ReactNode): ReactNode[][] =>
   elementsOf(children).flatMap((section) =>
-    elementsOf(section.props.children).map((row) => elementsOf(row.props.children).map((cell) => textOf(cell.props.children))),
+    elementsOf(section.props.children).map((row) => elementsOf(row.props.children).map((cell) => cell.props.children)),
   );
+
+/** True when a cell holds formatting: its content has an element (strong, em, code, a link), not only text. */
+const isFormatted = (content: ReactNode) => elementsOf(content).length > 0;
 
 // Plain numbers only (1234, -3.5): "1 234" or "1,234" read differently by locale, so they stay text.
 const NUMBER = /^-?\d+(\.\d+)?$/;
@@ -48,8 +49,10 @@ const PlainTable: FC<Props> = ({ className, ...props }) => (
 );
 
 export const MarkdownDataTable: FC<Props> = (props) => {
-  const [header, ...body] = rowsOf(props.children);
-  if (!header || header.length === 0 || body.length === 0 || holdsLink(props.children)) return <PlainTable {...props} />;
+  const cells = cellsOf(props.children);
+  if (cells.some((row) => row.some(isFormatted))) return <PlainTable {...props} />;
+  const [header, ...body] = cells.map((row) => row.map(textOf));
+  if (!header || header.length === 0 || body.length === 0) return <PlainTable {...props} />;
 
   const keys = header.map((_, index) => `c${index}`);
   const numeric = keys.map((_, column) => body.every((row) => (row[column] ?? "") === "" || NUMBER.test(row[column] ?? "")));
