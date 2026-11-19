@@ -4,6 +4,7 @@ import path from "node:path";
  * Where the agent's files live.
  *   <dataRoot>/sessions/<sessionId>/              one conversation: default folder for bash, read, write and edit
  *   <dataRoot>/sessions/<sessionId>/attachments/  files the user uploaded in that conversation
+ *   <dataRoot>/sessions/<sessionId>/images/       images the agent generated in that conversation
  *   <workspaceRoot>/<username>/                   one user's workspace, shared by all of that user's conversations
  *   <workspaceRoot>/<username>/projects/<id>/     one project's folder, shared by the conversations of that project
  */
@@ -18,6 +19,10 @@ export function sessionDir(roots: Roots, sessionId: string): string {
 
 export function attachmentsDir(roots: Roots, sessionId: string): string {
   return path.join(sessionDir(roots, sessionId), "attachments");
+}
+
+export function imagesDir(roots: Roots, sessionId: string): string {
+  return path.join(sessionDir(roots, sessionId), "images");
 }
 
 export function workspaceDir(roots: Roots, username: string): string {

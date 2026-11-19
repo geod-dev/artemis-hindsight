@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { Check, ChevronDown, Image as ImageIcon, X } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 import { baseName } from "@/lib/sandbox-files";
 
@@ -19,11 +19,15 @@ const FILE_VERBS: Record<string, { running: string; done: string }> = {
   edit: { running: "Editing", done: "Edited" },
 };
 
-/** The step's line: the description the model gave, or the file it works on for the file tools. */
+// The toolbox's image generation tool. Same name and line as services/web/src/components/chat/image-tool.tsx.
+export const IMAGE_TOOL = "generate_image";
+
+/** The step's line: the description the model gave, the file it works on for the file tools, or the image it draws. */
 function labelOf(call: ToolCall, finished: boolean): string {
   const args = (call.args ?? {}) as Record<string, unknown>;
   const verbs = FILE_VERBS[call.toolName];
   if (verbs && typeof args.path === "string") return `${finished ? verbs.done : verbs.running} ${baseName(args.path)}`;
+  if (call.toolName === IMAGE_TOOL) return finished ? "Generated image" : "Generating image";
   if (typeof args.description === "string" && args.description.trim()) return args.description.trim();
   return `Ran ${call.toolName}`;
 }
@@ -75,6 +79,8 @@ export function ToolPart({ part }: { part: ToolCall }) {
             <ActivityIndicator size="small" color={colors.muted} />
           ) : failed ? (
             <X size={14} color={colors.danger} />
+          ) : part.toolName === IMAGE_TOOL ? (
+            <ImageIcon size={14} color={colors.muted} />
           ) : (
             <Check size={14} color={colors.muted} />
           )}

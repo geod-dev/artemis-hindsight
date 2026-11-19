@@ -2,13 +2,14 @@ import { useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
 import Markdown, { Renderer, type MarkedStyles } from "react-native-marked";
 import { usePreferences } from "@/preferences";
-import { parseSandboxFileHref } from "@/lib/sandbox-files";
+import { baseName, mediaTypeOf, parseSandboxFileHref } from "@/lib/sandbox-files";
 import { renderVisual, VISUAL_LANGUAGES } from "../visuals";
 import { useConversationId } from "../conversation-context";
 import { openSandboxFile } from "./file-part";
 import { groupSourceLinks, parseSourceHref } from "../source-links";
 import { SourceBadge } from "./source-badge";
 import { SandboxFileCard } from "./sandbox-file-card";
+import { SandboxImage } from "./sandbox-image";
 import { CodeBlock } from "./code-block";
 
 // Headings sized closer to the body text, and no rule under them: the library draws a 1px border under h1 and h2 by default.
@@ -30,8 +31,8 @@ type Segment =
 const FILE_LINK = /\[([^\]\n]*)\]\(\s*<?(#sandbox-file:[^)\s>]+)>?\s*\)/g;
 
 /**
- * Takes the sandbox file links out of the markdown: each becomes a file card between the text around it, as the web app
- * draws them (a card is a block, it cannot sit inside a sentence on the phone).
+ * Takes the sandbox file links out of the markdown: each becomes a file card, or the picture for an image, between the
+ * text around it, as the web app draws them (a card is a block, it cannot sit inside a sentence on the phone).
  */
 function splitFiles(segments: Segment[]): Segment[] {
   const out: Segment[] = [];
@@ -174,7 +175,11 @@ export function TextPart({ text }: { text: string }) {
         segment.kind === "visual" ? (
           <View key={index}>{renderVisual(segment.language, segment.code, segment.closed)}</View>
         ) : segment.kind === "file" ? (
-          <SandboxFileCard key={index} conversationId={conversationId} path={segment.path} />
+          mediaTypeOf(baseName(segment.path)).startsWith("image/") ? (
+            <SandboxImage key={index} conversationId={conversationId} path={segment.path} />
+          ) : (
+            <SandboxFileCard key={index} conversationId={conversationId} path={segment.path} />
+          )
         ) : (
           <Markdown
             key={index}

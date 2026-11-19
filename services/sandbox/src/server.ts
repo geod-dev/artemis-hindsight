@@ -1,7 +1,8 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import {
   MAX_ATTACHMENT_BYTES,
+  MAX_SERVED_FILE_BYTES,
   execRequestSchema,
   fsEditRequestSchema,
   fsReadRequestSchema,
@@ -13,7 +14,7 @@ import {
   usernameSchema,
 } from "@artemis/contracts";
 import { SkillError, installSkill, listSkills, removeSkill } from "./skills.js";
-import { saveAttachment, AttachmentError } from "./attachments.js";
+import { SessionFileError, saveAttachment, saveGeneratedImage } from "./session-files.js";
 import { runCommand } from "./exec.js";
 import { FileError, editForAgent, readForAgent, serveFile, writeForAgent } from "./files.js";
 import {
@@ -46,15 +47,18 @@ app.post("/exec", async (c) => {
   return c.json(result);
 });
 
-// Stores an uploaded file in the session's attachments folder. The body is the raw file.
-app.post("/sessions/:sessionId/attachments", async (c) => {
+/**
+ * Receives a raw file body for a session and stores it with `save`. The file name comes, percent-encoded, in the
+ * x-file-name header.
+ */
+async function receiveFile(c: Context, maxBytes: number, save: typeof saveAttachment): Promise<Response> {
   const sessionId = sessionIdSchema.safeParse(c.req.param("sessionId"));
   if (!sessionId.success) return c.json({ error: "invalid session id" }, 400);
 
   const declared = Number(c.req.header("content-length") ?? 0);
-  if (declared > MAX_ATTACHMENT_BYTES) return c.json({ error: "file is too large" }, 413);
+  if (declared > maxBytes) return c.json({ error: "file is too large" }, 413);
 
-  const encodedName = c.req.header("x-attachment-name") ?? "file";
+  const encodedName = c.req.header("x-file-name") ?? "file";
   let name = encodedName;
   try {
     name = decodeURIComponent(encodedName);
@@ -64,12 +68,18 @@ app.post("/sessions/:sessionId/attachments", async (c) => {
   const mediaType = c.req.header("content-type") ?? "application/octet-stream";
   const bytes = Buffer.from(await c.req.arrayBuffer());
   try {
-    return c.json(await saveAttachment(roots, sessionId.data, name, bytes, mediaType));
+    return c.json(await save(roots, sessionId.data, name, bytes, mediaType));
   } catch (error) {
-    if (error instanceof AttachmentError) return c.json({ error: error.message }, 422);
+    if (error instanceof SessionFileError) return c.json({ error: error.message }, 422);
     throw error;
   }
-});
+}
+
+// Stores an uploaded file in the session's attachments folder. The body is the raw file.
+app.post("/sessions/:sessionId/attachments", (c) => receiveFile(c, MAX_ATTACHMENT_BYTES, saveAttachment));
+
+// Stores an image the agent generated in the session's images folder. The body is the raw image.
+app.post("/sessions/:sessionId/images", (c) => receiveFile(c, MAX_SERVED_FILE_BYTES, saveGeneratedImage));
 
 // Serves a file from the session (or /workspace) for previews and downloads.
 app.get("/sessions/:sessionId/files", async (c) => {

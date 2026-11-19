@@ -12,6 +12,7 @@ import type { MessagePrimitive } from "@assistant-ui/react";
 import { ToolEntry } from "./tool-entry";
 import { FILE_TOOLS, fileToolDetails, fileToolDoneIcon, fileToolLabel } from "./file-tool";
 import { EXA_TOOLS, exaToolView } from "./exa-tool";
+import { IMAGE_TOOL, ImageGenerationPlaceholder, imageToolView } from "./image-tool";
 import { ThinkingLabel, thinkingText } from "./thinking-label";
 import {
   asRecord,
@@ -99,11 +100,14 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
     const isFile = FILE_TOOLS.has(part.toolName);
     // Exa calls show the query or the page title as label, with their own icon and result text.
     const exa = EXA_TOOLS.has(part.toolName) ? exaToolView(part.toolName, args, part.result) : undefined;
+    const image = part.toolName === IMAGE_TOOL ? imageToolView(finished) : undefined;
     const description =
       typeof args.description === "string" && args.description.trim()
         ? args.description.trim()
         : `Ran ${part.toolName}`;
-    const label = isFile ? fileToolLabel(part.toolName, args.path, finished) : (exa?.label ?? description);
+    const label = isFile
+      ? fileToolLabel(part.toolName, args.path, finished)
+      : (exa?.label ?? image?.label ?? description);
     const command = typeof args.command === "string" ? args.command : safeStringify(part.args);
     // File calls expand to a code diff; a failed call keeps the plain request and result, to show the error.
     const details = isFile && !failed ? fileToolDetails(part.toolName, args, part.result, finished) : undefined;
@@ -120,7 +124,7 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
             running={messageRunning && !finished}
             failed={failed}
             doneIcon={isFile ? fileToolDoneIcon(part.toolName) : "check"}
-            icon={exa?.icon}
+            icon={exa?.icon ?? image?.icon}
             details={details}
           />
         ),
@@ -130,16 +134,30 @@ export const RunActivityGroup: FC<PropsWithChildren<{ group: MessagePrimitive.Gr
 
   const status: RunActivityStatus = messageRunning ? "running" : "complete";
 
+  // Under the run, each image of this run still being generated shows as a generating frame. A stopped message has
+  // none: its calls will never return.
+  const generatingImages = group.indices.flatMap((index) => {
+    const part = parts[index];
+    if (!messageRunning || part?.type !== "tool-call" || part.toolName !== IMAGE_TOOL || part.result !== undefined) return [];
+    const prompt = asRecord(part.args).prompt;
+    return [{ id: part.toolCallId, prompt: typeof prompt === "string" ? prompt : "" }];
+  });
+
   return (
-    <RunActivity
-      status={status}
-      statusLabel={working ? "Working" : "Worked for"}
-      durationLabel={durationMs === undefined ? undefined : formatDuration(durationMs)}
-      entries={entries}
-      open={open}
-      onOpenChange={setOpen}
-      className={open ? "mb-2" : undefined}
-    />
+    <>
+      <RunActivity
+        status={status}
+        statusLabel={working ? "Working" : "Worked for"}
+        durationLabel={durationMs === undefined ? undefined : formatDuration(durationMs)}
+        entries={entries}
+        open={open}
+        onOpenChange={setOpen}
+        className={open ? "mb-2" : undefined}
+      />
+      {generatingImages.map((image) => (
+        <ImageGenerationPlaceholder key={image.id} prompt={image.prompt} />
+      ))}
+    </>
   );
 };
 

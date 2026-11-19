@@ -11,7 +11,7 @@ import {
   type FC,
   type ReactNode,
 } from "react";
-import { DownloadIcon, EyeIcon, Loader2Icon } from "lucide-react";
+import { DownloadIcon, Loader2Icon } from "lucide-react";
 import { File } from "@/components/assistant-ui/elements/file";
 import {
   absoluteUrl,
@@ -22,7 +22,8 @@ import {
 } from "@/lib/sandbox-files";
 import { cn } from "@/lib/utils";
 import { ConversationIdContext } from "./conversation-context";
-import { FileThumb, ImagePreview, fileKind, fileMeta, isImageFile } from "./file-kind";
+import { FileThumb, fileKind, fileMeta, isImageFile } from "./file-kind";
+import { SandboxImage } from "./sandbox-image";
 
 /**
  * Fetches the file and saves it, so the card knows when the bytes have arrived (a plain download link
@@ -45,19 +46,33 @@ async function downloadFile(url: string, name: string): Promise<void> {
 }
 
 /**
- * A file in a reply, drawn like the composer's chips: type tile (or thumbnail), name, type. The whole card
- * is the action: an image opens the preview, any other file downloads (with a spinner until it is saved).
+ * A file in a reply, drawn like the composer's chips: type tile, name, type. The whole card downloads the file,
+ * with a spinner until it is saved.
  */
 const FileCard: FC<{ name: string; mimeType: string; url: string }> = ({ name, mimeType, url }) => {
   const kind = fileKind(name, mimeType);
-  const isImage = isImageFile(name, mimeType);
   const [downloading, setDownloading] = useState(false);
-  const ActionIcon = isImage ? EyeIcon : downloading ? Loader2Icon : DownloadIcon;
-  const className =
-    "[--tile-radius:0.375rem] bg-muted/50 hover:bg-muted border-foreground/10 not-prose my-1 flex w-fit max-w-72 items-center gap-2.5 rounded-xl border p-1.5 pr-2.5 text-left no-underline transition-colors active:scale-[0.99]";
-  const body = (
-    <>
-      <FileThumb src={isImage ? url : undefined} kind={kind} />
+  const ActionIcon = downloading ? Loader2Icon : DownloadIcon;
+  return (
+    <a
+      href={url}
+      download={name}
+      aria-label={downloading ? `Downloading ${name}` : `Download ${name}`}
+      aria-busy={downloading}
+      className={cn(
+        "[--tile-radius:0.375rem] bg-muted/50 hover:bg-muted border-foreground/10 not-prose my-1 flex w-fit max-w-72 items-center gap-2.5 rounded-xl border p-1.5 pr-2.5 text-left no-underline transition-colors active:scale-[0.99]",
+        downloading && "cursor-progress",
+      )}
+      onClick={(event) => {
+        // Modified clicks (new tab, save as) stay with the browser.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (downloading) return;
+        setDownloading(true);
+        void downloadFile(url, name).finally(() => setDownloading(false));
+      }}
+    >
+      <FileThumb src={undefined} kind={kind} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-foreground truncate text-xs font-medium" title={name}>
           {name}
@@ -71,43 +86,14 @@ const FileCard: FC<{ name: string; mimeType: string; url: string }> = ({ name, m
         )}
         aria-hidden
       />
-    </>
-  );
-
-  if (isImage) {
-    return (
-      <ImagePreview src={url} name={name}>
-        <button type="button" aria-label={`Preview ${name}`} className={cn(className, "cursor-zoom-in")}>
-          {body}
-        </button>
-      </ImagePreview>
-    );
-  }
-
-  return (
-    <a
-      href={url}
-      download={name}
-      aria-label={downloading ? `Downloading ${name}` : `Download ${name}`}
-      aria-busy={downloading}
-      className={cn(className, downloading && "cursor-progress")}
-      onClick={(event) => {
-        // Modified clicks (new tab, save as) stay with the browser.
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        if (downloading) return;
-        setDownloading(true);
-        void downloadFile(url, name).finally(() => setDownloading(false));
-      }}
-    >
-      {body}
     </a>
   );
 };
 
 /**
  * Renders a link the agent wrote as a file: [label](#sandbox-file:<path>). The path is absolute or
- * relative to the session folder. It shows as a downloadable file card; every other link stays a link.
+ * relative to the session folder. An image shows as the picture, any other file as a downloadable file card;
+ * every other link stays a link.
  *
  * The first render is always the plain link, on the server and on the client, so the markup
  * matches during hydration. The card replaces it once the component has mounted.
@@ -136,7 +122,10 @@ export const SandboxFileLink: FC<AnchorHTMLAttributes<HTMLAnchorElement>> = ({ h
     return <File type="file" status={{ type: "complete" }} filename={name} mimeType={mimeType} data={url} sourceType="url" />;
   }
 
-  return <FileCard name={name} mimeType={mimeType} url={url} />;
+  const card = <FileCard name={name} mimeType={mimeType} url={url} />;
+  // An image shows as the picture itself; the card stays as its fallback when the picture cannot load.
+  if (isImageFile(name, mimeType)) return <SandboxImage name={name} url={url} fallback={card} />;
+  return card;
 };
 
 /** True when a sandbox file link sits anywhere inside these children. */

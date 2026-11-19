@@ -9,7 +9,7 @@
 #
 # Required: POSTGRES_PASSWORD, ANTHROPIC_API_KEY, AUTH_SECRET (32+ chars), ADMIN_ACCESS_KEY (16+ chars).
 # POSTGRES_PASSWORD goes inside DATABASE_URL: use letters and digits only (e.g. openssl rand -hex 32).
-# Optional: GROQ_API_KEY (dictation), BRAVE_API_KEY and BRAVE_REQUESTS_PER_SECOND (image groups), GITHUB_TOKEN (skill marketplaces), CHAT_MODEL, TITLE_MODEL, MAX_AGENT_STEPS, MEMORY_RECALL_BUDGET,
+# Optional: GROQ_API_KEY (dictation), OPENAI_API_KEY (image generation), BRAVE_API_KEY and BRAVE_REQUESTS_PER_SECOND (image groups), GITHUB_TOKEN (skill marketplaces), CHAT_MODEL, TITLE_MODEL, MAX_AGENT_STEPS, MEMORY_RECALL_BUDGET,
 # MEMORY_RECALL_MAX_TOKENS. The agent's recall tool budget is fixed in this file (MEMORY_TOOL_RECALL_BUDGET: mid).
 
 services:
@@ -110,6 +110,7 @@ services:
       HINDSIGHT_URL: http://hindsight:8888  # the memory tools: recall, reflect
       MEMORY_TOOL_RECALL_BUDGET: mid  # the agent's recall tool searches at medium effort (the automatic recall is low)
       EXA_API_KEY: ${EXA_API_KEY:-}  # optional: enables the Exa MCP tools
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}  # optional: enables the generate_image tool (GPT Image 2)
     depends_on:
       sandbox:
         condition: service_healthy

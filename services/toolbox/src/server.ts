@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import OpenAI from "openai";
 import { sessionIdSchema, toolInvokeRequestSchema } from "@artemis/contracts";
 import { ToolInputError, ToolNotFoundError, ToolRegistry } from "./registry.js";
 import { McpManager } from "./mcp/manager.js";
@@ -7,6 +8,7 @@ import { mcpServersFromEnv } from "./mcp/servers.js";
 import { SandboxClient } from "./sandbox-client.js";
 import { createBashTool } from "./tools/bash.js";
 import { createEditTool } from "./tools/edit.js";
+import { createGenerateImageTool } from "./tools/generate-image.js";
 import { createMemoryTools } from "./tools/memory.js";
 import { createReadTool } from "./tools/read.js";
 import { createWriteTool } from "./tools/write.js";
@@ -17,12 +19,18 @@ const sandboxUrl = process.env.SANDBOX_URL ?? "http://sandbox:8080";
 
 const sandbox = new SandboxClient(sandboxUrl);
 const hindsight = new HindsightClient(hindsightFromEnv(process.env));
+// Image generation is offered only with an OpenAI key. No retries: a slow generation retried could outlast the
+// web app's wait for the tool, and the agent can call the tool again itself.
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 300_000, maxRetries: 0 })
+  : undefined;
 const registry = new ToolRegistry([
   createBashTool(sandbox),
   createReadTool(sandbox),
   createWriteTool(sandbox),
   createEditTool(sandbox),
   ...createMemoryTools(hindsight),
+  ...(openai ? [createGenerateImageTool(sandbox, openai)] : []),
 ]);
 
 // MCP servers add their tools to the registry as they connect. The toolbox serves its local tools meanwhile.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -30,32 +30,44 @@ export async function openSandboxFile(conversationId: string, path: string): Pro
   }
 }
 
+/** The source of a picture on the server: loaded with the session. */
+export function serverImageSource(url: string): ImageSourcePropType {
+  return { uri: absoluteUrl(url), headers: authHeaders() };
+}
+
+/** A picture full screen, over a dark backdrop. The close button, or a tap outside the picture, closes it. */
+export function ImageLightbox({ source, visible, onClose }: { source: ImageSourcePropType; visible: boolean; onClose: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={styles.fullscreen}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close image" />
+        <Image source={source} resizeMode="contain" style={styles.fullImage} />
+        <SafeAreaView style={styles.closeBar} edges={["top"]} pointerEvents="box-none">
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} style={styles.closeButton}>
+            <X size={22} color="#ffffff" />
+          </Pressable>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
 /**
  * An image in a message (the uploaded picture, or one the agent produced): a square rounded thumbnail. A tap opens it
- * full screen; the close button, or a tap outside the picture, closes it. Loaded with the session.
+ * full screen. Loaded with the session.
  */
 export function ImagePart({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
   const { colors } = usePreferences();
-  const source = { uri: absoluteUrl(url), headers: authHeaders() };
+  const source = serverImageSource(url);
   if (failed) return <Text style={{ color: colors.muted }}>Image unavailable</Text>;
   return (
     <>
       <Pressable onPress={() => setOpen(true)} accessibilityRole="imagebutton" accessibilityLabel="Open image" style={styles.thumb}>
         <Image source={source} onError={() => setFailed(true)} style={styles.thumbImage} accessibilityLabel="Image" />
       </Pressable>
-      <Modal visible={open} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setOpen(false)}>
-        <View style={styles.fullscreen}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Close image" />
-          <Image source={source} resizeMode="contain" style={styles.fullImage} />
-          <SafeAreaView style={styles.closeBar} edges={["top"]} pointerEvents="box-none">
-            <Pressable onPress={() => setOpen(false)} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} style={styles.closeButton}>
-              <X size={22} color="#ffffff" />
-            </Pressable>
-          </SafeAreaView>
-        </View>
-      </Modal>
+      <ImageLightbox source={source} visible={open} onClose={() => setOpen(false)} />
     </>
   );
 }

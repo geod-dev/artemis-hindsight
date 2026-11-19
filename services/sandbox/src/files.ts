@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   MAX_ATTACHMENT_BYTES,
+  MAX_SERVED_FILE_BYTES,
   type FsEditRequest,
   type FsEditResult,
   type FsReadRequest,
@@ -151,7 +152,7 @@ export async function serveFile(
   return guarded(async () => {
     const stat = await fs.stat(absolute);
     if (stat.isDirectory()) throw new FileError("path is a directory, not a file");
-    if (stat.size > MAX_ATTACHMENT_BYTES * 4) throw new FileError("file is too large to download here");
+    if (stat.size > MAX_SERVED_FILE_BYTES) throw new FileError("file is too large to download here");
     const bytes = await fs.readFile(absolute);
     const ext = path.extname(absolute).toLowerCase();
     const mediaType = IMAGE_MEDIA_TYPES[ext] ?? MEDIA_TYPES[ext] ?? "application/octet-stream";

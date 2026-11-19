@@ -1,11 +1,11 @@
 import {
-  attachmentSavedSchema,
   installedSkillListSchema,
   installedSkillSchema,
+  savedFileSchema,
   toolDefinitionSchema,
   toolInvokeResponseSchema,
-  type AttachmentSaved,
   type InstalledSkill,
+  type SavedFile,
   type SkillInstallRequest,
   type ToolDefinition,
 } from "@artemis/contracts";
@@ -57,7 +57,7 @@ export async function uploadAttachment(
   name: string,
   bytes: ArrayBuffer,
   mediaType: string,
-): Promise<AttachmentSaved> {
+): Promise<SavedFile> {
   const res = await fetch(new URL(`/sessions/${encodeURIComponent(sessionId)}/attachments`, getConfig().TOOLBOX_URL), {
     method: "POST",
     headers: { "content-type": mediaType, "x-attachment-name": encodeURIComponent(name) },
@@ -66,7 +66,7 @@ export async function uploadAttachment(
   });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new Error(errorMessage(body, res.status));
-  return attachmentSavedSchema.parse(body);
+  return savedFileSchema.parse(body);
 }
 
 /** Reads a session file. Returns null when it does not exist. */

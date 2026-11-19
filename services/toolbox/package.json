@@ -15,6 +15,7 @@
     "@hono/node-server": "^2.1.6",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "hono": "^4.13.17",
+    "openai": "^7.60.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -1,10 +1,9 @@
 import {
-  attachmentSavedSchema,
   execResultSchema,
   fsEditResultSchema,
   fsReadResultSchema,
   fsWriteResultSchema,
-  type AttachmentSaved,
+  savedFileSchema,
   type ExecResult,
   type FsEditRequest,
   type FsEditResult,
@@ -12,6 +11,7 @@ import {
   type FsReadResult,
   type FsWriteRequest,
   type FsWriteResult,
+  type SavedFile,
 } from "@artemis/contracts";
 
 /** Thin HTTP client for the sandbox service. The toolbox is its only caller. */
@@ -35,16 +35,14 @@ export class SandboxClient {
     return fsEditResultSchema.parse(await (await this.post("/fs/edit", input)).json());
   }
 
-  /** Stores an uploaded file. The body is the raw file bytes. */
-  async saveAttachment(sessionId: string, name: string, bytes: ArrayBuffer, mediaType: string): Promise<AttachmentSaved> {
-    const res = await fetch(new URL(`/sessions/${encodeURIComponent(sessionId)}/attachments`, this.baseUrl), {
-      method: "POST",
-      headers: { "content-type": mediaType, "x-attachment-name": encodeURIComponent(name) },
-      body: bytes,
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) throw new Error(await this.errorMessage(res));
-    return attachmentSavedSchema.parse(await res.json());
+  /** Stores an uploaded file in the session's attachments folder. */
+  async saveAttachment(sessionId: string, name: string, bytes: ArrayBuffer, mediaType: string): Promise<SavedFile> {
+    return this.saveFile(sessionId, "attachments", name, bytes, mediaType);
+  }
+
+  /** Stores a generated image in the session's images folder. */
+  async saveImage(sessionId: string, name: string, bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<SavedFile> {
+    return this.saveFile(sessionId, "images", name, bytes, mediaType);
   }
 
   /** Fetches a session file for a preview or download. Returns null when it does not exist. */
@@ -92,6 +90,24 @@ export class SandboxClient {
       ...(body === undefined ? {} : { headers: { "content-type": contentType ?? "application/octet-stream" }, body }),
       signal: AbortSignal.timeout(120_000),
     });
+  }
+
+  /** Stores a file under a free name in one of the session's folders. The body is the raw file bytes. */
+  private async saveFile(
+    sessionId: string,
+    folder: "attachments" | "images",
+    name: string,
+    bytes: ArrayBuffer | Uint8Array<ArrayBuffer>,
+    mediaType: string,
+  ): Promise<SavedFile> {
+    const res = await fetch(new URL(`/sessions/${encodeURIComponent(sessionId)}/${folder}`, this.baseUrl), {
+      method: "POST",
+      headers: { "content-type": mediaType, "x-file-name": encodeURIComponent(name) },
+      body: bytes,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) throw new Error(await this.errorMessage(res));
+    return savedFileSchema.parse(await res.json());
   }
 
   private async send(method: "PUT" | "DELETE", path: string): Promise<void> {

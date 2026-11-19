@@ -4,10 +4,11 @@ import { Text } from "react-native";
 import { usePreferences } from "@/preferences";
 import { RunActivity, type ActivityEntry } from "./activity/run-activity";
 import { FilePart, ImagePart } from "./parts/file-part";
+import { ImageGenerationFrame } from "./parts/image-generation";
 import { ReasoningPart } from "./parts/reasoning-part";
 import { TextPart } from "./parts/text-part";
 import { PendingSpinner, formatDuration, useElapsed } from "./parts/thinking-label";
-import { ToolPart } from "./parts/tool-part";
+import { IMAGE_TOOL, ToolPart } from "./parts/tool-part";
 
 // The parts of a message as the runtime and the server give them: the runtime uses data/mimeType, the server's AI SDK
 // shape uses url/mediaType. Both are read.
@@ -83,7 +84,10 @@ export function MessageParts({ role }: { role: "user" | "assistant" }) {
   );
 }
 
-/** The work of a reply in one RunActivity, with a live clock while it runs ("Working 5s"). */
+/**
+ * The work of a reply in one RunActivity, with a live clock while it runs ("Working 5s"). Under it, each image still being
+ * generated shows as a generating frame, as on the web. A stopped reply has none: its calls will never return.
+ */
 function ActivityGroup({
   parts,
   running,
@@ -107,14 +111,25 @@ function ActivityGroup({
     .filter(({ part }) => (part.type === "text" ? (part.text ?? "").trim() !== "" : part.type === "reasoning" || part.type === "tool-call"))
     .map(({ part, index }) => ({ id: `${index}`, content: renderPart(part, "assistant", index, { running: messageRunning, timing: timingOf(index) }) }));
 
+  const generatingImages = messageRunning
+    ? parts.flatMap((part, index) =>
+        part.type === "tool-call" && part.toolName === IMAGE_TOOL && part.result === undefined ? [index] : [],
+      )
+    : [];
+
   return (
-    <RunActivity
-      statusLabel={running ? "Working" : "Worked for"}
-      durationLabel={durationMs === undefined ? undefined : formatDuration(durationMs)}
-      latest={latestLabel(parts)}
-      running={running}
-      entries={entries}
-    />
+    <>
+      <RunActivity
+        statusLabel={running ? "Working" : "Worked for"}
+        durationLabel={durationMs === undefined ? undefined : formatDuration(durationMs)}
+        latest={latestLabel(parts)}
+        running={running}
+        entries={entries}
+      />
+      {generatingImages.map((index) => (
+        <ImageGenerationFrame key={index} />
+      ))}
+    </>
   );
 }
 
@@ -124,6 +139,7 @@ function latestLabel(parts: Part[]): string | undefined {
     const part = parts[index];
     if (!part) continue;
     if (part.type === "tool-call") {
+      if (part.toolName === IMAGE_TOOL) return part.result === undefined ? "Generating image" : "Generated image";
       const args = (part.args ?? {}) as Record<string, unknown>;
       return typeof args.description === "string" && args.description.trim() ? args.description.trim() : `Ran ${part.toolName ?? "tool"}`;
     }

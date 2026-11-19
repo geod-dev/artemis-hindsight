@@ -27,16 +27,19 @@ export type ExecResult = z.infer<typeof execResultSchema>;
 // Limits shared by the web app, the toolbox and the sandbox.
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_FILE_CHARS = 5_000_000;
+// The largest file the sandbox serves for a preview or download, and the largest generated image it stores.
+export const MAX_SERVED_FILE_BYTES = 20 * 1024 * 1024;
 
-// Attachments are stored in <session>/attachments/ by the sandbox. Their paths are relative to the session folder.
-export const attachmentSavedSchema = z.object({
+// A file the sandbox stored under a free name in a session folder: an upload in <session>/attachments/, or a generated
+// image in <session>/images/. Its path is relative to the session folder.
+export const savedFileSchema = z.object({
   name: z.string(),
-  path: z.string(), // e.g. "attachments/report.pdf"
+  path: z.string(), // e.g. "attachments/report.pdf", "images/image-2.png"
   absolutePath: z.string(),
   mediaType: z.string(),
   size: z.number().int().nonnegative(),
 });
-export type AttachmentSaved = z.infer<typeof attachmentSavedSchema>;
+export type SavedFile = z.infer<typeof savedFileSchema>;
 
 export const fsReadRequestSchema = z.object({
   sessionId: sessionIdSchema,
