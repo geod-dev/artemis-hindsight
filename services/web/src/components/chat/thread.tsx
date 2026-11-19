@@ -35,10 +35,12 @@ export const Thread: FC<ThreadProps> = ({ mascotColor, underMascot, belowCompose
       className="bg-background flex h-full flex-col"
       style={
         {
-          ["--thread-max-width" as string]: "44rem",
+          ["--thread-max-width" as string]: "50rem",
           ["--composer-bg" as string]: "color-mix(in oklab, var(--color-muted) 30%, transparent)",
-          ["--composer-radius" as string]: "1rem",
-          ["--composer-padding" as string]: "8px",
+          ["--composer-padding" as string]: "10px",
+          // Concentric with the round 28px buttons in the bottom corners: their radius (14px) plus the padding. Nothing
+          // in that row is taller than 28px, so the gap is the padding on both axes.
+          ["--composer-radius" as string]: "calc(14px + var(--composer-padding))",
         } as CSSProperties
       }
     >

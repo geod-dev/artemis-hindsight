@@ -66,8 +66,10 @@ function useTypeToFocus(inputRef: RefObject<HTMLTextAreaElement | null>, enabled
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key.length !== 1) return;
+      if (event.defaultPrevented || event.altKey) return;
+      // Ctrl/Cmd+V counts as typing: focused now, the input receives the paste event that follows (text and files).
+      const paste = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v";
+      if (!paste && (event.ctrlKey || event.metaKey || event.key.length !== 1)) return;
       const active = document.activeElement;
       if (active instanceof HTMLElement && (active.isContentEditable || active.matches("input, textarea, select"))) return;
       const input = inputRef.current;
@@ -98,7 +100,7 @@ function useFocusOnQuote(inputRef: RefObject<HTMLTextAreaElement | null>) {
  * The message input box. Same shell and input styling as the Thread bundle's composer.
  * Files are added with the attach button (left) and uploaded to the conversation's sandbox when the message is sent.
  * Dictation turns the bottom bar into: cancel (left), live waveform, stop (transcribe), send (transcribe and send).
- * `typeToFocus` makes a keypress with nothing focused move focus into this input (used for the main composer).
+ * `typeToFocus` makes a keypress or a paste with nothing focused move focus into this input (used for the main composer).
  */
 export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean; modelPicker?: boolean }> = ({
   autoFocus = false,
@@ -123,7 +125,7 @@ export const Composer: FC<{ autoFocus?: boolean; typeToFocus?: boolean; modelPic
         <ComposerPrimitive.Input
           ref={inputRef}
           placeholder="Send a message..."
-          className="caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
+          className="caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 pt-1.5 pb-1 text-base leading-6 outline-none"
           rows={1}
           autoFocus={autoFocus}
           enterKeyHint="send"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ChevronDown, FolderInput, FolderMinus, ListFilter, MessageSquarePlus, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, FolderInput, FolderMinus, ListFilter, MessageSquarePlus, MoreVertical, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -367,7 +367,7 @@ export function AppSidebar({
                   )}
                 </SidebarGroupAction>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="start" className="rounded-xl bg-popover/95 backdrop-blur">
+              <DropdownMenuContent side="right" align="start">
                 <DropdownMenuCheckboxItem
                   checked={showProjectConversations}
                   onCheckedChange={toggleProjectConversations}
@@ -402,7 +402,7 @@ export function AppSidebar({
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <SidebarMenuAction showOnHover aria-label={`Actions for ${title}`}>
-                            <MoreHorizontal />
+                            <MoreVertical />
                           </SidebarMenuAction>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent

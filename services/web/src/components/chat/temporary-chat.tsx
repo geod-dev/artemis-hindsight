@@ -52,12 +52,12 @@ export function TemporaryChatControls({
       {value && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground gap-1 rounded-full font-normal">
+            <Button variant="pill" size="sm">
               {TEMPORARY_MODE_LABELS[value]}
               <ChevronDownIcon aria-hidden />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-56 rounded-xl bg-popover/95 backdrop-blur">
+          <DropdownMenuContent align="end">
             <DropdownMenuRadioGroup value={value} onValueChange={(mode) => choose(mode as TemporaryMode)}>
               {TEMPORARY_MODES.map((mode) => (
                 <DropdownMenuRadioItem key={mode} value={mode} className="flex-col items-start gap-0.5">
@@ -76,7 +76,7 @@ export function TemporaryChatControls({
             pressed={value !== null}
             onPressedChange={(on) => onChange(on ? lastMode : null)}
             aria-label={TEMPORARY_CHAT_TITLE}
-            className="rounded-full"
+            shape="round"
           >
             <MessageCircleDashedIcon />
           </Toggle>

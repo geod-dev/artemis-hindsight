@@ -62,14 +62,15 @@ export function ProjectPicker({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="rounded-full font-normal text-muted-foreground">
+          <Button variant="pill" size="sm">
             Select project
           </Button>
         </DropdownMenuTrigger>
         {/* The dialog takes the focus when it opens: the menu must not hand it back to the trigger. */}
         <DropdownMenuContent
           align="center"
-          className="min-w-48 rounded-xl bg-popover/95 backdrop-blur"
+
+
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
           <DropdownMenuItem onSelect={() => undefined} className="text-muted-foreground">
@@ -81,7 +82,7 @@ export function ProjectPicker({
               <span className="truncate">{project.name}</span>
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator className="bg-border/40" />
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setCreating(true)} className="gap-2">
             <Plus className="size-3.5" />
             New project

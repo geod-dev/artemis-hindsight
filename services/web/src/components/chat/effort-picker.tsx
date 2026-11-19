@@ -1,20 +1,23 @@
 "use client";
 
 import { useAui } from "@assistant-ui/react";
+import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useState, type FC } from "react";
+import { Button } from "@/components/ui/button";
 import {
-  ComposerMenu,
-  ComposerModelItem,
-  ComposerModelTrigger,
-  type ComposerModel,
-} from "@/components/assistant-ui/elements/composer";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type ReasoningEffort = "low" | "medium" | "high";
 
-const OPTIONS: { value: ReasoningEffort; entry: ComposerModel }[] = [
-  { value: "low", entry: { name: "Low", meta: "Quick replies" } },
-  { value: "medium", entry: { name: "Medium", meta: "Everyday tasks" } },
-  { value: "high", entry: { name: "High", meta: "Complex works" } },
+const OPTIONS: { value: ReasoningEffort; name: string; meta: string }[] = [
+  { value: "low", name: "Low", meta: "Quick replies" },
+  { value: "medium", name: "Medium", meta: "Everyday tasks" },
+  { value: "high", name: "High", meta: "Complex works" },
 ];
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
@@ -33,8 +36,7 @@ function isEffort(value: unknown): value is ReasoningEffort {
 export const EffortPicker: FC = () => {
   const aui = useAui();
   const [effort, setEffort] = useState<ReasoningEffort>(DEFAULT_REASONING_EFFORT);
-  const [open, setOpen] = useState(false);
-  const selectedName = OPTIONS.find((option) => option.value === effort)?.entry.name ?? "Medium";
+  const selectedName = OPTIONS.find((option) => option.value === effort)?.name ?? "Medium";
 
   // Read after mount, not during render, so the server and the first browser render match.
   useEffect(() => {
@@ -54,32 +56,34 @@ export const EffortPicker: FC = () => {
     [aui, effort],
   );
 
+  const choose = (value: string) => {
+    if (!isEffort(value)) return;
+    setEffort(value);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, value);
+    } catch {
+      // Not saved if storage is blocked; the choice still applies for this session.
+    }
+  };
+
   return (
-    <div className="relative">
-      <ComposerModelTrigger
-        model={selectedName}
-        open={open}
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Reasoning effort"
-      />
-      <ComposerMenu open={open} align="start">
-        {OPTIONS.map((option) => (
-          <ComposerModelItem
-            key={option.value}
-            entry={option.entry}
-            selected={option.value === effort}
-            onClick={() => {
-              setEffort(option.value);
-              setOpen(false);
-              try {
-                window.localStorage.setItem(STORAGE_KEY, option.value);
-              } catch {
-                // Not saved if storage is blocked; the choice still applies for this session.
-              }
-            }}
-          />
-        ))}
-      </ComposerMenu>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="pill" size="xs" aria-label="Reasoning effort">
+          {selectedName}
+          <ChevronDownIcon aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuRadioGroup value={effort} onValueChange={choose}>
+          {OPTIONS.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              <span className="flex-1">{option.name}</span>
+              <span className="text-muted-foreground text-xs">{option.meta}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
