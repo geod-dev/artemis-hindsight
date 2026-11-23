@@ -69,7 +69,7 @@ export function StackedBarChart({ data, series, formatValue, className }: Stacke
       {activeIndex !== null && data.length > 0 && (
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-sm bg-muted"
+          className="pointer-events-none absolute bg-foreground/[0.06]"
           style={{
             left: `calc(${MARGIN.left}px + (100% - ${MARGIN.left + MARGIN.right}px) * ${activeIndex / data.length})`,
             width: `calc((100% - ${MARGIN.left + MARGIN.right}px) / ${data.length})`,
