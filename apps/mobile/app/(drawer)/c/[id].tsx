@@ -2,6 +2,7 @@ import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { ChatScreen } from "@/chat/chat-screen";
+import { treeOfBranch } from "@/chat/message-tree";
 import { TemporaryChatTitle } from "@/chat/temporary-chat";
 import { ConversationTitleBar } from "@/components/conversation-title-bar";
 import { useConversationMessages } from "@/queries/conversations";
@@ -47,7 +48,7 @@ export default function ConversationScreen() {
     <ChatScreen
       key={id}
       conversationId={id}
-      initialMessages={data.messages}
+      initialTree={data.tree ?? treeOfBranch(data.messages)}
       isNewConversation={false}
       activeStreamId={data.activeStreamId}
       temporary={data.conversation.temporary}

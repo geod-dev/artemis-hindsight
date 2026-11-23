@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import type { UIMessage } from "ai";
 import { apiFetch } from "@/lib/api";
 import type { TemporaryMode } from "@/lib/temporary-chat";
+import type { MessageTree } from "@/chat/message-tree";
 
 // Mirrors services/web/src/server/conversations/conversation-json.ts (ConversationJson).
 export interface ConversationSummary {
@@ -25,7 +26,10 @@ export interface ConversationPayload {
     /** The mode of a temporary chat, or null for a normal one. */
     temporary: TemporaryMode | null;
   };
+  /** The branch the conversation opens on. */
   messages: UIMessage[];
+  /** Every branch, and the leaf the conversation opens on. Absent from a server older than branches. */
+  tree?: MessageTree;
   /** The turn running in this conversation right now, if any. */
   activeStreamId: string | null;
 }

@@ -66,7 +66,6 @@ function NewChat({ initialProjectId }: { initialProjectId: string | null }) {
   return (
     <ChatScreen
       conversationId={conversationId}
-      initialMessages={[]}
       isNewConversation
       onTitle={setTitle}
       projectId={selected?.id ?? null}

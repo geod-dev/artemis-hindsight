@@ -1,16 +1,18 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react-native";
-import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
 import { paletteHex } from "@/lib/avatar";
 import type { TemporaryMode } from "@/lib/temporary-chat";
 import { ConversationIdProvider } from "./conversation-context";
+import { ContinuedRepliesProvider } from "./continued-replies";
+import type { MessageTree } from "./message-tree";
 import { TemporaryChatKeepAlive, ThreadStartWatcher } from "./temporary-chat";
 import { useArtemisRuntime } from "./use-artemis-runtime";
 import { ThreadView } from "./thread-view";
 
 export interface ChatScreenProps {
   conversationId: string;
-  initialMessages: UIMessage[];
+  /** The stored messages, every branch, and the branch the conversation opens on. Empty for a new chat. */
+  initialTree?: MessageTree;
   isNewConversation: boolean;
   /** The turn running in this conversation when it opened, if any: the screen joins it. */
   activeStreamId?: string | null;
@@ -34,7 +36,7 @@ export interface ChatScreenProps {
 /** One chat session bound to a conversation id: the runtime, then the thread (messages and composer). */
 export function ChatScreen({
   conversationId,
-  initialMessages,
+  initialTree,
   isNewConversation,
   activeStreamId,
   onTitle,
@@ -46,7 +48,7 @@ export function ChatScreen({
 }: ChatScreenProps) {
   const runtime = useArtemisRuntime({
     conversationId,
-    initialMessages,
+    initialTree,
     isNewConversation,
     activeStreamId,
     onTitle,
@@ -56,6 +58,7 @@ export function ChatScreen({
   return (
     <ConversationIdProvider value={conversationId}>
       <AssistantRuntimeProvider runtime={runtime}>
+        <ContinuedRepliesProvider>
         {temporary ? <TemporaryChatKeepAlive conversationId={conversationId} /> : null}
         {onStarted ? <ThreadStartWatcher onStarted={onStarted} /> : null}
         <ThreadView
@@ -64,6 +67,7 @@ export function ChatScreen({
           mascotTint={projectColor ? paletteHex(projectColor) : undefined}
           projectPicker={projectPicker}
         />
+        </ContinuedRepliesProvider>
       </AssistantRuntimeProvider>
     </ConversationIdProvider>
   );

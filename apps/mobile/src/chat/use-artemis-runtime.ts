@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useChatRuntime } from "@assistant-ui/ai-sdk";
-import type { UIMessage } from "ai";
-import { authorizedStreamFetch } from "@/lib/api";
+import { apiFetch, authorizedStreamFetch } from "@/lib/api";
 import type { TemporaryMode } from "@/lib/temporary-chat";
 import { usePreferences } from "@/preferences";
 import { useAuth } from "@/auth";
@@ -10,11 +9,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "./title-part";
 import { createAttachmentAdapter } from "./attachment-adapter";
 import { createConversationResumableStorage } from "./resumable-storage";
+import type { MessageTree } from "./message-tree";
 import { NativeChatTransport } from "./native-transport";
+import { useBranchSaving, useRestoreBranches } from "./use-branch-memory";
 
 export interface ArtemisRuntimeOptions {
   conversationId: string;
-  initialMessages: UIMessage[];
+  /** The stored messages, every branch, and the branch the conversation opens on. Empty for a new chat. */
+  initialTree?: MessageTree;
   /** A new chat only gets its id stored once the first reply finishes, so the list is refreshed then. */
   isNewConversation: boolean;
   /** The turn running in this conversation when it opened, if any: the app joins it. */
@@ -33,9 +35,17 @@ export interface ArtemisRuntimeOptions {
  * Switching conversations drops this runtime only: the turn keeps running on the server and is joined again
  * when its conversation is opened.
  */
+/** The stopped reply a run continues: the run config's `custom.continueMessageId`, which reaches the request as its metadata. */
+function continueMessageIdOf(requestMetadata: unknown): string | undefined {
+  const value = (requestMetadata as { custom?: { continueMessageId?: unknown } } | undefined)?.custom?.continueMessageId;
+  return typeof value === "string" ? value : undefined;
+}
+
+const EMPTY_TREE: MessageTree = { headId: null, messages: [] };
+
 export function useArtemisRuntime({
   conversationId,
-  initialMessages,
+  initialTree = EMPTY_TREE,
   isNewConversation,
   activeStreamId = null,
   onTitle,
@@ -67,7 +77,8 @@ export function useArtemisRuntime({
       new NativeChatTransport({
         api: `${base}/api/chat`,
         fetch: authorizedStreamFetch,
-        prepareSendMessagesRequest: ({ messages, trigger, messageId }) => ({
+        prepareSendMessagesRequest: ({ messages, trigger, messageId, requestMetadata }) => ({
+          // The messages are the branch the message is sent on: the server stores the message after the one before it.
           // projectId and temporary only matter to the message that creates the conversation; the server ignores them
           // otherwise.
           body: {
@@ -76,6 +87,8 @@ export function useArtemisRuntime({
             trigger,
             messageId,
             config: { reasoningEffort: effort },
+            // Set by Continue under a stopped reply (message-view.tsx, StoppedRow): the reply to go on with.
+            continueMessageId: continueMessageIdOf(requestMetadata),
             projectId: projectRef.current,
             temporary: temporaryRef.current,
           },
@@ -90,9 +103,16 @@ export function useArtemisRuntime({
 
   const attachments = useMemo(() => createAttachmentAdapter(conversationId), [conversationId]);
 
-  return useChatRuntime({
+  // The branch the user switches to is stored on the server, so every device opens the conversation on it.
+  const { onBranchChange, restoring } = useBranchSaving((leafId) => {
+    void apiFetch(`/api/conversations/${conversationId}/branch`, { method: "POST", json: { leafId } }).catch(() => undefined);
+  });
+
+  const runtime = useChatRuntime({
     id: conversationId,
-    messages: initialMessages,
+    // Every branch, opened on the one the user was on.
+    messageRepository: initialTree,
+    unstable_onBranchChange: onBranchChange,
     transport,
     adapters: { attachments },
     canResume: true,
@@ -118,4 +138,6 @@ export function useArtemisRuntime({
       if (isNewConversation) void queryClient.invalidateQueries({ queryKey: messagesKey(conversationId) });
     },
   });
+  useRestoreBranches(runtime, initialTree, restoring);
+  return runtime;
 }

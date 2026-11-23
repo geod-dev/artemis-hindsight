@@ -1,5 +1,5 @@
-import { ThreadPrimitive } from "@assistant-ui/react-native";
-import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { ThreadPrimitive, useAui } from "@assistant-ui/react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
@@ -7,6 +7,7 @@ import { ChevronDown } from "lucide-react-native";
 import { usePreferences } from "@/preferences";
 import { BrandMark } from "@/components/brand-mark";
 import { Composer, composerSurface } from "./composer";
+import { EditingContext, EditingScope } from "./editing";
 import { MessageView } from "./message-view";
 import { ProjectRecents } from "./project-recents";
 
@@ -34,6 +35,26 @@ export function ThreadView({
   projectPicker?: ReactNode;
 }) {
   const { colors, isDark } = usePreferences();
+
+  const aui = useAui();
+  // The message being edited in the composer (Edit in its options, or Discard under a stopped reply). The list scrolls to
+  // it, so the message being changed is in view above the composer.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const stopEditing = useCallback(() => setEditingId(null), []);
+  const startEditing = useCallback(
+    (messageId: string) => {
+      setEditingId(messageId);
+      const index = aui.thread().getState().messages.findIndex((message) => message.id === messageId);
+      if (index < 0) return;
+      pinnedToEnd.current = false;
+      list.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+    },
+    [aui],
+  );
+  const editing = useMemo(
+    () => ({ messageId: editingId, start: startEditing, stop: stopEditing }),
+    [editingId, startEditing, stopEditing],
+  );
 
   // The sizes that decide how much room the messages have: the chat's height, the composer's, and the messages' content.
   const sizes = useRef({ chat: 0, composer: 0, content: 0 });
@@ -70,6 +91,7 @@ export function ThreadView({
   }, [conversationId]);
 
   return (
+    <EditingContext.Provider value={editing}>
     <View
       style={styles.clip}
       onLayout={(event) => {
@@ -99,6 +121,11 @@ export function ThreadView({
               scrollToBottomOnThreadSwitch
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
+              // A message far above is not laid out yet: go near it, then try again once it is.
+              onScrollToIndexFailed={({ index, averageItemLength }) => {
+                list.current?.scrollToOffset({ offset: index * averageItemLength, animated: false });
+                setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true }), 120);
+              }}
               onScrollBeginDrag={() => {
                 pinnedToEnd.current = false;
               }}
@@ -129,11 +156,14 @@ export function ThreadView({
               updateFreeSpace();
             }}
           >
-            <Composer conversationId={conversationId} />
+            <EditingScope>
+              <Composer conversationId={conversationId} editing={editingId !== null} />
+            </EditingScope>
           </View>
         </ThreadPrimitive.Root>
       </Animated.View>
     </View>
+    </EditingContext.Provider>
   );
 }
 

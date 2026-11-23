@@ -18,6 +18,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 import { MAX_ATTACHMENT_MB, type PickedFile } from "./attachment-adapter";
+import { useContinuedReplies } from "./continued-replies";
 import { usePreferences } from "@/preferences";
 import { acquireSwipeLock } from "@/lib/swipe-lock";
 
@@ -73,11 +74,20 @@ export function composerSurface(colors: { surface: string; surfaceStrong: string
  * send). Pressing the dictate button starts dictation at once. A tap leaves it running. Holding it dictates while the finger
  * is down: sliding onto cancel, stop or send buzzes and enlarges that button, and lifting there does its action. Lifting
  * anywhere else stops, as the stop button does. Icons are lucide, the same set as the web app.
+ *
+ * Editing a message happens here too (`editing`): the composer is then in the message's scope (EditingScope), so it holds
+ * the message's text and files, and sending makes the edited version. The card sits in a tinted container of the same
+ * radius whose top holds "Editing message" and a close button: the card looks laid over it. Without an edit the container
+ * is transparent and takes no room. While a reply runs, the stop button stays where send is: an edit is sent once the
+ * reply has ended or been stopped.
  */
-export function Composer({ conversationId }: { conversationId: string }) {
+export function Composer({ conversationId, editing = false }: { conversationId: string; editing?: boolean }) {
   const { colors, isDark } = usePreferences();
   const aui = useAui();
   const running = useAuiState((s) => s.thread.isRunning);
+  const { markStopped } = useContinuedReplies();
+  // The reply the stop button stops: a continued reply counts as stopped again (see continued-replies.tsx).
+  const lastId = useAuiState((s) => s.thread.messages.at(-1)?.id);
   const text = useAuiState((s) => s.composer.text);
   // Images sit inline, other files one per line, so the two are counted apart.
   const imageCount = useAuiState((s) => s.composer.attachments.filter((attachment) => attachment.type === "image").length);
@@ -139,6 +149,7 @@ export function Composer({ conversationId }: { conversationId: string }) {
   };
 
   const stop = () => {
+    markStopped(lastId);
     // The turn runs on the server: stopping asks it to stop, and the local stream is cancelled at once.
     void apiFetch(`/api/chat/${conversationId}/stop`, { method: "POST" }).catch(() => undefined);
     aui.thread().cancelRun();
@@ -339,9 +350,16 @@ export function Composer({ conversationId }: { conversationId: string }) {
     [],
   );
 
+  // An edit starts with the keyboard open on the message's text.
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
   return (
     <View>
       <View style={styles.wrapper}>
+        <View style={[styles.editFrame, editing && { backgroundColor: editTint(colors.accent) }]}>
+        {editing ? <EditingHeader /> : null}
         <ComposerPrimitive.Root
           style={[
             styles.card,
@@ -465,9 +483,55 @@ export function Composer({ conversationId }: { conversationId: string }) {
             </View>
           </View>
         </ComposerPrimitive.Root>
+        </View>
 
         {voiceError ? <Text style={[styles.error, { color: colors.danger }]}>{voiceError}</Text> : null}
       </View>
+    </View>
+  );
+}
+
+/** The tint of an edit: the accent, light. The edited message in the thread takes it too (message-view.tsx). */
+export function editTint(accent: string): string {
+  return /^#[0-9a-f]{6}$/i.test(accent) ? `${accent}26` : accent;
+}
+
+/**
+ * The top of the edit container: "Editing message", and the close button on the other side. Closing drops the edit and
+ * brings back the draft that was in the composer; when the text or the files were changed, it asks first.
+ */
+function EditingHeader() {
+  const { colors } = usePreferences();
+  const aui = useAui();
+  const text = useAuiState((s) => s.composer.text);
+  const attachmentIds = useAuiState((s) => s.composer.attachments.map((attachment) => attachment.id).join(","));
+  // The edit as it opened: the message's text and files.
+  const initial = useRef({ text, attachmentIds });
+  const changed = text !== initial.current.text || attachmentIds !== initial.current.attachmentIds;
+
+  const close = () => {
+    if (!changed) {
+      aui.composer().cancel();
+      return;
+    }
+    Alert.alert("Discard your changes?", "The message stays as it was.", [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: () => aui.composer().cancel() },
+    ]);
+  };
+
+  return (
+    <View style={styles.editHeader}>
+      <Text style={[styles.editLabel, { color: colors.accent }]}>Editing message</Text>
+      <Pressable
+        onPress={close}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Stop editing"
+        style={styles.editClose}
+      >
+        <X size={16} color={colors.accent} />
+      </Pressable>
     </View>
   );
 }
@@ -639,6 +703,11 @@ const IconButton = forwardRef<
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 8 },
+  // Transparent and without padding when not editing, so the card looks as it always does; the same radius as the card.
+  editFrame: { borderRadius: 24 },
+  editHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 16, paddingRight: 12, paddingVertical: 8 },
+  editLabel: { fontSize: 13, fontWeight: "600" },
+  editClose: { width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, gap: 6 },
   imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   fileList: { gap: 6 },

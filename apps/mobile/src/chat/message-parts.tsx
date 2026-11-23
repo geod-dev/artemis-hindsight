@@ -1,5 +1,5 @@
 import { useAuiState } from "@assistant-ui/react-native";
-import { type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Text } from "react-native";
 import { usePreferences } from "@/preferences";
 import { RunActivity, type ActivityEntry } from "./activity/run-activity";
@@ -148,10 +148,14 @@ function latestLabel(parts: Part[]): string | undefined {
   return undefined;
 }
 
+/** The text colour of the bubble around a user's text, when it is not the usual one (the message being edited). */
+export const UserTextColorContext = createContext<string | undefined>(undefined);
+
 /** A user's typed text, in the bubble's colour. */
 function UserText({ text }: { text: string }) {
   const { colors } = usePreferences();
-  return <Text style={{ color: colors.onUser, fontSize: 16, lineHeight: 22 }}>{text}</Text>;
+  const color = useContext(UserTextColorContext) ?? colors.onUser;
+  return <Text style={{ color, fontSize: 16, lineHeight: 22 }}>{text}</Text>;
 }
 
 /**
