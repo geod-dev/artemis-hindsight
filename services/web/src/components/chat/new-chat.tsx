@@ -34,7 +34,6 @@ export function NewChat({
   return (
     <ChatSession
       conversationId={conversationId}
-      initialMessages={[]}
       isNewConversation
       projects={projects}
       projectId={projectId}

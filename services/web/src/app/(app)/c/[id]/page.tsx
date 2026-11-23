@@ -1,4 +1,3 @@
-import type { UIMessage } from "ai";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ChatSession } from "@/components/chat/chat-session";
@@ -7,7 +6,7 @@ import { findConversation, setConversationUnread } from "@/server/repositories/c
 import { findProject } from "@/server/repositories/project-repository";
 import { listMessages } from "@/server/repositories/message-repository";
 import { activeStreamOf } from "@/server/agent/turn-registry";
-import { toUiMessages } from "@/lib/stored-messages";
+import { toMessageTree } from "@/lib/stored-messages";
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +21,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // Opening the conversation reads it.
   if (conversation.unread) await setConversationUnread(id, user.id, false);
 
-  const initialMessages: UIMessage[] = toUiMessages(await listMessages(id));
+  const initialTree = toMessageTree(await listMessages(id), conversation.activeLeafId);
   // The project's name and color, for the badge after the title. A project deleted meanwhile leaves no badge.
   const project = conversation.projectId ? await findProject(conversation.projectId, user.id) : undefined;
 
@@ -30,7 +29,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     <ChatSession
       key={id}
       conversationId={id}
-      initialMessages={initialMessages}
+      initialTree={initialTree}
       isNewConversation={false}
       initialTitle={conversation.title}
       activeStreamId={activeStreamOf(id)}

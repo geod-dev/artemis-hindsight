@@ -7,6 +7,7 @@ import { ComposerAddAttachment } from "@/components/assistant-ui/elements/attach
 import { ComposerQuotePreview } from "@/components/assistant-ui/elements/quote.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { ComposerAttachments } from "./composer-attachments";
+import { useContinuedReplies } from "./continued-replies";
 import { ConversationIdContext } from "./conversation-context";
 import { EffortPicker } from "./effort-picker";
 import { DictationWaveform } from "./dictation-waveform";
@@ -22,12 +23,16 @@ const iconButtonClass =
  */
 const StopButton: FC = () => {
   const conversationId = useContext(ConversationIdContext);
+  const { markStopped } = useContinuedReplies();
+  // The reply being stopped: a continued reply counts as stopped again (see continued-replies.tsx).
+  const lastId = useAuiState((s) => s.thread.messages.at(-1)?.id);
   return (
     <ComposerPrimitive.Cancel asChild>
       <button
         type="button"
         aria-label="Stop generating"
         onClick={() => {
+          markStopped(lastId);
           if (conversationId) void fetch(`/api/chat/${conversationId}/stop`, { method: "POST" });
         }}
         className="bg-foreground text-background flex size-7 items-center justify-center rounded-full"
@@ -38,6 +43,10 @@ const StopButton: FC = () => {
   );
 };
 
+/** The round send button of the composer, also used by the edit card. */
+export const sendButtonClass =
+  "bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50";
+
 /**
  * Solid primary when there is text, an attachment or a dictation. Empty, it is disabled and gets the shadcn
  * disabled look (dimmed), the same as every other shadcn button.
@@ -46,12 +55,7 @@ const SendButton: FC = () => {
   const canSend = useAuiState((s) => s.composer.canSend);
   return (
     <ComposerPrimitive.Send asChild>
-      <button
-        type="button"
-        aria-label="Send message"
-        disabled={!canSend}
-        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50"
-      >
+      <button type="button" aria-label="Send message" disabled={!canSend} className={sendButtonClass}>
         <ArrowUpIcon className="size-4" />
       </button>
     </ComposerPrimitive.Send>

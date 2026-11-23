@@ -2,7 +2,6 @@
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { AssistantChatTransport, createResumableSessionStorage, useChatRuntime } from "@assistant-ui/ai-sdk";
-import type { UIMessage } from "ai";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { useConversationTitles } from "@/components/conversation-titles";
@@ -10,13 +9,16 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import { ProjectRecents } from "@/components/projects/project-recents";
 import { paletteColorCss } from "@/lib/avatar-colors";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "@/lib/conversation-title-part";
+import type { MessageTree } from "@/lib/message-tree";
 import type { ProjectRef, ProjectSummary } from "@/lib/projects";
 import type { TemporaryMode } from "@/lib/temporary-chat";
 import { ChatPageFrame } from "./chat-page-frame";
 import { createAttachmentAdapter } from "./attachment-adapter";
+import { ContinuedRepliesProvider } from "./continued-replies";
 import { ConversationHeading } from "./conversation-heading";
 import { ConversationIdContext, ProjectColorContext } from "./conversation-context";
 import { MessageTimesContext } from "./day-header";
+import { EditEffortContext, type ReasoningEffort } from "./effort-picker";
 import { dictationAdapter } from "./server-dictation-adapter";
 import {
   TemporaryChatControls,
@@ -25,11 +27,12 @@ import {
   TemporaryChatNotice,
 } from "./temporary-chat";
 import { Thread } from "./thread";
+import { useBranchSaving, useRestoreBranches } from "./use-branch-memory";
 
 export interface ChatSessionProps {
   conversationId: string;
-  /** Messages already stored for this conversation. Empty for a new chat. */
-  initialMessages: UIMessage[];
+  /** The messages already stored for this conversation, every branch, and the branch it opens on. Empty for a new chat. */
+  initialTree?: MessageTree;
   /** True on the new-chat page, where the id is only stored once the first reply finishes. */
   isNewConversation: boolean;
   /** The stored name, shown in the top bar. Empty for a new chat until its name arrives. */
@@ -57,15 +60,26 @@ export interface ChatSessionProps {
  * reply runs never resumes that reply inside another conversation.
  */
 function resumableStorageFor(conversationId: string, activeStreamId: string | null | undefined) {
-  const storage = createResumableSessionStorage({ key: () => `artemis.stream.${conversationId}` });
+  const storage = createResumableSessionStorage({
+    key: () => `artemis.stream.${conversationId}`,
+  });
   if (activeStreamId) storage.setStreamId(activeStreamId);
   return storage;
 }
 
+/** The stopped reply a run continues: the run config's `custom.continueMessageId`, which reaches the request as its metadata. */
+function continueMessageIdOf(requestMetadata: unknown): string | undefined {
+  const value = (requestMetadata as { custom?: { continueMessageId?: unknown } } | undefined)?.custom
+    ?.continueMessageId;
+  return typeof value === "string" ? value : undefined;
+}
+
+const EMPTY_TREE: MessageTree = { headId: null, messages: [] };
+
 /** Stored messages carry their creation time in `metadata.createdAt` (ISO string), set by the conversation page. */
-function messageTimesOf(messages: UIMessage[]): ReadonlyMap<string, Date> {
+function messageTimesOf(tree: MessageTree): ReadonlyMap<string, Date> {
   const entries: [string, Date][] = [];
-  for (const message of messages) {
+  for (const { message } of tree.messages) {
     const createdAt = (message.metadata as { createdAt?: string } | undefined)?.createdAt;
     if (createdAt) entries.push([message.id, new Date(createdAt)]);
   }
@@ -78,7 +92,7 @@ function messageTimesOf(messages: UIMessage[]): ReadonlyMap<string, Date> {
  */
 export function ChatSession({
   conversationId,
-  initialMessages,
+  initialTree = EMPTY_TREE,
   isNewConversation,
   initialTitle = "",
   activeStreamId = null,
@@ -100,6 +114,9 @@ export function ChatSession({
     temporaryRef.current = temporary;
   }, [projectId, temporary]);
 
+  // The effort the edit card sends an edit with: read once, in place of the composer's (see EditEffortContext).
+  const editEffort = useRef<ReasoningEffort | null>(null);
+
   // The body id must be our conversation UUID. assistant-ui may otherwise send its own thread id.
   // The turn runs on the server: the browser keeps the stream id of the running turn and reconnects to it through
   // /api/chat/resume/<streamId>, after a reload or when this page joins a turn that is already running.
@@ -108,20 +125,29 @@ export function ChatSession({
       const storage = resumableStorageFor(conversationId, activeStreamId);
       return new AssistantChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: ({ messages, trigger, messageId, body }) => ({
-          // config holds the model context's settings, such as the reasoning effort chosen in the composer.
-          // projectId and temporary only matter to the message that creates the conversation; the server ignores them
-          // otherwise.
-          body: {
-            id: conversationId,
-            messages,
-            trigger,
-            messageId,
-            config: body?.config,
-            projectId: projectRef.current,
-            temporary: temporaryRef.current,
-          },
-        }),
+        prepareSendMessagesRequest: ({ messages, trigger, messageId, body, requestMetadata }) => {
+          // An edit sent from the edit card carries its own effort.
+          const effort = editEffort.current;
+          editEffort.current = null;
+          const config = body?.config as Record<string, unknown> | undefined;
+          return {
+            // config holds the model context's settings, such as the reasoning effort chosen in the composer.
+            // The messages are the branch the message is sent on: the server stores the message after the one before it.
+            // projectId and temporary only matter to the message that creates the conversation; the server ignores them
+            // otherwise.
+            body: {
+              id: conversationId,
+              messages,
+              trigger,
+              messageId,
+              config: effort ? { ...config, reasoningEffort: effort } : config,
+              // Set by Continue under a stopped reply (StoppedBar): the reply to go on with.
+              continueMessageId: continueMessageIdOf(requestMetadata),
+              projectId: projectRef.current,
+              temporary: temporaryRef.current,
+            },
+          };
+        },
         resumable: {
           storage,
           resumeApi: (streamId: string) => `/api/chat/resume/${streamId}`,
@@ -134,9 +160,20 @@ export function ChatSession({
 
   const attachments = useMemo(() => createAttachmentAdapter(conversationId), [conversationId]);
 
+  // The branch the user switches to is stored on the server, so every device opens the conversation on it.
+  const { onBranchChange, restoring } = useBranchSaving((leafId) => {
+    void fetch(`/api/conversations/${conversationId}/branch`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ leafId }),
+    });
+  });
+
   const runtime = useChatRuntime({
     id: conversationId,
-    messages: initialMessages,
+    // Every branch, opened on the one the user was on.
+    messageRepository: initialTree,
+    unstable_onBranchChange: onBranchChange,
     transport,
     adapters: { attachments, dictation: dictationAdapter },
     canResume: true,
@@ -155,7 +192,9 @@ export function ChatSession({
     },
   });
 
-  const times = useMemo(() => messageTimesOf(initialMessages), [initialMessages]);
+  useRestoreBranches(runtime, initialTree, restoring);
+
+  const times = useMemo(() => messageTimesOf(initialTree), [initialTree]);
 
   // Only the new chat has a project. Its picker sits under the mascot; with a project selected, the mascot takes the
   // project's color and its recent conversations show under the composer.
@@ -166,45 +205,53 @@ export function ChatSession({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <ConversationIdContext.Provider value={conversationId}>
-        <ProjectColorContext.Provider value={mascotColor}>
-          <MessageTimesContext.Provider value={times}>
-            {temporary && <TemporaryChatKeepAlive conversationId={conversationId} />}
-            <ChatPageFrame
-              title={
-                temporary ? (
-                  <TemporaryChatHeading mode={temporary} />
-                ) : (
-                  <ConversationHeading
-                    conversationId={conversationId}
-                    initialTitle={initialTitle}
-                    project={isNewConversation ? selectedProject : project}
-                  />
-                )
-              }
-              actions={
-                isNewConversation ? <TemporaryChatControls value={temporary} onChange={onTemporaryChange} /> : undefined
-              }
-            >
-              <div className="h-full min-h-0">
-                <Thread
-                  mascotColor={mascotColor}
-                  underMascot={
-                    !isNewConversation ? undefined : temporary ? (
-                      <TemporaryChatNotice mode={temporary} />
+      <ContinuedRepliesProvider>
+        <ConversationIdContext.Provider value={conversationId}>
+          <ProjectColorContext.Provider value={mascotColor}>
+            <MessageTimesContext.Provider value={times}>
+              <EditEffortContext.Provider value={editEffort}>
+                {temporary && <TemporaryChatKeepAlive conversationId={conversationId} />}
+                <ChatPageFrame
+                  title={
+                    temporary ? (
+                      <TemporaryChatHeading mode={temporary} />
                     ) : (
-                      <ProjectPicker projects={projects} value={projectId} onChange={onProjectChange} />
+                      <ConversationHeading
+                        conversationId={conversationId}
+                        initialTitle={initialTitle}
+                        project={isNewConversation ? selectedProject : project}
+                      />
                     )
                   }
-                  belowComposer={
-                    selectedProject ? <ProjectRecents key={selectedProject.id} projectId={selectedProject.id} /> : undefined
+                  actions={
+                    isNewConversation ? (
+                      <TemporaryChatControls value={temporary} onChange={onTemporaryChange} />
+                    ) : undefined
                   }
-                />
-              </div>
-            </ChatPageFrame>
-          </MessageTimesContext.Provider>
-        </ProjectColorContext.Provider>
-      </ConversationIdContext.Provider>
+                >
+                  <div className="h-full min-h-0">
+                    <Thread
+                      mascotColor={mascotColor}
+                      underMascot={
+                        !isNewConversation ? undefined : temporary ? (
+                          <TemporaryChatNotice mode={temporary} />
+                        ) : (
+                          <ProjectPicker projects={projects} value={projectId} onChange={onProjectChange} />
+                        )
+                      }
+                      belowComposer={
+                        selectedProject ? (
+                          <ProjectRecents key={selectedProject.id} projectId={selectedProject.id} />
+                        ) : undefined
+                      }
+                    />
+                  </div>
+                </ChatPageFrame>
+              </EditEffortContext.Provider>
+            </MessageTimesContext.Provider>
+          </ProjectColorContext.Provider>
+        </ConversationIdContext.Provider>
+      </ContinuedRepliesProvider>
     </AssistantRuntimeProvider>
   );
 }

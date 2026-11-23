@@ -1,17 +1,19 @@
 "use client";
 
-import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { ActionBarPrimitive, MessagePrimitive, useAuiState } from "@assistant-ui/react";
+import { CheckIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
 import { useContext, useMemo, useState, type FC } from "react";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
-import { StoppedRun } from "@/components/assistant-ui/elements/stopped-run";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
+import { BranchPicker } from "./branch-picker";
 import { ProjectColorContext } from "./conversation-context";
 import { CodeBlock } from "./code-block";
 import { MarkdownDataTable } from "./markdown-data-table";
 import { SourceGroups, withSourceBadges } from "./source-link";
+import { StoppedBar } from "./stopped-bar";
+import { useReplyStopped } from "./continued-replies";
 import { MessageDebugMenu } from "./message-debug-menu";
 import { sandboxMarkdownComponents } from "./sandbox-file-link";
 import { RunActivityGroup } from "./run-activity-group";
@@ -34,14 +36,17 @@ const markdownComponents = {
 // thinking between the last tool call and that text is part of the run. A message with no tool calls has no run.
 const groupFor = (parts: readonly { type: string }[]) => {
   const lastToolIndex = parts.map((part) => part.type).lastIndexOf("tool-call");
-  const answerStart = lastToolIndex === -1 ? 0 : parts.findIndex((part, index) => index > lastToolIndex && part.type === "text");
+  const answerStart =
+    lastToolIndex === -1 ? 0 : parts.findIndex((part, index) => index > lastToolIndex && part.type === "text");
   const finalAnswer = new Set<unknown>(answerStart === -1 ? [] : parts.slice(answerStart));
   return (part: { type: string }) => (finalAnswer.has(part) ? [] : (["group-run"] as const));
 };
 
 /**
- * Our assistant message: text and tool runs, then a copy button.
- * A message stopped by the user shows the words that arrived before the stop, in StoppedRun.
+ * Our assistant message: text and tool runs, then the branch picker (when the reply was regenerated) and the actions:
+ * copy, regenerate (a new reply beside this one) and the debug menu.
+ * A reply the user stopped renders as any other, then StoppedBar ("Stopped by you", Discard, Continue); see
+ * useReplyStopped for what counts as stopped.
  * Replaces the Thread bundle's AssistantMessage through the `AssistantMessage` slot.
  */
 export const AssistantMessage: FC = () => {
@@ -51,17 +56,15 @@ export const AssistantMessage: FC = () => {
   const isRunning = useAuiState((s) => s.message.status?.type === "running");
   const isLast = useAuiState((s) => s.message.isLast);
   const projectColor = useContext(ProjectColorContext);
-  const isCancelled = useAuiState(
-    (s) => s.message.status?.type === "incomplete" && s.message.status.reason === "cancelled",
-  );
+  const isStopped = useReplyStopped();
   const text = useAuiState((s) =>
     s.message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n"),
   );
-  const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
   const parts = useAuiState((s) => s.message.parts);
   const groupBy = useMemo(() => groupFor(parts), [parts]);
   const hasContent = parts.some(
-    (part) => part.type === "reasoning" || part.type === "tool-call" || (part.type === "text" && part.text.trim() !== ""),
+    (part) =>
+      part.type === "reasoning" || part.type === "tool-call" || (part.type === "text" && part.text.trim() !== ""),
   );
   const rawTurnTiming = useAuiState((s) => s.message.metadata.custom?.turnTiming);
   const turnTiming = useMemo(() => asTurnTiming(rawTurnTiming), [rawTurnTiming]);
@@ -73,7 +76,10 @@ export const AssistantMessage: FC = () => {
   };
 
   return (
-    <MessagePrimitive.Root data-role="assistant" className="group fade-in slide-in-from-bottom-1 animate-in relative flex gap-2 duration-150">
+    <MessagePrimitive.Root
+      data-role="assistant"
+      className="group fade-in slide-in-from-bottom-1 animate-in relative flex gap-2 duration-150"
+    >
       {/* The gutter is reserved on every assistant message, so the text does not shift when the avatar moves. */}
       <div className="flex w-7 shrink-0 justify-center pt-1">
         {isLast && (
@@ -98,14 +104,14 @@ export const AssistantMessage: FC = () => {
                   return <ThinkingLabel durationMs={durationMs} live={live} startedAt={timing?.startedAt} />;
                 }
                 case "text":
-                  // StoppedRun shows the same words itself, so the markdown text is not rendered twice.
-                  return isCancelled ? (
-                    <StoppedRun words={words} reason="stopped by you" />
-                  ) : (
-                    // Only the message text can be quoted; tool cards are outside this region.
+                  // Only the message text can be quoted; tool cards are outside this region.
+                  return (
                     <div data-aui-quote-selectable="">
                       <SourceGroups>
-                        <MarkdownText components={markdownComponents} componentsByLanguage={visualComponentsByLanguage} />
+                        <MarkdownText
+                          components={markdownComponents}
+                          componentsByLanguage={visualComponentsByLanguage}
+                        />
                       </SourceGroups>
                     </div>
                   );
@@ -117,23 +123,27 @@ export const AssistantMessage: FC = () => {
           {/* Running with nothing yet: the model is starting, so show that it is thinking. */}
           {isRunning && !hasContent && <ThinkingLabel live startedAt={turnTiming?.startedAt} />}
         </div>
+        {isStopped && <StoppedBar />}
         {!isRunning && (
-          // Hidden until the pointer is over the message (or a key focuses the action), so the thread stays uncluttered.
-          <div
-            className={cn(
-              "flex items-center gap-1 pe-2 pt-1.5 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
-              copied || menuOpen ? "opacity-100" : "opacity-0",
-            )}
-          >
-            <button
-              type="button"
-              aria-label="Copy response"
-              onClick={copy}
-              className={cn(ghostButton, "size-7")}
+          <div className="flex items-center gap-1 pe-2 pt-1.5">
+            <BranchPicker />
+            {/* Hidden until the pointer is over the message (or a key focuses the action), so the thread stays uncluttered. */}
+            <div
+              className={cn(
+                "flex items-center gap-1 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
+                copied || menuOpen ? "opacity-100" : "opacity-0",
+              )}
             >
-              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-            </button>
-            <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
+              <button type="button" aria-label="Copy response" onClick={copy} className={cn(ghostButton, "size-7")}>
+                {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+              </button>
+              <ActionBarPrimitive.Reload asChild>
+                <button type="button" aria-label="Regenerate response" className={cn(ghostButton, "size-7")}>
+                  <RefreshCwIcon className="size-3.5" />
+                </button>
+              </ActionBarPrimitive.Reload>
+              <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
+            </div>
           </div>
         )}
       </div>

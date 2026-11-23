@@ -6,12 +6,14 @@ import { useState, type FC } from "react";
 import { QuoteBlock } from "@/components/assistant-ui/elements/quote.aui";
 import { ghostButton } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
+import { BranchPicker } from "./branch-picker";
 import { MessageDebugMenu } from "./message-debug-menu";
 import { UserMessageAttachments } from "./user-attachments";
 
 /**
- * A user message: the bubble, then a row of actions underneath (copy, edit and the debug menu), like the assistant's.
- * Editing starts the message's edit composer; the Thread renders that composer in place of the bubble.
+ * A user message: the bubble, then a row of actions underneath (copy, edit and the debug menu), like the assistant's,
+ * and the branch picker when the message was edited. Editing starts the message's edit composer; the Thread renders
+ * that composer (UserEditMessage) in place of the bubble.
  */
 export const UserMessage: FC = () => {
   const [copied, setCopied] = useState(false);
@@ -38,27 +40,26 @@ export const UserMessage: FC = () => {
         <MessagePrimitive.Quote>{(quote) => <QuoteBlock {...quote} />}</MessagePrimitive.Quote>
         <MessagePrimitive.Parts />
       </div>
-      {/* Hidden until the pointer is over the message (or a key focuses an action), so the row does not clutter the thread. */}
-      <div
-        className={cn(
-          "flex items-center gap-1 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
-          copied || menuOpen ? "opacity-100" : "opacity-0",
-        )}
-      >
-        <button
-          type="button"
-          aria-label="Copy message"
-          onClick={copy}
-          className={cn(ghostButton, "size-7")}
+      <div className="flex items-center gap-1">
+        {/* Hidden until the pointer is over the message (or a key focuses an action), so the row does not clutter the thread. */}
+        <div
+          className={cn(
+            "flex items-center gap-1 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100",
+            copied || menuOpen ? "opacity-100" : "opacity-0",
+          )}
         >
-          {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-        </button>
-        <ActionBarPrimitive.Edit asChild>
-          <button type="button" aria-label="Edit message" className={cn(ghostButton, "size-7")}>
-            <PencilIcon className="size-3.5" />
+          <button type="button" aria-label="Copy message" onClick={copy} className={cn(ghostButton, "size-7")}>
+            {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
           </button>
-        </ActionBarPrimitive.Edit>
-        <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
+          <ActionBarPrimitive.Edit asChild>
+            <button type="button" aria-label="Edit message" className={cn(ghostButton, "size-7")}>
+              <PencilIcon className="size-3.5" />
+            </button>
+          </ActionBarPrimitive.Edit>
+          <MessageDebugMenu messageId={messageId} onMenuOpenChange={setMenuOpen} />
+        </div>
+        {/* Always shown when the message has other versions, so a branch is never hidden. */}
+        <BranchPicker />
       </div>
     </MessagePrimitive.Root>
   );

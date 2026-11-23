@@ -9,6 +9,7 @@ import { Mascot } from "@/components/mascot/mascot";
 import { cn } from "@/lib/utils";
 import { AssistantMessage } from "./assistant-message";
 import { Composer } from "./composer";
+import { useContinuedReplies } from "./continued-replies";
 import { DayHeader, dayOf, MessageTimesContext } from "./day-header";
 import { UserEditMessage } from "./user-edit-message";
 import { UserMessage } from "./user-message";
@@ -29,6 +30,9 @@ export interface ThreadProps {
  */
 export const Thread: FC<ThreadProps> = ({ mascotColor, underMascot, belowComposer }) => {
   const isEmpty = useAuiState((s) => s.thread.messages.length === 0);
+  // A new turn brings the question to the top; a continued reply grows where the user reads, so the thread follows the
+  // bottom while it runs.
+  const { continuing } = useContinuedReplies();
 
   return (
     <ThreadPrimitive.Root
@@ -45,7 +49,7 @@ export const Thread: FC<ThreadProps> = ({ mascotColor, underMascot, belowCompose
       }
     >
       <ThreadPrimitive.Viewport
-        turnAnchor="top"
+        turnAnchor={continuing ? "bottom" : "top"}
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
         <div
