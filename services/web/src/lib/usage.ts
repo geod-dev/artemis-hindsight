@@ -30,10 +30,50 @@ export const CACHE_READ_MULTIPLIER = 0.1;
 export const EUR_PER_USD = 0.92;
 
 /**
- * Assumption, not a measured figure: grams of CO2 equivalent per million tokens, for the model's compute.
- * Replace it with a published factor before relying on the CO2 unit.
+ * The CO2 of model calls. Owner's estimates, not measurements.
+ *
+ *  - Text (the chat, titles and memory all run on Claude Haiku): 0.3 mg per token, input and output alike, cached input
+ *    included. Below a full lifecycle figure, above the bare inference energy of a small model.
+ *  - An image: 2 kg per million output tokens. Its output tokens follow its size and quality, which is what drawing it
+ *    costs; its input (the prompt, the source images) is only read, so it is left out.
  */
-export const GRAMS_CO2E_PER_MILLION_TOKENS = 300;
+const TEXT_GRAMS_PER_TOKEN = 0.3 / 1000;
+const IMAGE_GRAMS_PER_OUTPUT_TOKEN = 2 / 1000;
+
+/** Grams of CO2 for `tokens` tokens (input and output alike) of a text model. */
+export function co2GramsOf(tokens: number): number {
+  return tokens * TEXT_GRAMS_PER_TOKEN;
+}
+
+/** Grams of CO2 of a generated image, from its output tokens. */
+export function imageCo2Grams(outputTokens: number): number {
+  return outputTokens * IMAGE_GRAMS_PER_OUTPUT_TOKEN;
+}
+
+/**
+ * Everyday equivalents of an amount of CO2, from the smallest to the largest: each one covers the amounts below the next
+ * one's floor, and the last one has no ceiling. `perKg` is how many of the thing one kilogram of CO2 equals (a kettle
+ * boiled is about 80 g, a petrol car emits about 200 g per km, a litre of petrol about 2.3 kg, a kilogram of beef about
+ * 27 kg, a short-haul flight about 150 kg per passenger, a tree absorbs about 25 kg a year). Rough, and meant as such.
+ */
+const CO2_EQUIVALENTS: { fromKg: number; icon: string; perKg: number; sentence: (x: string) => string }[] = [
+  { fromKg: 0, icon: "☕", perKg: 12, sentence: (x) => `The equivalent of boiling a kettle ${x} times.` },
+  { fromKg: 1, icon: "🚗", perKg: 5, sentence: (x) => `The equivalent of driving ${x} km in a petrol car.` },
+  { fromKg: 10, icon: "⛽", perKg: 0.44, sentence: (x) => `The equivalent of burning ${x} litres of petrol.` },
+  { fromKg: 100, icon: "🥩", perKg: 0.037, sentence: (x) => `The equivalent of producing ${x} kg of beef.` },
+  { fromKg: 1_000, icon: "✈️", perKg: 0.0067, sentence: (x) => `The equivalent of ${x} short-haul flights per passenger.` },
+  { fromKg: 10_000, icon: "🌳", perKg: 0.04, sentence: (x) => `The equivalent of one tree working for ${x} years to absorb it.` },
+];
+
+const equivalentCount = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+
+/** An everyday equivalent of `grams` of CO2, shown under the total when the CO2 unit is selected. */
+export function co2Equivalent(grams: number): { icon: string; text: string } {
+  if (grams <= 0) return { icon: "🌱", text: "Nothing was emitted, boss" };
+  const kg = grams / 1000;
+  const equivalent = CO2_EQUIVALENTS.findLast((item) => kg >= item.fromKg) ?? CO2_EQUIVALENTS[0]!;
+  return { icon: equivalent.icon, text: equivalent.sentence(equivalentCount.format(kg * equivalent.perKg)) };
+}
 
 export type UsageUnit = "tokens" | "usd" | "eur" | "co2";
 
@@ -88,24 +128,24 @@ export function rangeStart(range: UsageRange, now: Date): Date | null {
 }
 
 /**
- * The parts of the usage, drawn as the segments of one bar. `input` and `output` come from the chat replies.
- * `title` is the model call that names a new conversation, `image` the images the agent generates, and `memory` what
- * Hindsight spends on retain, reflect and consolidation (read from its LLM request traces).
+ * The parts of the usage, drawn as the segments of one bar. `input` and `output` come from the chat replies; the model
+ * call that names a new conversation counts as input (it reads the user's message). `image` is the images the agent
+ * generates, and `memory` what Hindsight spends on retain, reflect and consolidation (read from its LLM request traces).
  */
 export const USAGE_PARTS = [
   { id: "input", label: "Input" },
   { id: "output", label: "Output" },
-  { id: "title", label: "Title" },
   { id: "image", label: "Image" },
   { id: "memory", label: "Memory" },
 ] as const;
 
 export type UsagePart = (typeof USAGE_PARTS)[number]["id"];
 
-/** The tokens and the dollar cost of one part. */
+/** The tokens, the dollar cost and the CO2 (grams, see co2GramsOf) of one part. */
 export interface PartTotals {
   tokens: number;
   costUsd: number;
+  co2Grams: number;
 }
 
 /** Raw counts for a set of turns. Costs are in US dollars. */
@@ -119,11 +159,10 @@ export interface UsageTotals {
 export function emptyTotals(): UsageTotals {
   return {
     parts: {
-      input: { tokens: 0, costUsd: 0 },
-      output: { tokens: 0, costUsd: 0 },
-      title: { tokens: 0, costUsd: 0 },
-      memory: { tokens: 0, costUsd: 0 },
-      image: { tokens: 0, costUsd: 0 },
+      input: { tokens: 0, costUsd: 0, co2Grams: 0 },
+      output: { tokens: 0, costUsd: 0, co2Grams: 0 },
+      memory: { tokens: 0, costUsd: 0, co2Grams: 0 },
+      image: { tokens: 0, costUsd: 0, co2Grams: 0 },
     },
     cachedInputTokens: 0,
     turns: 0,
@@ -144,6 +183,7 @@ export function addTotals(target: UsageTotals, part: UsageTotals): void {
   for (const { id } of USAGE_PARTS) {
     target.parts[id].tokens += part.parts[id].tokens;
     target.parts[id].costUsd += part.parts[id].costUsd;
+    target.parts[id].co2Grams += part.parts[id].co2Grams;
   }
   target.cachedInputTokens += part.cachedInputTokens;
   target.turns += part.turns;
@@ -193,7 +233,7 @@ export function valueOfPart(unit: UsageUnit, part: PartTotals): number {
     case "eur":
       return part.costUsd * EUR_PER_USD;
     case "co2":
-      return (part.tokens / 1_000_000) * GRAMS_CO2E_PER_MILLION_TOKENS;
+      return part.co2Grams;
   }
 }
 

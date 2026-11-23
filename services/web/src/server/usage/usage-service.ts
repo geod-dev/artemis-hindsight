@@ -2,6 +2,8 @@ import { and, eq, gte } from "drizzle-orm";
 import {
   addTotals,
   emptyTotals,
+  co2GramsOf,
+  imageCo2Grams,
   inputOutputCost,
   rangeStart,
   type UsageBucket,
@@ -13,16 +15,11 @@ import { getDb } from "../db/client";
 import { modelUsage, type UsageMetadata } from "../db/schema";
 import { bucketKey, emptyBuckets } from "./buckets";
 
-export interface ModelUsage extends UsageTotals {
-  model: string;
-}
-
 export interface UsageReport {
   range: UsageRange;
   totals: UsageTotals;
   /** The chart's bars, oldest first. */
   buckets: UsageBucket[];
-  byModel: ModelUsage[];
   /** Chat replies whose tokens were estimated from their text, because they predate the recording of usage. */
   estimatedReplies: number;
   /** True when Hindsight could not be read: memory then counts as zero. */
@@ -92,9 +89,9 @@ export async function recordModelUsage(entry: {
 
 /**
  * The user's usage for a period, as bars and totals. The app's own calls come from `model_usage`: a chat reply
- * contributes its input and output, a title or an image its input + output. Memory comes from Hindsight's traces of the
- * calls it made for the user's bank (retain, reflect, consolidation), input + output as well. Everything is priced
- * here, as the model prices it. Rows survive the deletion of their conversation. Temporary chats count too.
+ * contributes its input and output, a title its input + output to the input (naming reads the user's message), an image
+ * its input + output. Memory comes from Hindsight's traces of the calls it made for the user's bank (retain, reflect,
+ * consolidation), input + output as well. Everything is priced here, as the model prices it. Rows survive the deletion of their conversation. Temporary chats count too.
  */
 export async function usageForUser(
   user: { id: string; username: string },
@@ -130,12 +127,6 @@ export async function usageForUser(
 
   const totals = emptyTotals();
   const buckets = new Map(emptyBuckets(range, now, earliest).map((bucket) => [bucket.key, bucket]));
-  const models = new Map<string, ModelUsage>();
-  const modelEntry = (model: string): ModelUsage => {
-    const entry = models.get(model) ?? { ...emptyTotals(), model };
-    models.set(model, entry);
-    return entry;
-  };
   let estimatedReplies = 0;
 
   for (const row of rows) {
@@ -148,16 +139,23 @@ export async function usageForUser(
     const part = emptyTotals();
     part.cachedInputTokens = row.cachedInputTokens;
     if (row.part === "chat") {
-      part.parts.input = { tokens: row.inputTokens, costUsd: cost.input };
-      part.parts.output = { tokens: row.outputTokens, costUsd: cost.output };
+      part.parts.input = { tokens: row.inputTokens, costUsd: cost.input, co2Grams: co2GramsOf(row.inputTokens) };
+      part.parts.output = {
+        tokens: row.outputTokens,
+        costUsd: cost.output,
+        co2Grams: co2GramsOf(row.outputTokens),
+      };
       part.turns = 1;
       if (row.estimated) estimatedReplies += 1;
     } else {
-      part.parts[row.part] = { tokens: row.inputTokens + row.outputTokens, costUsd: cost.input + cost.output };
+      const target = row.part === "title" ? "input" : row.part;
+      const tokens = row.inputTokens + row.outputTokens;
+      // An image's CO2 comes from its output alone (its size and quality); a title's from all its tokens.
+      const co2Grams = row.part === "image" ? imageCo2Grams(row.outputTokens) : co2GramsOf(tokens);
+      part.parts[target] = { tokens, costUsd: cost.input + cost.output, co2Grams };
     }
 
     addTotals(totals, part);
-    addTotals(modelEntry(row.model), part);
     const bucket = buckets.get(bucketKey(range, row.createdAt));
     if (bucket) addPart(bucket, part);
   }
@@ -172,10 +170,14 @@ export async function usageForUser(
     };
     const cost = inputOutputCost(model, tokens);
     const part = emptyTotals();
-    part.parts.memory = { tokens: tokens.inputTokens + tokens.outputTokens, costUsd: cost.input + cost.output };
+    const memoryTokens = tokens.inputTokens + tokens.outputTokens;
+    part.parts.memory = {
+      tokens: memoryTokens,
+      costUsd: cost.input + cost.output,
+      co2Grams: co2GramsOf(memoryTokens),
+    };
 
     addTotals(totals, part);
-    addTotals(modelEntry(model), part);
     const bucket = buckets.get(bucketKey(range, call.startedAt));
     if (bucket) addPart(bucket, part);
   }
@@ -184,7 +186,6 @@ export async function usageForUser(
     range,
     totals,
     buckets: [...buckets.values()],
-    byModel: [...models.values()].sort((a, b) => partsCost(b) - partsCost(a) || b.turns - a.turns),
     estimatedReplies,
     memoryUnavailable,
   };
@@ -195,10 +196,7 @@ function addPart(bucket: UsageBucket, part: UsageTotals): void {
   for (const id of Object.keys(bucket.parts) as (keyof UsageBucket["parts"])[]) {
     bucket.parts[id].tokens += part.parts[id].tokens;
     bucket.parts[id].costUsd += part.parts[id].costUsd;
+    bucket.parts[id].co2Grams += part.parts[id].co2Grams;
   }
   bucket.turns += part.turns;
-}
-
-function partsCost(totals: UsageTotals): number {
-  return Object.values(totals.parts).reduce((sum, part) => sum + part.costUsd, 0);
 }

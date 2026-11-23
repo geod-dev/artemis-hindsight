@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { paletteColorCss, type AvatarColorId } from "@/lib/avatar-colors";
 import {
+  co2Equivalent,
   DEFAULT_USAGE_RANGE,
   USAGE_PARTS,
   USAGE_RANGES,
@@ -18,7 +19,7 @@ import {
   type UsageUnit,
 } from "@/lib/usage";
 import type { UsageReport } from "@/server/usage/usage-service";
-import { SettingsList, SettingsPage, SettingsRow } from "./settings-page";
+import { SettingsPage } from "./settings-page";
 
 const count = new Intl.NumberFormat("en-US");
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -58,7 +59,6 @@ function format(unit: UsageUnit, value: number): string {
 const PART_COLOR: Record<UsagePart, AvatarColorId> = {
   input: "blue",
   output: "orange",
-  title: "purple",
   image: "emerald",
   memory: "pink",
 };
@@ -115,29 +115,21 @@ export function UsageSettings() {
 
       {failed && <p className="text-sm text-destructive">The usage could not be loaded: {failed}.</p>}
       {!failed && !data && <Skeleton className="h-72 w-full rounded-xl" />}
-      {data && (
-        <>
-          <Chart unit={unit} report={data} />
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium">By model</h2>
-            {data.byModel.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing was used in this period.</p>
-            ) : (
-              <SettingsList>
-                {data.byModel.map((model) => (
-                  <SettingsRow
-                    key={model.model}
-                    title={model.model}
-                    description={`${count.format(model.turns)} ${model.turns === 1 ? "reply" : "replies"} · ${count.format(model.parts.input.tokens)} input · ${count.format(model.parts.output.tokens)} output`}
-                    actions={<span className="text-sm font-medium tabular-nums">{format(unit, valueIn(unit, model))}</span>}
-                  />
-                ))}
-              </SettingsList>
-            )}
-          </section>
-        </>
-      )}
+      {data && <Chart unit={unit} report={data} />}
     </SettingsPage>
+  );
+}
+
+/** The CO2 total as something everyday: a kettle, a drive, a flight... */
+function Co2Equivalent({ grams }: { grams: number }) {
+  const { icon, text } = co2Equivalent(grams);
+  return (
+    <p className="text-sm text-muted-foreground">
+      <span aria-hidden className="me-1.5">
+        {icon}
+      </span>
+      {text}
+    </p>
   );
 }
 
@@ -157,6 +149,7 @@ function Chart({ unit, report }: { unit: UsageUnit; report: UsageReport }) {
         <div className="flex flex-col gap-1">
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-3xl font-semibold tracking-tight tabular-nums">{format(unit, valueIn(unit, report.totals))}</p>
+          {unit === "co2" && <Co2Equivalent grams={valueIn("co2", report.totals)} />}
         </div>
 
         {hasUsage ? (
