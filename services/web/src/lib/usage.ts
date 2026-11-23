@@ -30,25 +30,11 @@ export const CACHE_READ_MULTIPLIER = 0.1;
 export const EUR_PER_USD = 0.92;
 
 /**
- * The CO2 of model calls. Owner's estimates, not measurements.
- *
- *  - Text (the chat, titles and memory all run on Claude Haiku): 0.3 mg per token, input and output alike, cached input
- *    included. Below a full lifecycle figure, above the bare inference energy of a small model.
- *  - An image: 2 kg per million output tokens. Its output tokens follow its size and quality, which is what drawing it
- *    costs; its input (the prompt, the source images) is only read, so it is left out.
+ * Grams of CO2 equivalent per US dollar of model usage, an estimate. The footprint follows the cost: the price already
+ * weighs what each token costs to compute (cached input at a tenth of input, output above both, an image's output far
+ * above text), for every part, memory included. A model without a listed price costs nothing here, so it emits nothing.
  */
-const TEXT_GRAMS_PER_TOKEN = 0.3 / 1000;
-const IMAGE_GRAMS_PER_OUTPUT_TOKEN = 2 / 1000;
-
-/** Grams of CO2 for `tokens` tokens (input and output alike) of a text model. */
-export function co2GramsOf(tokens: number): number {
-  return tokens * TEXT_GRAMS_PER_TOKEN;
-}
-
-/** Grams of CO2 of a generated image, from its output tokens. */
-export function imageCo2Grams(outputTokens: number): number {
-  return outputTokens * IMAGE_GRAMS_PER_OUTPUT_TOKEN;
-}
+export const GRAMS_CO2E_PER_USD = 200;
 
 /**
  * Everyday equivalents of an amount of CO2, from the smallest to the largest: each one covers the amounts below the next
@@ -141,11 +127,10 @@ export const USAGE_PARTS = [
 
 export type UsagePart = (typeof USAGE_PARTS)[number]["id"];
 
-/** The tokens, the dollar cost and the CO2 (grams, see co2GramsOf) of one part. */
+/** The tokens and the dollar cost of one part. */
 export interface PartTotals {
   tokens: number;
   costUsd: number;
-  co2Grams: number;
 }
 
 /** Raw counts for a set of turns. Costs are in US dollars. */
@@ -159,10 +144,10 @@ export interface UsageTotals {
 export function emptyTotals(): UsageTotals {
   return {
     parts: {
-      input: { tokens: 0, costUsd: 0, co2Grams: 0 },
-      output: { tokens: 0, costUsd: 0, co2Grams: 0 },
-      memory: { tokens: 0, costUsd: 0, co2Grams: 0 },
-      image: { tokens: 0, costUsd: 0, co2Grams: 0 },
+      input: { tokens: 0, costUsd: 0 },
+      output: { tokens: 0, costUsd: 0 },
+      memory: { tokens: 0, costUsd: 0 },
+      image: { tokens: 0, costUsd: 0 },
     },
     cachedInputTokens: 0,
     turns: 0,
@@ -183,7 +168,6 @@ export function addTotals(target: UsageTotals, part: UsageTotals): void {
   for (const { id } of USAGE_PARTS) {
     target.parts[id].tokens += part.parts[id].tokens;
     target.parts[id].costUsd += part.parts[id].costUsd;
-    target.parts[id].co2Grams += part.parts[id].co2Grams;
   }
   target.cachedInputTokens += part.cachedInputTokens;
   target.turns += part.turns;
@@ -233,7 +217,7 @@ export function valueOfPart(unit: UsageUnit, part: PartTotals): number {
     case "eur":
       return part.costUsd * EUR_PER_USD;
     case "co2":
-      return part.co2Grams;
+      return part.costUsd * GRAMS_CO2E_PER_USD;
   }
 }
 

@@ -2,8 +2,6 @@ import { and, eq, gte } from "drizzle-orm";
 import {
   addTotals,
   emptyTotals,
-  co2GramsOf,
-  imageCo2Grams,
   inputOutputCost,
   rangeStart,
   type UsageBucket,
@@ -139,20 +137,13 @@ export async function usageForUser(
     const part = emptyTotals();
     part.cachedInputTokens = row.cachedInputTokens;
     if (row.part === "chat") {
-      part.parts.input = { tokens: row.inputTokens, costUsd: cost.input, co2Grams: co2GramsOf(row.inputTokens) };
-      part.parts.output = {
-        tokens: row.outputTokens,
-        costUsd: cost.output,
-        co2Grams: co2GramsOf(row.outputTokens),
-      };
+      part.parts.input = { tokens: row.inputTokens, costUsd: cost.input };
+      part.parts.output = { tokens: row.outputTokens, costUsd: cost.output };
       part.turns = 1;
       if (row.estimated) estimatedReplies += 1;
     } else {
       const target = row.part === "title" ? "input" : row.part;
-      const tokens = row.inputTokens + row.outputTokens;
-      // An image's CO2 comes from its output alone (its size and quality); a title's from all its tokens.
-      const co2Grams = row.part === "image" ? imageCo2Grams(row.outputTokens) : co2GramsOf(tokens);
-      part.parts[target] = { tokens, costUsd: cost.input + cost.output, co2Grams };
+      part.parts[target] = { tokens: row.inputTokens + row.outputTokens, costUsd: cost.input + cost.output };
     }
 
     addTotals(totals, part);
@@ -170,12 +161,7 @@ export async function usageForUser(
     };
     const cost = inputOutputCost(model, tokens);
     const part = emptyTotals();
-    const memoryTokens = tokens.inputTokens + tokens.outputTokens;
-    part.parts.memory = {
-      tokens: memoryTokens,
-      costUsd: cost.input + cost.output,
-      co2Grams: co2GramsOf(memoryTokens),
-    };
+    part.parts.memory = { tokens: tokens.inputTokens + tokens.outputTokens, costUsd: cost.input + cost.output };
 
     addTotals(totals, part);
     const bucket = buckets.get(bucketKey(range, call.startedAt));
@@ -196,7 +182,6 @@ function addPart(bucket: UsageBucket, part: UsageTotals): void {
   for (const id of Object.keys(bucket.parts) as (keyof UsageBucket["parts"])[]) {
     bucket.parts[id].tokens += part.parts[id].tokens;
     bucket.parts[id].costUsd += part.parts[id].costUsd;
-    bucket.parts[id].co2Grams += part.parts[id].co2Grams;
   }
   bucket.turns += part.turns;
 }
