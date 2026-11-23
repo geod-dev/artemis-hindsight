@@ -1,8 +1,9 @@
 "use client";
 
 import { curveCardinal } from "d3-shape";
-import { Area, AreaChart, Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, LabelList, XAxis, YAxis } from "recharts";
 import { useId, type FC } from "react";
+import { StackedBarChart } from "@/components/charts/stacked-bar-chart";
 import { mono, paper } from "@/components/assistant-ui/elements/surfaces";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
@@ -151,13 +152,15 @@ export const TrendChart: FC<TrendChartProps> = ({
       </div>
       <span className="text-2xl font-medium tracking-tight tabular-nums">{value}</span>
 
+      {variant === "bars" ? (
+        <StackedBarChart
+          data={data}
+          series={[{ key: "value", label, color: "currentColor" }]}
+          formatValue={(value) => formatValue(value, unit)}
+          className={cn("h-28", tone)}
+        />
+      ) : (
       <ChartContainer config={config} className={cn("aspect-auto h-28 w-full", tone)}>
-        {variant === "bars" ? (
-          <BarChart data={data} margin={margin}>
-            {axes}
-            <Bar dataKey="value" fill="var(--color-value)" radius={3} />
-          </BarChart>
-        ) : (
           <AreaChart data={data} margin={margin}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -179,8 +182,8 @@ export const TrendChart: FC<TrendChartProps> = ({
               {startLabel}
             </Area>
           </AreaChart>
-        )}
       </ChartContainer>
+      )}
     </div>
   );
 };

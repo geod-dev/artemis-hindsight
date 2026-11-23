@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Brain, LogOut, Palette, Sparkles, TriangleAlert, UserRound } from "lucide-react";
+import { ArrowLeft, Brain, ChartColumn, LogOut, Palette, Sparkles, TriangleAlert, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const SECTIONS = [
   { href: "/settings/appearance", label: "Appearance", icon: Palette },
   { href: "/settings/memory", label: "Memory", icon: Brain },
   { href: "/settings/skills", label: "Skills", icon: Sparkles },
+  { href: "/settings/usage", label: "Usage", icon: ChartColumn },
   { href: "/settings/danger", label: "Danger zone", icon: TriangleAlert },
 ] as const;
 

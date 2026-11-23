@@ -8,6 +8,7 @@
     "start": "next start",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/server/db/migrate.ts",
+    "usage:backfill": "tsx src/jobs/usage-backfill.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint"
   },

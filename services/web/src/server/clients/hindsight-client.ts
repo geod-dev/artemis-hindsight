@@ -196,6 +196,69 @@ export async function readBank(
   return res.json();
 }
 
+const llmRequestsSchema = z.object({
+  total: z.number(),
+  items: z.array(
+    z.object({
+      operation: z.string().nullish(),
+      model: z.string().nullish(),
+      started_at: z.string(),
+      input_tokens: z.number().nullish(),
+      output_tokens: z.number().nullish(),
+      cached_tokens: z.number().nullish(),
+      thoughts_tokens: z.number().nullish(),
+    }),
+  ),
+});
+
+/** One model call Hindsight made for a bank (retain, reflect, consolidation...), as its trace recorded it. */
+export interface HindsightLlmCall {
+  operation: string;
+  /** As Hindsight names it, with its provider prefix ("anthropic/claude-haiku-5-5"). */
+  model: string;
+  startedAt: Date;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  /** Reasoning tokens. Not in outputTokens, but billed as output by Anthropic. */
+  thoughtsTokens: number;
+}
+
+const LLM_REQUESTS_PAGE = 500;
+
+/**
+ * The language-model calls Hindsight made for the bank since `start` (all of them when null), from its LLM request
+ * traces. Embedding and rerank calls are left out. Hindsight keeps traces for HINDSIGHT_API_LLM_TRACE_RETENTION_DAYS
+ * (0: forever, see docker-compose.yml); older calls are gone.
+ */
+export async function listLlmCalls(bankId: string, start: Date | null): Promise<HindsightLlmCall[]> {
+  const calls: HindsightLlmCall[] = [];
+  for (let offset = 0; ; offset += LLM_REQUESTS_PAGE) {
+    const url = bankUrl(bankId, "/llm-requests");
+    url.searchParams.set("call_type", "llm");
+    url.searchParams.set("limit", String(LLM_REQUESTS_PAGE));
+    url.searchParams.set("offset", String(offset));
+    if (start) url.searchParams.set("start_date", start.toISOString());
+    const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
+    // A user without a bank yet has made no memory calls.
+    if (res.status === 404) return calls;
+    if (!res.ok) throw new Error(`hindsight llm-requests failed for ${bankId}: HTTP ${res.status}`);
+    const page = llmRequestsSchema.parse(await res.json());
+    for (const item of page.items) {
+      calls.push({
+        operation: item.operation ?? "unknown",
+        model: item.model ?? "unknown",
+        startedAt: new Date(item.started_at),
+        inputTokens: item.input_tokens ?? 0,
+        outputTokens: item.output_tokens ?? 0,
+        cachedTokens: item.cached_tokens ?? 0,
+        thoughtsTokens: item.thoughts_tokens ?? 0,
+      });
+    }
+    if (page.items.length < LLM_REQUESTS_PAGE || offset + LLM_REQUESTS_PAGE >= page.total) return calls;
+  }
+}
+
 /** How many of the bank's facts consolidation has not turned into observations yet. */
 export async function pendingConsolidation(bankId: string): Promise<number> {
   const res = await fetch(bankUrl(bankId, "/stats"), { headers: headers(), signal: AbortSignal.timeout(15_000) });

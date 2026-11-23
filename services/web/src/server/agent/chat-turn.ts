@@ -39,7 +39,8 @@ import { textOf, type MemoryLookup } from "./memory-context";
 import type { ProjectContext } from "./project-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
-import { createTurnTiming, observeTurnTiming, snapshotTiming } from "./turn-timing";
+import { recordModelUsage } from "../usage/usage-service";
+import { createTurnTiming, observeTurnTiming, snapshotTiming, usageOfTiming } from "./turn-timing";
 import { acquireTurn, endTurn, hasViewers, resumable, startTurn, watchViewers } from "./turn-registry";
 import { announceListChange } from "../events/list-events";
 
@@ -153,7 +154,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   const modelMessages = await convertToModelMessages(quotedHistory);
 
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
-  const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null);
+  const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null, user.id);
   // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd). A temporary chat,
   // never saved, does not get it.
   let memoryFlushRequested = false;
@@ -216,11 +217,11 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       );
     },
     onStepEnd: async ({ messages }) => {
-      await persistLatestAssistant(conversationId, messages, "streaming", snapshotTiming(timing));
+      await persistLatestAssistant(user.id, conversationId, messages, "streaming", snapshotTiming(timing));
     },
     onEnd: async ({ messages, isAborted }) => {
       timing.endedAt ??= Date.now();
-      await persistLatestAssistant(conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
+      await persistLatestAssistant(user.id, conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
       await touchConversation(conversationId, user.id);
       // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
       const delivered = hasViewers(streamId);
@@ -305,6 +306,7 @@ async function lookupMemory(username: string, query: string): Promise<MemoryLook
 }
 
 async function persistLatestAssistant(
+  userId: string,
   conversationId: string,
   all: UIMessage[],
   status: "streaming" | "complete" | "aborted",
@@ -320,6 +322,11 @@ async function persistLatestAssistant(
     metadata: { model: getConfig().CHAT_MODEL, turnTiming },
     status,
   });
+  // The reply's tokens go to the usage record, keyed by the message: updated while it streams, final when it ends.
+  const usage = usageOfTiming(turnTiming);
+  if (usage) {
+    await recordModelUsage({ userId, part: "chat", messageId: latest.id, model: getConfig().CHAT_MODEL, usage });
+  }
 }
 
 function toUIMessage(row: MessageRow): UIMessage {

@@ -13,20 +13,26 @@ COPY services/web/package.json services/web/
 RUN --mount=type=cache,target=/root/.npm npm ci --workspace @artemis/contracts --workspace @artemis/web
 
 # The migration script and its two dependencies (drizzle-orm, postgres) in one file, so the migrate image needs no
-# node_modules. esbuild comes with tsx.
+# node_modules. esbuild comes with tsx. The usage backfill (src/jobs/usage-backfill.ts) is a separate job bundled the
+# same way: it runs after the migrations and reads the prompts in prompts/ as data.
 FROM deps AS migrate-build
 COPY services/web/src/server/db services/web/src/server/db
+COPY services/web/src/jobs services/web/src/jobs
 COPY services/web/drizzle services/web/drizzle
 RUN node_modules/.bin/esbuild services/web/src/server/db/migrate.ts --bundle --platform=node --target=node22 \
-    --outfile=services/web/dist/migrate.cjs
+    --outfile=services/web/dist/migrate.cjs \
+ && node_modules/.bin/esbuild services/web/src/jobs/usage-backfill.ts --bundle --platform=node --target=node22 \
+    --outfile=services/web/dist/usage-backfill.cjs
 
 FROM node:22-bookworm-slim AS migrate
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=migrate-build /repo/services/web/dist/migrate.cjs ./
+COPY --from=migrate-build /repo/services/web/dist/migrate.cjs /repo/services/web/dist/usage-backfill.cjs ./
 COPY --from=migrate-build /repo/services/web/drizzle ./drizzle
+COPY services/web/prompts ./prompts
 USER node
-CMD ["node", "migrate.cjs"]
+# The backfill never blocks the launch: when it fails, its users stay untagged and the next launch tries again.
+CMD ["sh", "-c", "node migrate.cjs && { node usage-backfill.cjs || echo 'usage backfill failed, retried at next launch'; }"]
 
 FROM deps AS build
 COPY packages/contracts packages/contracts

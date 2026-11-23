@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "../config";
 import { renameUntitledConversation } from "../repositories/conversation-repository";
+import { recordModelUsage } from "../usage/usage-service";
 
 // The naming prompt lives in prompts/conversation-title.md so it can be reviewed and edited without touching code.
 // Same caching as the system prompt: read on every call in development, once per process in production.
@@ -41,7 +42,7 @@ export async function nameConversation(params: {
 }): Promise<string | undefined> {
   const { conversationId, userId, placeholderTitle, firstMessage } = params;
   try {
-    const { text } = await generateText({
+    const { text, usage } = await generateText({
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
       prompt: firstMessage.slice(0, MAX_INPUT_CHARS),
@@ -49,6 +50,7 @@ export async function nameConversation(params: {
       // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
       maxRetries: 4,
     });
+    await recordModelUsage({ userId, part: "title", model: getConfig().TITLE_MODEL, metadata: { conversationId }, usage });
     const title = cleanTitle(text);
     if (!title) return undefined;
     const renamed = await renameUntitledConversation(conversationId, userId, placeholderTitle, title);
