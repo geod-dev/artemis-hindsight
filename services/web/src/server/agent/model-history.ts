@@ -112,6 +112,20 @@ export function renderTemporaryChat(mode: TemporaryMode): string {
 }
 
 /**
+ * A reply without the tool calls that never got a result: a reply stopped during a call keeps it half done, and the model
+ * refuses a tool call with no result. The text and the finished calls stay, so a message after the stop ("Continue")
+ * reads what the reply had done.
+ */
+function withFinishedTools(message: UIMessage): UIMessage {
+  const parts = message.parts.filter((part) => {
+    if (!part.type.startsWith("tool-") && part.type !== "dynamic-tool") return true;
+    const state = (part as { state?: string }).state;
+    return state === "output-available" || state === "output-error";
+  });
+  return parts.length === message.parts.length ? message : { ...message, parts };
+}
+
+/**
  * The history as the model reads it. Each user message gets its attachment notice and its images and PDFs.
  * The first user message also gets the temporary chat tag (in a temporary chat), the user metadata, the project tag
  * (when the conversation has a project) and the skills tags, and only the latest user message gets the current time
@@ -137,7 +151,7 @@ export async function toModelHistory(
     const message = history[i];
     if (!message) continue;
     if (message.role !== "user") {
-      out.push(message);
+      out.push(withFinishedTools(message));
       continue;
     }
 

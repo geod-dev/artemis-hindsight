@@ -4,13 +4,14 @@ import { activeStreamOf } from "@/server/agent/turn-registry";
 import { findConversation, setConversationUnread } from "@/server/repositories/conversation-repository";
 import { findProject } from "@/server/repositories/project-repository";
 import { listMessages } from "@/server/repositories/message-repository";
-import { toUiMessages } from "@/lib/stored-messages";
+import { activeBranchOf, toMessageTree } from "@/lib/stored-messages";
 
 export const runtime = "nodejs";
 
 /**
  * The stored messages of one of the signed-in user's conversations, as UI messages. Opening a conversation reads
- * it: the unread flag is cleared. `activeStreamId` is set while a reply runs there, so this client can join it.
+ * it: the unread flag is cleared. `tree` holds every branch and the leaf to open on; `messages` is that branch alone,
+ * for clients that do not read branches. `activeStreamId` is set while a reply runs there, so this client can join it.
  */
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
   const user = await getCurrentUser();
@@ -28,6 +29,8 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
   // The project the conversation belongs to, shown as a badge after its title. Null when it has none.
   const project = conversation.projectId ? await findProject(conversation.projectId, user.id) : undefined;
 
+  const rows = await listMessages(id);
+
   return Response.json({
     conversation: {
       id,
@@ -36,7 +39,8 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       // "personalized" or "unpersonalized" for a temporary chat, null otherwise.
       temporary: conversation.temporary,
     },
-    messages: toUiMessages(await listMessages(id)),
+    messages: activeBranchOf(rows, conversation.activeLeafId),
+    tree: toMessageTree(rows, conversation.activeLeafId),
     activeStreamId: activeStreamOf(id),
   });
 }

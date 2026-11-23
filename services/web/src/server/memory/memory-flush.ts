@@ -1,16 +1,24 @@
 import { createHash } from "node:crypto";
 import type { UIMessage } from "ai";
-import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { conversations, messages, projects, users } from "../db/schema";
 import { retainTranscript, type TranscriptTurn } from "../clients/hindsight-client";
 import { DEFAULT_TITLE, titleFrom } from "../repositories/conversation-repository";
+import { activeLeafOf, branchTo } from "../repositories/message-repository";
 import { CONVERSATION_STRATEGY, ensureBankTemplate } from "./bank-template";
 
 // Moving a user's conversation messages into their Hindsight bank.
 //
-// A message is retained once: messages.memorized_at records when it reached the bank. A flush sends every message
-// of one conversation that is not in memory yet, as one retain call. Each user has at most one active conversation;
+// Memory holds one branch of each conversation (see messages.parentId): conversations.memorized_leaf_id is the last
+// message of the branch in the bank. A flush saves the active branch, the one that ends at conversations.active_leaf_id,
+// in one retain call:
+//  - nothing, when that branch is the one in memory;
+//  - an append of the messages after the memorized leaf, when the active branch continues it (the whole branch on the
+//    first save);
+//  - a replace of the conversation's document with the whole branch, when the user left the memorized branch (an edit,
+//    a regenerated reply, a switch to another branch). Hindsight then drops what only the abandoned branch said.
+// messages.memorized_at records when a message was last sent, for the debug view. Each user has at most one active conversation;
 // it is flushed when another conversation of the user receives a message, or after an hour without a new user message.
 // Temporary chats never reach the bank: they are never made active, and a flush of one sends nothing.
 
@@ -73,18 +81,38 @@ export function flushConversation(conversationId: string, username: string): Pro
 }
 
 async function flushNow(conversationId: string, username: string): Promise<void> {
-  const rows = await getDb()
-    .select({ id: messages.id, role: messages.role, parts: messages.parts, createdAt: messages.createdAt })
+  const [conversation] = await getDb()
+    .select({ activeLeafId: conversations.activeLeafId, memorizedLeafId: conversations.memorizedLeafId })
+    .from(conversations)
+    .where(eq(conversations.id, conversationId))
+    .limit(1);
+  if (!conversation) return;
+  const all = await getDb()
+    .select({
+      id: messages.id,
+      parentId: messages.parentId,
+      role: messages.role,
+      parts: messages.parts,
+      status: messages.status,
+      createdAt: messages.createdAt,
+    })
     .from(messages)
-    .where(
-      and(
-        eq(messages.conversationId, conversationId),
-        isNull(messages.memorizedAt),
-        ne(messages.status, "streaming"),
-      ),
-    )
+    .where(eq(messages.conversationId, conversationId))
     .orderBy(asc(messages.position));
-  if (rows.length === 0) return;
+
+  // The active branch. A reply still streaming is left for the flush after its turn: the branch stops before it.
+  const branch = branchTo(all, activeLeafOf(all, conversation.activeLeafId));
+  while (branch.at(-1)?.status === "streaming") branch.pop();
+  const leaf = branch.at(-1);
+  if (!leaf || leaf.id === conversation.memorizedLeafId) return;
+
+  // Append what follows the memorized leaf when the branch continues it (everything on the first save); replace the
+  // document with the whole branch when the user left the memorized branch.
+  const memorizedIndex = conversation.memorizedLeafId
+    ? branch.findIndex((row) => row.id === conversation.memorizedLeafId)
+    : -1;
+  const mode = conversation.memorizedLeafId && memorizedIndex === -1 ? "replace" : "append";
+  const rows = mode === "replace" ? branch : branch.slice(memorizedIndex + 1);
 
   const turns = rows.flatMap((row): TranscriptTurn[] => {
     const text = textOfParts(row.parts);
@@ -102,37 +130,42 @@ async function flushNow(conversationId: string, username: string): Promise<void>
         context: source.context,
         timestamp: source.startedAt,
         strategy: CONVERSATION_STRATEGY,
-        operationId: operationIdFor(conversationId, rows.map((row) => row.id)),
+        operationId: operationIdFor(conversationId, mode, rows.map((row) => row.id)),
+        mode,
       });
     }
   }
-  await getDb()
-    .update(messages)
-    .set({ memorizedAt: sql`now()` })
-    .where(
-      inArray(
-        messages.id,
-        rows.map((row) => row.id),
-      ),
-    );
+  await getDb().transaction(async (tx) => {
+    if (rows.length > 0) {
+      await tx
+        .update(messages)
+        .set({ memorizedAt: sql`now()` })
+        .where(
+          inArray(
+            messages.id,
+            rows.map((row) => row.id),
+          ),
+        );
+    }
+    await tx.update(conversations).set({ memorizedLeafId: leaf.id }).where(eq(conversations.id, conversationId));
+  });
 }
 
 /**
- * Flushes now every conversation of the user that has messages not in memory yet, the active one included, instead of
- * waiting for a switch or an hour of silence. A reply still streaming is left for the flush after its turn.
- * Returns how many conversations had something to save.
+ * Flushes now every conversation of the user whose active branch is not the one in memory, the active conversation
+ * included, instead of waiting for a switch or an hour of silence. A reply still streaming is left for the flush after
+ * its turn. Returns how many conversations were flushed.
  */
 export async function flushUnsavedConversations(userId: string, username: string): Promise<number> {
   const rows = await getDb()
-    .selectDistinct({ id: messages.conversationId })
-    .from(messages)
-    .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+    .select({ id: conversations.id })
+    .from(conversations)
     .where(
       and(
         eq(conversations.userId, userId),
         isNull(conversations.temporary),
-        isNull(messages.memorizedAt),
-        ne(messages.status, "streaming"),
+        isNotNull(conversations.activeLeafId),
+        sql`${conversations.activeLeafId} is distinct from ${conversations.memorizedLeafId}`,
       ),
     );
   for (const row of rows) await flushConversation(row.id, username);
@@ -200,8 +233,13 @@ async function firstUserText(conversationId: string): Promise<string> {
   return row ? textOfParts(row.parts) : "";
 }
 
-/** The operation id is derived from the batch, so retrying the same batch is a no-op on the Hindsight side. */
-function operationIdFor(conversationId: string, messageIds: string[]): string {
+/**
+ * The operation id of an append is derived from the batch, so retrying the same batch is a no-op on the Hindsight side.
+ * A replace gets a new id every time: going back to a branch saved before must replace again, and Hindsight would answer
+ * a repeated id with the old operation. Resending a whole branch is harmless; unchanged chunks are not re-extracted.
+ */
+function operationIdFor(conversationId: string, mode: "append" | "replace", messageIds: string[]): string {
+  if (mode === "replace") return crypto.randomUUID();
   const hex = createHash("sha256").update(`${conversationId}:${messageIds.join(",")}`).digest("hex");
   return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20, 32)].join("-");
 }

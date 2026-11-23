@@ -41,6 +41,19 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
   `announceListChange(userId)` (`server/events/list-events.ts`). A new write that changes a list must announce too.
   Clients read the lists again on `changed`: the web app in `LiveUpdates`, the phone in `useLiveListUpdates`.
 
+## Branches (edit and regenerate)
+
+- A conversation is a tree: `messages.parent_id`. An edit is a new user message beside the edited one; a regenerate is a
+  new assistant message beside the old reply. `position` is insertion order across all branches (sibling order).
+- `conversations.active_leaf_id` is the branch the user is on (the clients open on it, every device). A turn moves it to
+  the new message, then to its reply. A branch switch is `POST /api/conversations/[id]/branch` (refused while a reply
+  runs). `messages.visited_at` lets the clients reopen each fork on the branch visited last (`use-branch-memory.ts`).
+- The model, memory and any new feature that reads a conversation read **one branch** (`branchTo`), never every row.
+- Memory: `conversations.memorized_leaf_id` is the branch in Hindsight. A flush appends when the active branch continues
+  it, and replaces the conversation's document with the active branch when the user left it (`memory-flush.ts`).
+- Clients load the whole tree (`tree` in the messages JSON, assistant-ui's `messageRepository`). `messages` stays the
+  active branch alone, for older phone builds.
+
 ## Temporary chats
 
 - `conversations.temporary` is `personalized`, `unpersonalized` or null. A temporary chat is never listed, named, made

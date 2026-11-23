@@ -153,7 +153,13 @@ export async function ensureConversation(
   userId: string,
   firstUserText: string,
   { projectId, temporary }: NewConversationOptions,
-): Promise<{ title: string; created: boolean; projectId: string | null; temporary: TemporaryMode | null }> {
+): Promise<{
+  title: string;
+  created: boolean;
+  projectId: string | null;
+  temporary: TemporaryMode | null;
+  activeLeafId: string | null;
+}> {
   const title = temporary ? TEMPORARY_CHAT_TITLE : titleFrom(firstUserText);
   const [row] = await getDb()
     .insert(conversations)
@@ -176,6 +182,7 @@ export async function ensureConversation(
       created: sql<boolean>`(xmax = 0)`,
       projectId: conversations.projectId,
       temporary: conversations.temporary,
+      activeLeafId: conversations.activeLeafId,
     });
   if (!row) throw new ConversationOwnershipError("conversation belongs to another user");
   return row;

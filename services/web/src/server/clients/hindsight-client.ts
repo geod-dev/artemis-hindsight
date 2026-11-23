@@ -83,8 +83,15 @@ export interface TranscriptTurn {
 }
 
 /**
- * Retains a transcript in the bank. The turns go into the document named by `documentId` (one per conversation) and
- * are appended to it, so each call only adds what is new; Hindsight merges the JSON arrays of successive appends.
+ * Retains a transcript in the bank, in the document named by `documentId` (one per conversation).
+ *
+ *  - `append`: the turns are added to the document, so each call only sends what is new; Hindsight merges the JSON
+ *    arrays of successive appends.
+ *  - `replace`: the turns become the whole document. Hindsight re-extracts only the chunks that changed, deletes the
+ *    facts of the chunks that are gone and the observations built from them, and consolidates again; mental models drop
+ *    what only those facts supported at their next refresh. Used when the user left the branch of the conversation
+ *    that memory holds, so the abandoned branch leaves memory.
+ *
  * Async with a caller-chosen operation id: a retry of the same batch returns the original operation instead of
  * extracting the memories twice.
  *
@@ -100,6 +107,7 @@ export async function retainTranscript(
     timestamp: Date;
     strategy: string;
     operationId: string;
+    mode: "append" | "replace";
   },
 ): Promise<void> {
   const res = await fetch(bankUrl(bankId, "/memories"), {
@@ -110,7 +118,7 @@ export async function retainTranscript(
         {
           content: JSON.stringify(input.turns),
           document_id: input.documentId,
-          update_mode: "append",
+          update_mode: input.mode,
           context: input.context,
           timestamp: input.timestamp.toISOString(),
           strategy: input.strategy,

@@ -29,9 +29,18 @@ import {
 } from "../repositories/conversation-repository";
 import { findProject } from "../repositories/project-repository";
 import { ProjectServiceError } from "../projects/project-service";
-import { listMessages, saveMessage, setModelInput, type MessageRow } from "../repositories/message-repository";
+import {
+  advanceActiveLeaf,
+  branchTo,
+  listMessages,
+  saveMessage,
+  setActiveLeaf,
+  setModelInput,
+  type MessageRow,
+} from "../repositories/message-repository";
 import { activateConversation, flushConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
+import { CONTINUE_INSTRUCTION, continueInOpenText, replayReply } from "./continue-reply";
 import { nameConversation } from "./conversation-title";
 import { flushMemoryTool } from "./flush-memory-tool";
 import { latestModelInput, loadUsableSkills, toModelHistory, type UserContext } from "./model-history";
@@ -55,7 +64,7 @@ import { announceListChange } from "../events/list-events";
  *   4. recall memory from the user's bank for the user's text (best effort; a failure never blocks the chat)
  *   5. store the user message, with its attachment paths and the memory it was enriched with; the conversation becomes
  *      the user's active one, and the previous active conversation is flushed to memory in the background
- *   6. load the full history from the database, the source of truth, and build the model input
+ *   6. load the branch that ends at this message from the database, the source of truth, and build the model input
  *   7. stream the model response into the resumable store; every completed step is written to the database
  *   8. while the conversation still has its placeholder title, name it in the background (see naming below)
  *
@@ -69,12 +78,28 @@ import { announceListChange } from "../events/list-events";
  * stream as a transient part, so the sidebar updates without a reload. If the turn has already ended, the stored
  * name shows on the next load.
  *
+ * Branches: the message follows `parentId`, the message before it in the client's branch. An edit is a new user message
+ * whose parent is the edited message's parent, so it starts a branch beside it. A regenerate sends an existing user
+ * message again: it is not stored twice, and the new reply is a branch beside the old one. Either way the model reads only
+ * the branch, and the conversation's active leaf moves to the message, then to its reply. Editing the first message
+ * names the conversation again from the new text.
+ *
+ * Continue: a regenerate that names a reply the user stopped (`continueMessageId`, a reply to the incoming message). The
+ * model reads that reply and is asked to go on with it; the turn's stream replays it and carries the rest, in the same
+ * message, which is stored complete (see continue-reply.ts).
+ *
  * Returns the stream of this turn, and the stream id the browser keeps to reconnect after a reload.
  */
 /** The project and temporary mode the composer had selected. They only matter when this message creates the conversation. */
 export interface ChatTurnParams {
   conversationId: string;
   incoming: UIMessage;
+  /** The message the incoming one follows in the client's branch, or null when it is the first message. */
+  parentId: string | null;
+  /** True when the client asks for a new reply to a user message that is already stored. */
+  regenerate: boolean;
+  /** With `regenerate`: the stopped reply to continue instead of answering again. */
+  continueMessageId?: string | null;
   reasoningEffort?: "low" | "medium" | "high";
   projectId?: string | null;
   temporary?: TemporaryMode | null;
@@ -122,28 +147,61 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
 
   const custom = (incoming.metadata as { custom?: StoredMessageMetadata["custom"] } | undefined)?.custom;
 
-  await saveMessage({
-    id: incoming.id,
-    conversationId,
-    role: "user",
-    parts,
-    metadata: {
-      ...(context ? { memory: memoryMetadata(context.lookup) } : {}),
-      ...(custom ? { custom } : {}),
-    },
-    status: "complete",
-  });
+  const stored = await listMessages(conversationId);
+  const existing = stored.find((row) => row.id === incoming.id);
+  // A regenerate names a user message that is already stored: it keeps its content, its parent and its metadata.
+  const regenerate = params.regenerate && existing?.role === "user";
+  const parentId = existing ? existing.parentId : parentOf(stored, params.parentId, conversation.activeLeafId);
+  // The stopped reply to go on with: it must answer the incoming message. Anything else is a plain regenerate.
+  const stoppedRow =
+    regenerate && params.continueMessageId
+      ? stored.find(
+          (row) => row.id === params.continueMessageId && row.role === "assistant" && row.parentId === incoming.id,
+        )
+      : undefined;
+  const stopped = stoppedRow ? toUIMessage(stoppedRow) : undefined;
+  // A new first message beside an existing one: the first message was edited, so the conversation is named again.
+  const editsFirstMessage = !existing && parentId === null && stored.some((row) => row.parentId === null);
+
+  if (!regenerate) {
+    await saveMessage({
+      id: incoming.id,
+      conversationId,
+      parentId,
+      role: "user",
+      parts,
+      metadata: {
+        ...(context ? { memory: memoryMetadata(context.lookup) } : {}),
+        ...(custom ? { custom } : {}),
+        reasoningEffort,
+      },
+      status: "complete",
+    });
+  }
+  // The branch the user is on now ends at this message, until its reply replaces it (see persistLatestAssistant).
+  await setActiveLeaf(conversationId, incoming.id);
   // This conversation is now the user's active one. The previous active conversation is flushed to memory in the background.
   // A temporary chat never becomes active: it is never saved to memory.
   if (!temporary) await activateConversation(user.id, user.username, conversationId);
 
-  const history = (await listMessages(conversationId)).map(toUIMessage);
-  const naming = temporary ? undefined : namingInput(conversation.title, history);
-  const modelHistory = await toModelHistory(conversationId, history, context, temporary);
+  const history = branchTo(await listMessages(conversationId), incoming.id).map(toUIMessage);
+  const naming = temporary
+    ? undefined
+    : editsFirstMessage
+      ? userText || undefined
+      : namingInput(conversation.title, history);
+  // Continuing: the model reads its stopped reply, then the request to go on with it.
+  const modelHistory = await toModelHistory(conversationId, stopped ? [...history, stopped] : history, context, temporary);
   // A quoted message reaches the model as a blockquote in front of its text.
-  const quotedHistory = injectQuoteContext(modelHistory);
+  const quotedHistory = [
+    ...injectQuoteContext(modelHistory),
+    ...(stopped
+      ? [{ id: "continue", role: "user" as const, parts: [{ type: "text" as const, text: CONTINUE_INSTRUCTION }] }]
+      : []),
+  ];
   // Kept for the message's debug view, exactly as the model reads it. Best effort: a failure never blocks the reply.
-  const modelInput = latestModelInput(quotedHistory);
+  // A continuation keeps the input of the first answer.
+  const modelInput = stopped ? undefined : latestModelInput(quotedHistory);
   if (modelInput) {
     try {
       await setModelInput(incoming.id, modelInput);
@@ -168,6 +226,8 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       };
 
   const streamId = crypto.randomUUID();
+  // The usage of a continuation is its own record: the stopped run's tokens, keyed by the message, stay counted.
+  const usageKey = stopped ? `${stopped.id}:continue:${streamId}` : undefined;
   const turn = startTurn(conversationId, streamId, user.id);
   // The lists show the running spinner from the start of the turn, so they are read again now.
   announceListChange(user.id);
@@ -204,24 +264,43 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       const observed = observeTurnTiming(result.stream, timing, () =>
         writer.write({ type: "message-metadata", messageMetadata: { turnTiming: snapshotTiming(timing) } }),
       );
+      const messageMetadata = ({ part }: { part: { type: string } }) => {
+        if (part.type === "finish") timing.endedAt = Date.now();
+        return part.type === "start" || part.type === "finish" ? { turnTiming: snapshotTiming(timing) } : undefined;
+      };
+      if (!stopped) {
+        writer.merge(toUIMessageStream({ stream: observed, messageMetadata }));
+        return;
+      }
+      // Continuing: the reply opens under the stopped reply's id with what it had, then the model goes on with it.
+      writer.write({ type: "start", messageId: stopped.id, messageMetadata: { turnTiming: snapshotTiming(timing) } });
+      const replayed = replayReply(writer, stopped);
       writer.merge(
-        toUIMessageStream({
-          stream: observed,
-          messageMetadata: ({ part }) => {
-            if (part.type === "finish") timing.endedAt = Date.now();
-            return part.type === "start" || part.type === "finish"
-              ? { turnTiming: snapshotTiming(timing) }
-              : undefined;
-          },
-        }),
+        toUIMessageStream({ stream: observed, messageMetadata, sendStart: false }).pipeThrough(continueInOpenText(replayed)),
       );
     },
     onStepEnd: async ({ messages }) => {
-      await persistLatestAssistant(user.id, conversationId, messages, "streaming", snapshotTiming(timing));
+      await persistLatestAssistant(
+        user.id,
+        conversationId,
+        incoming.id,
+        messages,
+        "streaming",
+        snapshotTiming(timing),
+        usageKey,
+      );
     },
     onEnd: async ({ messages, isAborted }) => {
       timing.endedAt ??= Date.now();
-      await persistLatestAssistant(user.id, conversationId, messages, isAborted ? "aborted" : "complete", snapshotTiming(timing));
+      await persistLatestAssistant(
+        user.id,
+        conversationId,
+        incoming.id,
+        messages,
+        isAborted ? "aborted" : "complete",
+        snapshotTiming(timing),
+        usageKey,
+      );
       await touchConversation(conversationId, user.id);
       // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
       const delivered = hasViewers(streamId);
@@ -261,6 +340,17 @@ function namingInput(title: string, history: UIMessage[]): string | undefined {
   const isPlaceholder = title === DEFAULT_TITLE || userTexts.some((text) => titleFrom(text) === title);
   if (!isPlaceholder) return undefined;
   return userTexts.find(Boolean);
+}
+
+/**
+ * The stored parent of a new message: the one the client names when it is stored in this conversation, none when the
+ * client sends a first message. A parent the server does not know (a message that never reached it) falls back to the
+ * end of the branch the conversation is on, so the message is never stored outside the tree.
+ */
+function parentOf(stored: MessageRow[], requested: string | null, activeLeafId: string | null): string | null {
+  if (requested === null) return null;
+  if (stored.some((row) => row.id === requested)) return requested;
+  return activeLeafId && stored.some((row) => row.id === activeLeafId) ? activeLeafId : (stored.at(-1)?.id ?? null);
 }
 
 /** Sends the conversation's new name on the turn's stream. Transient: the browser reads it, the messages do not store it. */
@@ -305,27 +395,36 @@ async function lookupMemory(username: string, query: string): Promise<MemoryLook
   }
 }
 
+/**
+ * Stores the reply to `userMessageId`: the assistant message after it in the stream's messages. Its parent is that user
+ * message, and the conversation's active leaf moves from the user message to the reply.
+ */
 async function persistLatestAssistant(
   userId: string,
   conversationId: string,
+  userMessageId: string,
   all: UIMessage[],
   status: "streaming" | "complete" | "aborted",
   turnTiming: TurnTiming,
+  usageKey?: string,
 ): Promise<void> {
-  const latest = [...all].reverse().find((message) => message.role === "assistant");
+  const after = all.slice(all.findIndex((message) => message.id === userMessageId) + 1);
+  const latest = after.findLast((message) => message.role === "assistant");
   if (!latest) return;
   await saveMessage({
     id: latest.id,
     conversationId,
+    parentId: userMessageId,
     role: "assistant",
     parts: latest.parts,
     metadata: { model: getConfig().CHAT_MODEL, turnTiming },
     status,
   });
+  await advanceActiveLeaf(conversationId, userMessageId, latest.id);
   // The reply's tokens go to the usage record, keyed by the message: updated while it streams, final when it ends.
   const usage = usageOfTiming(turnTiming);
   if (usage) {
-    await recordModelUsage({ userId, part: "chat", messageId: latest.id, model: getConfig().CHAT_MODEL, usage });
+    await recordModelUsage({ userId, part: "chat", messageId: usageKey ?? latest.id, model: getConfig().CHAT_MODEL, usage });
   }
 }
 

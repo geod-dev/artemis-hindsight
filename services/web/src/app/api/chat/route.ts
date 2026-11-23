@@ -18,6 +18,10 @@ const requestSchema = z.object({
       "expected a UI message",
     ),
   ),
+  // The AI SDK's reason for the request: a new or edited message, or a new reply to the last user message.
+  trigger: z.enum(["submit-message", "regenerate-message"]).optional(),
+  // With a regenerate: the stopped reply to continue (the Continue button under a stopped reply).
+  continueMessageId: z.string().min(1).nullable().optional(),
   // Model context settings from the composer. Only the reasoning effort is used.
   config: z.object({ reasoningEffort: z.enum(["low", "medium", "high"]).optional() }).optional(),
   // The project selected in the new chat. Used when this message creates the conversation.
@@ -48,6 +52,11 @@ export async function POST(req: Request): Promise<Response> {
     return await runChatTurn({
       conversationId: parsed.data.id,
       incoming,
+      // The messages are the client's branch: the one before the incoming message is its parent. An edit sends the
+      // branch up to the edited message's parent, so the edit is stored beside the message it replaces.
+      parentId: parsed.data.messages.at(-2)?.id ?? null,
+      regenerate: parsed.data.trigger === "regenerate-message",
+      continueMessageId: parsed.data.continueMessageId ?? null,
       reasoningEffort: parsed.data.config?.reasoningEffort,
       projectId: parsed.data.projectId,
       temporary: parsed.data.temporary,

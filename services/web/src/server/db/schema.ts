@@ -91,6 +91,13 @@ export const conversations = pgTable(
     // When a client last showed this temporary chat (it calls /api/conversations/<id>/keepalive while it is open), or
     // when a turn last touched it. Null for other conversations.
     keptAliveAt: timestamp("kept_alive_at", { withTimezone: true }),
+    // The last message of the branch the user is on: editing a message or regenerating a reply forks the conversation
+    // (see messages.parentId), and this is the branch the clients open on. Null until the first message.
+    activeLeafId: text("active_leaf_id"),
+    // The last message of the branch that is in the user's Hindsight bank. The next flush appends what follows it when
+    // the active branch continues it, and replaces the conversation's document with the active branch otherwise.
+    // Null until the conversation is first saved.
+    memorizedLeafId: text("memorized_leaf_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -155,6 +162,8 @@ export interface StoredMessageMetadata {
   /** The exact input the model read for this user message. Absent on messages stored before it was recorded. */
   modelInput?: StoredModelInput;
   model?: string;
+  /** The reasoning effort the user message was sent with. Absent on messages stored before it was recorded. */
+  reasoningEffort?: "low" | "medium" | "high";
   /** The assistant turn's timing, measured by the server. Epoch milliseconds. */
   turnTiming?: TurnTiming;
   /** assistant-ui's composer quote, kept under the same key the runtime uses (metadata.custom). */
@@ -169,17 +178,25 @@ export const messages = pgTable(
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").$type<"user" | "assistant" | "system">().notNull(),
+    // The message this one follows. Null for a first message. Two messages with the same parent are branches: an edit is a
+    // new user message beside the one it edits, a regenerated reply a new assistant message beside the old one.
+    parentId: text("parent_id"),
+    // Insertion order across the whole conversation, every branch included. Siblings are shown in this order.
     position: integer("position").notNull(),
     parts: jsonb("parts").$type<UIMessage["parts"]>().notNull(),
     metadata: jsonb("metadata").$type<StoredMessageMetadata>(),
     status: text("status").$type<MessageStatus>().notNull().default("complete"),
     /** When this message was retained in the user's Hindsight bank. Null while it has not been sent yet. */
     memorizedAt: timestamp("memorized_at", { withTimezone: true }),
+    // When the user last had this message at the end of the branch they were on. At a fork, the clients open the
+    // branch visited last.
+    visitedAt: timestamp("visited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("messages_conversation_position_idx").on(table.conversationId, table.position),
+    index("messages_parent_idx").on(table.parentId),
   ],
 );
 
