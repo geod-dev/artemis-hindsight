@@ -59,6 +59,7 @@ function format(unit: UsageUnit, value: number): string {
 const PART_COLOR: Record<UsagePart, AvatarColorId> = {
   input: "blue",
   output: "orange",
+  title: "violet",
   image: "emerald",
   memory: "pink",
 };

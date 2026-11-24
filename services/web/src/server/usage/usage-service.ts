@@ -86,8 +86,7 @@ function partsOf(context: ModelCallContext): [UsagePart, ModelCallTokenKind[]][]
         ["output", ["output"]],
       ];
     case "title":
-      // Naming reads the user's message: the whole call counts as input.
-      return [["input", ALL_KINDS]];
+      return [["title", ALL_KINDS]];
     case "image":
       return [["image", ALL_KINDS]];
     case "memory":

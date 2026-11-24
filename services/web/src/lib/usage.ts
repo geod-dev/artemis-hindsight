@@ -90,14 +90,16 @@ export function rangeStart(range: UsageRange, now: Date): Date | null {
 }
 
 /**
- * The parts of the usage, drawn as the segments of one bar. `input` and `output` come from the chat replies (input with
- * its cache reads and writes); the model call that names a conversation counts as input (it reads the user's message).
- * `image` is the images the agent generates, and `memory` what Hindsight spends (retain, recall, reflect, consolidation,
- * summary refreshes, its decision model). Every figure comes from the ledger of model calls (server/usage/model-calls.ts).
+ * The parts of the usage, drawn as the segments of one bar. Only the chat replies are split: `input` (with its cache
+ * reads and writes) and `output`. Every other context is one part with its whole total: `title` the naming of
+ * conversations (first names and renames), `image` the images the agent generates, and `memory` what Hindsight spends
+ * (retain, recall, reflect, consolidation, summary refreshes, its decision model). Every figure comes from the ledger of
+ * model calls (server/usage/model-calls.ts).
  */
 export const USAGE_PARTS = [
   { id: "input", label: "Input" },
   { id: "output", label: "Output" },
+  { id: "title", label: "Title" },
   { id: "image", label: "Image" },
   { id: "memory", label: "Memory" },
 ] as const;
@@ -121,6 +123,7 @@ export function emptyTotals(): UsageTotals {
     parts: {
       input: { tokens: 0, costUsd: 0 },
       output: { tokens: 0, costUsd: 0 },
+      title: { tokens: 0, costUsd: 0 },
       memory: { tokens: 0, costUsd: 0 },
       image: { tokens: 0, costUsd: 0 },
     },
