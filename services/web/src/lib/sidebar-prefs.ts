@@ -1,3 +1,5 @@
+import { useStoredState } from "./use-stored-state";
+
 // The sidebar's view preferences. They live in this browser only: a convenience, not data the server needs.
 
 const SHOW_PROJECT_CONVERSATIONS = "artemis.sidebar.showProjectConversations";
@@ -39,4 +41,16 @@ export function writeSidebarGroupCollapsed(group: SidebarGroupName, collapsed: b
   } catch {
     // Not stored: the choice lasts until the page is reloaded.
   }
+}
+
+const SHOW_PROJECTS = "artemis.sidebar.showProjects";
+
+const isBoolean = (raw: unknown) => (typeof raw === "boolean" ? raw : undefined);
+
+/**
+ * Whether the sidebar shows the Projects group, and its setter (the appearance settings). On by default. Without it,
+ * Recents lists every conversation and has no filter menu: project conversations could not be found otherwise.
+ */
+export function useShowSidebarProjects(): [boolean, (show: boolean) => void] {
+  return useStoredState(SHOW_PROJECTS, true, isBoolean);
 }

@@ -25,9 +25,19 @@ export interface Preferences {
   reasoningEffort: ReasoningEffort;
   /** The drawer's Recents list shows the conversations of projects too (the web sidebar's sort menu). */
   showProjectConversations: boolean;
+  /**
+   * The drawer shows the Projects list (appearance settings, as the web sidebar). Without it, Recents lists every
+   * conversation and has no sort menu.
+   */
+  showProjects: boolean;
 }
 
-const DEFAULT_PREFERENCES: Preferences = { appearance: "system", reasoningEffort: "medium", showProjectConversations: true };
+const DEFAULT_PREFERENCES: Preferences = {
+  appearance: "system",
+  reasoningEffort: "medium",
+  showProjectConversations: true,
+  showProjects: true,
+};
 
 export async function loadPreferences(): Promise<Preferences> {
   const raw = await AsyncStorage.getItem(PREFERENCES_KEY);

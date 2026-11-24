@@ -59,6 +59,7 @@ import {
   readSidebarGroupCollapsed,
   writeShowProjectConversations,
   writeSidebarGroupCollapsed,
+  useShowSidebarProjects,
   type SidebarGroupName,
 } from "@/lib/sidebar-prefs";
 import { newChatInProjectHref, type ConversationSummary, type ProjectSummary } from "@/lib/projects";
@@ -151,7 +152,9 @@ export function AppSidebar({
     setShowProjectConversations(show);
     writeShowProjectConversations(show);
   };
-  const recentConversations = showProjectConversations
+  // Without the Projects group (appearance settings), Recents lists every conversation and has no filter menu.
+  const [showProjects] = useShowSidebarProjects();
+  const recentConversations = showProjectConversations || !showProjects
     ? conversations
     : conversations.filter((conversation) => !conversation.project);
 
@@ -305,46 +308,48 @@ export function AppSidebar({
         onDragEnd={onSidebarDragEnd}
       >
         <SidebarContent>
-          <SidebarGroup>
-            <CollapsibleGroupLabel
-              label="Projects"
-              collapsed={collapsedGroups.projects}
-              controls="sidebar-projects-list"
-              onToggle={() => toggleGroup("projects")}
-            />
-            {/* Hidden until the sidebar is hovered, like its close button. */}
-            <SidebarGroupAction
-              aria-label="New project"
-              title="New project"
-              onClick={openNewProject}
-              className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [&>svg]:size-3"
-            >
-              <Plus />
-            </SidebarGroupAction>
-            <SidebarGroupContent id="sidebar-projects-list" hidden={collapsedGroups.projects}>
-              <SidebarMenu>
-                {projects.length === 0 && (
-                  <p className="px-2 py-1.5 text-xs text-muted-foreground">No projects yet.</p>
-                )}
-                {/* Projects are dragged into another place: the new order is saved as soon as it is dropped. */}
-                <SortableContext items={orderedProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
-                  {orderedProjects.map((project) => (
-                    <SortableProjectRow
-                      key={project.id}
-                      project={project}
-                      active={activeProjectId === project.id}
-                      unread={unreadProjectIds.has(project.id)}
-                      onEdit={() => openEditProject(project)}
-                      onDelete={() => {
-                        setProjectDeleteError(null);
-                        setPendingProjectDelete(project);
-                      }}
-                    />
-                  ))}
-                </SortableContext>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {showProjects && (
+            <SidebarGroup>
+              <CollapsibleGroupLabel
+                label="Projects"
+                collapsed={collapsedGroups.projects}
+                controls="sidebar-projects-list"
+                onToggle={() => toggleGroup("projects")}
+              />
+              {/* Hidden until the sidebar is hovered, like its close button. */}
+              <SidebarGroupAction
+                aria-label="New project"
+                title="New project"
+                onClick={openNewProject}
+                className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [&>svg]:size-3"
+              >
+                <Plus />
+              </SidebarGroupAction>
+              <SidebarGroupContent id="sidebar-projects-list" hidden={collapsedGroups.projects}>
+                <SidebarMenu>
+                  {projects.length === 0 && (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">No projects yet.</p>
+                  )}
+                  {/* Projects are dragged into another place: the new order is saved as soon as it is dropped. */}
+                  <SortableContext items={orderedProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
+                    {orderedProjects.map((project) => (
+                      <SortableProjectRow
+                        key={project.id}
+                        project={project}
+                        active={activeProjectId === project.id}
+                        unread={unreadProjectIds.has(project.id)}
+                        onEdit={() => openEditProject(project)}
+                        onDelete={() => {
+                          setProjectDeleteError(null);
+                          setPendingProjectDelete(project);
+                        }}
+                      />
+                    ))}
+                  </SortableContext>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
           <SidebarGroup>
             <CollapsibleGroupLabel
@@ -353,30 +358,32 @@ export function AppSidebar({
               controls="sidebar-recents-list"
               onToggle={() => toggleGroup("recents")}
             />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarGroupAction
-                  aria-label="Sort and filter recents"
-                  title="Sort and filter recents"
-                  className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [&>svg]:size-3"
-                >
-                  <ListFilter />
-                  {/* A tiny dot while project conversations are left out of Recents. */}
-                  {!showProjectConversations && (
-                    <span aria-hidden className="absolute top-0 right-0 size-1 rounded-full bg-primary" />
-                  )}
-                </SidebarGroupAction>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="start">
-                <DropdownMenuCheckboxItem
-                  checked={showProjectConversations}
-                  onCheckedChange={toggleProjectConversations}
-                  onSelect={(event) => event.preventDefault()}
-                >
-                  Show project conversations
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {showProjects && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarGroupAction
+                    aria-label="Sort and filter recents"
+                    title="Sort and filter recents"
+                    className="text-sidebar-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [&>svg]:size-3"
+                  >
+                    <ListFilter />
+                    {/* A tiny dot while project conversations are left out of Recents. */}
+                    {!showProjectConversations && (
+                      <span aria-hidden className="absolute top-0 right-0 size-1 rounded-full bg-primary" />
+                    )}
+                  </SidebarGroupAction>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="right" align="start">
+                  <DropdownMenuCheckboxItem
+                    checked={showProjectConversations}
+                    onCheckedChange={toggleProjectConversations}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    Show project conversations
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <SidebarGroupContent id="sidebar-recents-list" hidden={collapsedGroups.recents}>
               <SidebarMenu>
                 {recentConversations.length === 0 && (

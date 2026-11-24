@@ -37,7 +37,10 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
   // The sort menu of Recents: whether the conversations of projects are listed too.
   const [sortOpen, setSortOpen] = useState(false);
   const allConversations = conversations.data ?? [];
-  const recents = preferences.showProjectConversations ? allConversations : allConversations.filter((item) => !item.project);
+  // Without the Projects list (appearance settings), Recents lists every conversation and has no sort menu.
+  const { showProjects } = preferences;
+  const recents =
+    preferences.showProjectConversations || !showProjects ? allConversations : allConversations.filter((item) => !item.project);
   // A project shows an unread dot while one of its conversations has an unread reply that is not open now.
   const unreadProjectIds = new Set(
     allConversations.flatMap((item) =>
@@ -63,49 +66,55 @@ export function ConversationsDrawer(props: DrawerContentComponentProps) {
 
   const projectsSection = (
     <View>
-      <View style={styles.sectionRow}>
-        <Text style={[styles.sectionLabel, { color: colors.muted }]}>Projects</Text>
-        <Pressable
-          onPress={() => go("/projects/form" as Href)}
-          accessibilityRole="button"
-          accessibilityLabel="New project"
-          hitSlop={10}
-          style={styles.sectionAction}
-        >
-          <Plus size={18} color={colors.muted} />
-        </Pressable>
-      </View>
-      {projects.data?.length === 0 ? <Text style={[styles.hint, { color: colors.muted }]}>No projects yet.</Text> : null}
-      {projects.data?.map((project) => {
-        const active = selectedProject === project.id;
-        return (
-          <Pressable
-            key={project.id}
-            onPress={() => openProject(project.id)}
-            onLongPress={() => setProjectMenuFor(project)}
-            accessibilityRole="link"
-            accessibilityLabel={unreadProjectIds.has(project.id) ? `${project.name}, unread reply` : project.name}
-            style={[styles.item, styles.row, active && { backgroundColor: colors.surfaceStrong }]}
-          >
-            <ProjectIcon project={project} size={18} />
-            <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
-              {project.name}
-            </Text>
-            {unreadProjectIds.has(project.id) ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
-          </Pressable>
-        );
-      })}
+      {showProjects ? (
+        <>
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionLabel, { color: colors.muted }]}>Projects</Text>
+            <Pressable
+              onPress={() => go("/projects/form" as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="New project"
+              hitSlop={10}
+              style={styles.sectionAction}
+            >
+              <Plus size={18} color={colors.muted} />
+            </Pressable>
+          </View>
+          {projects.data?.length === 0 ? <Text style={[styles.hint, { color: colors.muted }]}>No projects yet.</Text> : null}
+          {projects.data?.map((project) => {
+            const active = selectedProject === project.id;
+            return (
+              <Pressable
+                key={project.id}
+                onPress={() => openProject(project.id)}
+                onLongPress={() => setProjectMenuFor(project)}
+                accessibilityRole="link"
+                accessibilityLabel={unreadProjectIds.has(project.id) ? `${project.name}, unread reply` : project.name}
+                style={[styles.item, styles.row, active && { backgroundColor: colors.surfaceStrong }]}
+              >
+                <ProjectIcon project={project} size={18} />
+                <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
+                  {project.name}
+                </Text>
+                {unreadProjectIds.has(project.id) ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
+              </Pressable>
+            );
+          })}
+        </>
+      ) : null}
       <View style={[styles.sectionRow, styles.recentsRow]}>
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>Recents</Text>
-        <Pressable
-          onPress={() => setSortOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Sort and filter recents"
-          hitSlop={10}
-          style={styles.sectionAction}
-        >
-          <ArrowDownUp size={16} color={colors.muted} />
-        </Pressable>
+        {showProjects ? (
+          <Pressable
+            onPress={() => setSortOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Sort and filter recents"
+            hitSlop={10}
+            style={styles.sectionAction}
+          >
+            <ArrowDownUp size={16} color={colors.muted} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
