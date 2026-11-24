@@ -50,7 +50,7 @@ export async function nameConversation(params: {
 }): Promise<string | undefined> {
   const { conversationId, userId, placeholderTitle, firstMessage, cause } = params;
   try {
-    const { text, usage, response } = await generateText({
+    const { text, usage, response, finishReason } = await generateText({
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
       prompt: firstMessage.slice(0, NAMING_INPUT_CHARS),
@@ -69,11 +69,15 @@ export async function nameConversation(params: {
       conversationId,
     });
     const title = cleanTitle(text);
-    if (!title) return undefined;
+    if (!title) {
+      console.warn("conversation naming failed", { conversationId, reason: "empty title", finishReason, text });
+      return undefined;
+    }
     const renamed =
       placeholderTitle === undefined
         ? await setConversationTitle(conversationId, userId, title)
         : await renameUntitledConversation(conversationId, userId, placeholderTitle, title);
+    if (!renamed) console.warn("conversation naming failed", { conversationId, reason: "title not stored", title });
     return renamed ? title : undefined;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
