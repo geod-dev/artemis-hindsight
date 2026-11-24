@@ -16,7 +16,7 @@ import {
   titleFrom,
 } from "../repositories/conversation-repository";
 import { activeLeafOf, branchTo, listMessages, type MessageRow } from "../repositories/message-repository";
-import { NAMING_INPUT_CHARS, nameConversation } from "../agent/conversation-title";
+import { nameConversation, namingMessages, type NamingMessage } from "../agent/conversation-title";
 import { textOf } from "../agent/memory-context";
 import { findProject } from "../repositories/project-repository";
 
@@ -58,19 +58,16 @@ export async function rename(userId: string, id: string, title: string): Promise
 }
 
 /**
- * Names the conversation again with the naming task, from the user's messages of the branch it is on (not only the
- * first one). A long conversation is cut from its start: its latest messages say best what it is about now.
- * Returns the new title.
+ * Names the conversation again with the naming task, from the messages (the user's and the agent's) of the branch it is
+ * on. A long conversation keeps its latest messages: they say best what it is about now. Returns the new title.
  */
 export async function regenerateTitle(userId: string, id: string): Promise<string> {
   const conversation = await findConversation(id, userId);
   if (!conversation || conversation.temporary) throw new ConversationServiceError("conversation not found", 404);
   const rows = await listMessages(id);
-  const text = userTexts(branchTo(rows, activeLeafOf(rows, conversation.activeLeafId)))
-    .join("\n\n")
-    .slice(-NAMING_INPUT_CHARS);
-  if (!text) throw new ConversationServiceError("this conversation has no text to name it from", 400);
-  const title = await nameConversation({ conversationId: id, userId, firstMessage: text, cause: "user_action" });
+  const messages = namingMessages(branchTo(rows, activeLeafOf(rows, conversation.activeLeafId)));
+  if (messages.length === 0) throw new ConversationServiceError("this conversation has no text to name it from", 400);
+  const title = await nameConversation({ conversationId: id, userId, messages, cause: "user_action" });
   if (!title) throw new ConversationServiceError("the title could not be generated right now", 502);
   return title;
 }
@@ -81,19 +78,23 @@ export async function regenerateTitle(userId: string, id: string): Promise<strin
  * temporary chats are not. Returns how many were named and how many are left untitled.
  */
 export async function nameUntitledConversations(userId: string): Promise<{ named: number; failed: number }> {
-  const untitled: { id: string; title: string; text: string }[] = [];
+  const untitled: { id: string; title: string; messages: NamingMessage[] }[] = [];
   for (const { id, title } of await listTitledConversations(userId)) {
-    const texts = userTexts(await listMessages(id));
+    const rows = await listMessages(id);
+    const texts = userTexts(rows);
     const isPlaceholder = title === DEFAULT_TITLE || texts.some((text) => titleFrom(text) === title);
-    if (isPlaceholder && texts[0]) untitled.push({ id, title, text: texts[0] });
+    // Named from its first user message with text, as a new conversation is.
+    const first = rows.find((row) => row.role === "user" && textOf({ id: row.id, role: "user", parts: row.parts }));
+    const messages = first ? namingMessages([first]) : [];
+    if (isPlaceholder && messages.length > 0) untitled.push({ id, title, messages });
   }
   let named = 0;
   // A few at a time, so a long list does not hit the model's rate limit all at once.
   for (let start = 0; start < untitled.length; start += 4) {
     const batch = untitled.slice(start, start + 4);
     const titles = await Promise.all(
-      batch.map(({ id, title, text }) =>
-        nameConversation({ conversationId: id, userId, placeholderTitle: title, firstMessage: text, cause: "user_action" }),
+      batch.map(({ id, title, messages }) =>
+        nameConversation({ conversationId: id, userId, placeholderTitle: title, messages, cause: "user_action" }),
       ),
     );
     named += titles.filter(Boolean).length;

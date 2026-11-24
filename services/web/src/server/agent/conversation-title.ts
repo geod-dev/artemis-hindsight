@@ -1,5 +1,5 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { generateText } from "ai";
+import { generateText, type UIMessage } from "ai";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "../config";
@@ -24,16 +24,56 @@ export function loadConversationTitlePrompt(): string {
 
 /** The same limit the placeholder title uses, so a generated name never looks longer than a first message. */
 const MAX_TITLE_LENGTH = 60;
-/**
- * The most text the naming model reads: the start of a first message, or the end of a whole conversation when the user
- * asks for a new name (regenerateTitle in conversation-service.ts cuts it from its start).
- */
-export const NAMING_INPUT_CHARS = 2000;
+/** The most JSON the naming model reads. A long conversation keeps its latest messages: they say best what it is about. */
+const NAMING_INPUT_CHARS = 2000;
+/** The most text kept from one message, so one long message does not push out all the others. */
+const NAMING_MESSAGE_CHARS = 1000;
 
 /**
- * Names a conversation from its text with one short model call, then stores the name. With `placeholderTitle`, the name
- * only replaces that placeholder (a new conversation named from its first message). Without it, the name replaces the
- * current title (the user asked for a new name, from the user's messages of the whole conversation).
+ * One message as the naming model reads it: what the user typed or the agent replied, and the names of the files the
+ * user attached. Stored messages hold no context tags (those are added for the agent in model-history.ts), and file
+ * contents are never sent.
+ */
+export interface NamingMessage {
+  role: "user" | "assistant";
+  text: string;
+  files?: string[];
+}
+
+/**
+ * The messages to name a conversation from: its user and assistant messages in order, each cut to its start, then
+ * the latest ones that fit in the naming budget. Empty when no user message has text (a conversation opened with only a
+ * file is named on the first message that says something).
+ */
+export function namingMessages(history: Pick<UIMessage, "role" | "parts">[]): NamingMessage[] {
+  const all: NamingMessage[] = [];
+  for (const message of history) {
+    if (message.role !== "user" && message.role !== "assistant") continue;
+    const text = message.parts
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("")
+      .trim()
+      .slice(0, NAMING_MESSAGE_CHARS);
+    const files = message.parts.flatMap((part) => (part.type === "file" && part.filename ? [part.filename] : []));
+    if (!text && files.length === 0) continue;
+    all.push({ role: message.role, text, ...(files.length > 0 ? { files } : {}) });
+  }
+  if (!all.some((message) => message.role === "user" && message.text)) return [];
+  const kept: NamingMessage[] = [];
+  let size = 2;
+  for (const message of [...all].reverse()) {
+    size += JSON.stringify(message).length + 1;
+    if (kept.length > 0 && size > NAMING_INPUT_CHARS) break;
+    kept.unshift(message);
+  }
+  return kept;
+}
+
+/**
+ * Names a conversation from its messages with one short model call, then stores the name. The messages are sent as
+ * JSON under a question, so the model reads them as text to name, never as a request to answer. With
+ * `placeholderTitle`, the name only replaces that placeholder (a new conversation named from its first message).
+ * Without it, the name replaces the current title (the user asked for a new name).
  * Resolves to the stored name, or undefined when nothing was named.
  *
  * `cause` is why the name is asked for: a new conversation, or the user (rename, name the untitled conversations).
@@ -45,15 +85,15 @@ export async function nameConversation(params: {
   conversationId: string;
   userId: string;
   placeholderTitle?: string;
-  firstMessage: string;
+  messages: NamingMessage[];
   cause: "conversation_created" | "user_action";
 }): Promise<string | undefined> {
-  const { conversationId, userId, placeholderTitle, firstMessage, cause } = params;
+  const { conversationId, userId, placeholderTitle, messages, cause } = params;
   try {
     const { text, usage, response, finishReason } = await generateText({
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
-      prompt: firstMessage.slice(0, NAMING_INPUT_CHARS),
+      prompt: `What's the title of this conversation?\n\n${JSON.stringify(messages)}`,
       maxOutputTokens: 32,
       // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
       maxRetries: 4,

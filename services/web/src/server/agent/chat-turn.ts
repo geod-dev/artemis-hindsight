@@ -41,7 +41,7 @@ import {
 import { activateConversation, flushConversation, flushIfInactive } from "../memory/memory-flush";
 import { checkAttachments } from "./attachments";
 import { CONTINUE_INSTRUCTION, continueInOpenText, replayReply } from "./continue-reply";
-import { nameConversation } from "./conversation-title";
+import { nameConversation, namingMessages, type NamingMessage } from "./conversation-title";
 import { flushMemoryTool } from "./flush-memory-tool";
 import { latestModelInput, loadUsableSkills, toModelHistory, type UserContext } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
@@ -188,7 +188,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   const naming = temporary
     ? undefined
     : editsFirstMessage
-      ? userText || undefined
+      ? nonEmpty(namingMessages(history))
       : namingInput(conversation.title, history);
   // Continuing: the model reads its stopped reply, then the request to go on with it.
   const modelHistory = await toModelHistory(conversationId, stopped ? [...history, stopped] : history, context, temporary);
@@ -274,7 +274,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
           conversationId,
           userId: user.id,
           placeholderTitle: conversation.title,
-          firstMessage: naming,
+          messages: naming,
           cause: "conversation_created",
         }).then((title) => {
           if (title) announceTitle(writer, title);
@@ -346,16 +346,19 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
 }
 
 /**
- * The text to name the conversation from, or undefined when it already has a real name. The title is a placeholder
- * when it is the default one or the one a user message of this conversation gives (see `ensureConversation`). The
- * name comes from the first user message with text, so a conversation opened with only a file is named on the first
- * message that says something.
+ * The messages to name the conversation from, or undefined when it already has a real name. The title is a placeholder
+ * when it is the default one or the one a user message of this conversation gives (see `ensureConversation`). A
+ * conversation opened with only a file is named on the first message that says something (`namingMessages`).
  */
-function namingInput(title: string, history: UIMessage[]): string | undefined {
+function namingInput(title: string, history: UIMessage[]): NamingMessage[] | undefined {
   const userTexts = history.filter((message) => message.role === "user").map(textOf);
   const isPlaceholder = title === DEFAULT_TITLE || userTexts.some((text) => titleFrom(text) === title);
   if (!isPlaceholder) return undefined;
-  return userTexts.find(Boolean);
+  return nonEmpty(namingMessages(history));
+}
+
+function nonEmpty<T>(items: T[]): T[] | undefined {
+  return items.length > 0 ? items : undefined;
 }
 
 /**
