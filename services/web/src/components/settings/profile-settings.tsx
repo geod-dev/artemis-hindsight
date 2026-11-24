@@ -1,18 +1,18 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ColorSwatches } from "@/components/profile/color-swatches";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { saveProfile } from "@/components/profile/save-profile";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isAvatarColorId, type AvatarColorId } from "@/lib/avatar-colors";
 import { SettingsPage } from "./settings-page";
 
 const MAX_NAME = 40;
+/** How long the name waits after the last keystroke before it is saved. */
+const NAME_SAVE_DELAY_MS = 600;
 
 export function ProfileSettings({
   username,
@@ -26,36 +26,58 @@ export function ProfileSettings({
   const router = useRouter();
   const initialColor = isAvatarColorId(savedColor) ? savedColor : null;
 
-  const [saved, setSaved] = useState({ displayName: savedDisplayName, color: initialColor });
   const [displayName, setDisplayName] = useState(savedDisplayName);
   const [color, setColor] = useState<AvatarColorId | null>(initialColor);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const trimmed = displayName.trim();
-  const dirty = displayName !== saved.displayName || color !== saved.color;
-  const canSave = dirty && trimmed.length > 0 && color !== null && !saving;
 
-  function revert() {
-    setDisplayName(saved.displayName);
-    setColor(saved.color);
-    setError(null);
+  // Saved as it changes, like the appearance page: a colour on click, the name once typing stops or the field is left.
+  // Saves run one after another, so an older name never lands after a newer one. The phone's profile does the same.
+  const saved = useRef({ displayName: savedDisplayName, color: initialColor });
+  const queue = useRef(Promise.resolve());
+
+  const persist = useCallback(
+    (name: string, nextColor: AvatarColorId | null) => {
+      const values = { displayName: name.trim(), avatarColor: nextColor };
+      if (!values.displayName || !values.avatarColor) return;
+      const previous = saved.current;
+      if (values.displayName === previous.displayName && values.avatarColor === previous.color) return;
+      saved.current = { displayName: values.displayName, color: values.avatarColor };
+      const avatarColor = values.avatarColor;
+      queue.current = queue.current.then(async () => {
+        try {
+          await saveProfile({ displayName: values.displayName, avatarColor });
+          setError(null);
+          router.refresh();
+        } catch (saveError) {
+          // The next change sends everything again.
+          saved.current = previous;
+          setError(saveError instanceof Error ? saveError.message : "could not save the profile");
+        }
+      });
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => persist(displayName, color), NAME_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // Only typing waits: `color` is left out, a colour is saved on click with the name as it is.
+  }, [displayName, persist]);
+
+  function pickColor(next: AvatarColorId) {
+    setColor(next);
+    persist(displayName, next);
   }
 
-  async function save() {
-    if (!canSave || color === null) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await saveProfile({ displayName: trimmed, avatarColor: color });
-      setSaved({ displayName: trimmed, color });
-      setDisplayName(trimmed);
-      router.refresh();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "could not save the profile");
-    } finally {
-      setSaving(false);
+  /** Leaving the field saves the name now; an empty name is not saved and the last saved one comes back. */
+  function leaveName() {
+    if (!trimmed) {
+      setDisplayName(saved.current.displayName);
+      return;
     }
+    setDisplayName(trimmed);
+    persist(trimmed, color);
   }
 
   return (
@@ -76,7 +98,7 @@ export function ProfileSettings({
             maxLength={MAX_NAME}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
-            disabled={saving}
+            onBlur={leaveName}
             className="max-w-md"
           />
           <p className="text-xs text-muted-foreground">Up to {MAX_NAME} characters.</p>
@@ -84,29 +106,11 @@ export function ProfileSettings({
 
         <div className="flex flex-col gap-3">
           <Label>Avatar color</Label>
-          <ColorSwatches value={color} onChange={setColor} disabled={saving} />
+          <ColorSwatches value={color} onChange={pickColor} />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
       </section>
-
-      {dirty && (
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 z-50 flex w-[min(calc(100%-2rem),36rem)] -translate-x-1/2 items-center justify-between gap-4 rounded-xl border bg-popover px-4 py-3 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200"
-        >
-          <p className="text-sm">You have unsaved changes.</p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={revert} disabled={saving} className="gap-1.5">
-              <RotateCcw className="size-3.5" />
-              Revert
-            </Button>
-            <Button size="sm" onClick={() => void save()} disabled={!canSave}>
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
-        </div>
-      )}
     </SettingsPage>
   );
 }

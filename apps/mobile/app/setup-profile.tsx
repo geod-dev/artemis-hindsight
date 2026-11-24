@@ -16,6 +16,7 @@ export default function SetupProfileScreen() {
   return (
     <ScrollView style={{ backgroundColor: colors.background }}>
       <ProfileForm
+        mode="submit"
         initialDisplayName={state.user.displayName}
         initialColor={state.user.avatarColor}
         submitLabel="Continue"
