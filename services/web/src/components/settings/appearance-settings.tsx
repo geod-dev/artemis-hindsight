@@ -1,11 +1,9 @@
 "use client";
 
-import { SettingsList, SettingsPage, SettingsRow } from "./settings-page";
+import { SettingsList, SettingsPage, SettingsSwitchRow } from "./settings-page";
 import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useId, useState } from "react";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { useEffect, useState } from "react";
 import { useShowSidebarProjects } from "@/lib/sidebar-prefs";
 import { cn } from "@/lib/utils";
 
@@ -103,13 +101,13 @@ export function AppearanceSettings() {
 
 /** Shows or hides the Projects group of the sidebar. Kept in this browser, like the theme. */
 function ShowProjectsRow() {
-  const id = useId();
   const [showProjects, setShowProjects] = useShowSidebarProjects();
   return (
-    <SettingsRow
-      title={<Label htmlFor={id}>Show projects in the sidebar</Label>}
+    <SettingsSwitchRow
+      title="Show projects in the sidebar"
       description="When off, the sidebar lists every conversation in Recents, project ones included."
-      actions={<Switch id={id} checked={showProjects} onCheckedChange={setShowProjects} />}
+      checked={showProjects}
+      onCheckedChange={setShowProjects}
     />
   );
 }

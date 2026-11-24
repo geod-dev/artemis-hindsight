@@ -31,7 +31,14 @@ export default function AppearanceSettings() {
 
       {/* The web's appearance page has the same switch for its sidebar. */}
       <Text style={[styles.section, { color: colors.muted }]}>Drawer</Text>
-      <View style={[styles.option, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {/* The whole row toggles the switch, as on the web. */}
+      <Pressable
+        onPress={() => setShowProjects(!preferences.showProjects)}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: preferences.showProjects }}
+        accessibilityLabel="Show projects"
+        style={[styles.option, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      >
         <View style={styles.optionText}>
           <Text style={{ color: colors.text, fontSize: 16 }}>Show projects</Text>
           <Text style={{ color: colors.muted, fontSize: 13 }}>When off, Recents lists every conversation, project ones included.</Text>
@@ -39,11 +46,12 @@ export default function AppearanceSettings() {
         <Switch
           value={preferences.showProjects}
           onValueChange={setShowProjects}
-          accessibilityLabel="Show projects"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           trackColor={{ false: colors.border, true: colors.accent }}
           thumbColor={colors.background}
         />
-      </View>
+      </Pressable>
     </View>
   );
 }

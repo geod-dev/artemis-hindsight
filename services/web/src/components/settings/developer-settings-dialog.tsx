@@ -4,7 +4,6 @@ import { Code, Loader2, Save, Sparkles, Type, type LucideIcon } from "lucide-rea
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useMessageDebugPreference } from "@/lib/developer-prefs";
 import { cn } from "@/lib/utils";
@@ -27,7 +26,7 @@ export function DeveloperSettingsDialog() {
           <DialogTitle>Developer settings</DialogTitle>
           <DialogDescription>Tools for looking inside Artemis. The toggle applies to this browser only.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col divide-y rounded-xl border">
+        <div className="flex flex-col divide-y overflow-hidden rounded-xl border">
           <MessageDebugRow />
           <FlushRow />
           <ConsolidateRow />
@@ -38,17 +37,23 @@ export function DeveloperSettingsDialog() {
   );
 }
 
+/** A row of the dialog. With `htmlFor` (a switch), the whole row is the switch's label: a click anywhere toggles it. */
 function Row({ title, description, htmlFor, children }: { title: string; description: string; htmlFor?: string; children: ReactNode }) {
+  const Root = htmlFor ? "label" : "div";
   return (
-    <div className="flex items-center justify-between gap-4 p-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Label htmlFor={htmlFor} className="text-sm font-medium">
-          {title}
-        </Label>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+    <Root
+      htmlFor={htmlFor}
+      className={cn(
+        "flex items-center justify-between gap-4 p-4",
+        htmlFor && "cursor-pointer transition-colors select-none hover:bg-muted/50",
+      )}
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-sm text-muted-foreground">{description}</span>
+      </span>
       {children}
-    </div>
+    </Root>
   );
 }
 

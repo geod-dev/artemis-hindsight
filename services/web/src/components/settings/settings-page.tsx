@@ -1,7 +1,8 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 /**
@@ -98,6 +99,38 @@ export function SettingsRow({
         {actions && <div className="flex shrink-0 flex-col items-stretch gap-1.5">{actions}</div>}
       </div>
       {note && <p className="text-sm text-muted-foreground">{note}</p>}
+    </li>
+  );
+}
+
+/**
+ * A row of a SettingsList that turns one setting on or off. The whole row is the switch's label, so a click anywhere on
+ * it toggles the switch, like the settings of any system.
+ */
+export function SettingsSwitchRow({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <li>
+      <label
+        htmlFor={id}
+        className="flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors select-none hover:bg-muted/50"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-sm font-medium">{title}</span>
+          {description && <span className="line-clamp-2 text-sm text-muted-foreground">{description}</span>}
+        </span>
+        <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      </label>
     </li>
   );
 }
