@@ -94,7 +94,9 @@ export async function nameConversation(params: {
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
       prompt: `What's the title of this conversation?\n\n${JSON.stringify(messages)}`,
-      maxOutputTokens: 32,
+      // A little thinking, and no output cap: a cap small enough for a title was spent on thinking and left no text
+      // (finishReason "length", empty title).
+      providerOptions: { anthropic: { thinking: { type: "adaptive" }, effort: "low" } },
       // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
       maxRetries: 4,
     });
@@ -110,7 +112,14 @@ export async function nameConversation(params: {
     });
     const title = cleanTitle(text);
     if (!title) {
-      console.warn("conversation naming failed", { conversationId, reason: "empty title", finishReason, text });
+      console.warn("conversation naming failed", {
+        conversationId,
+        reason: "empty title",
+        finishReason,
+        text,
+        outputTokens: usage.outputTokens,
+        reasoningTokens: usage.outputTokenDetails?.reasoningTokens,
+      });
       return undefined;
     }
     const renamed =
