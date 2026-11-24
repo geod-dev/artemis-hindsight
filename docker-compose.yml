@@ -69,6 +69,12 @@ services:
       HINDSIGHT_API_CONSOLIDATION_LLM_MODEL: anthropic/claude-haiku-5-5
       HINDSIGHT_API_CONSOLIDATION_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       HINDSIGHT_API_CONSOLIDATION_LLM_REASONING_EFFORT: "medium"
+      # Decision model: Jev (TypeSafe AI) answers the typed in-between questions (does this fact restate an observation,
+      # can this memory change a knowledge page) in place of an LLM call. Consolidation and knowledge page refreshes use
+      # it; they fall back to the LLM when it fails.
+      HINDSIGHT_API_DECISION_MODEL_PROVIDER: typesafe
+      HINDSIGHT_API_DECISION_MODEL_MODEL: jev-latest
+      HINDSIGHT_API_DECISION_MODEL_API_KEY: ${TYPESAFE_API_KEY:?set TYPESAFE_API_KEY in .env}
     volumes:
       - hindsight-data:/home/hindsight/.pg0
     ports:

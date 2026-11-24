@@ -7,7 +7,7 @@
 # Every service has a healthcheck, or an explicit `healthcheck: disable: true` with `exclude_from_hc: true`
 # when it is a one-shot job. Coolify computes the overall status from these.
 #
-# Required: POSTGRES_PASSWORD, ANTHROPIC_API_KEY, AUTH_SECRET (32+ chars), ADMIN_ACCESS_KEY (16+ chars).
+# Required: POSTGRES_PASSWORD, ANTHROPIC_API_KEY, TYPESAFE_API_KEY (Hindsight decision model), AUTH_SECRET (32+ chars), ADMIN_ACCESS_KEY (16+ chars).
 # POSTGRES_PASSWORD goes inside DATABASE_URL: use letters and digits only (e.g. openssl rand -hex 32).
 # Optional: GROQ_API_KEY (dictation), OPENAI_API_KEY (image generation), BRAVE_API_KEY and BRAVE_REQUESTS_PER_SECOND (image groups), GITHUB_TOKEN (skill marketplaces), CHAT_MODEL, TITLE_MODEL, MAX_AGENT_STEPS, MEMORY_RECALL_BUDGET,
 # MEMORY_RECALL_MAX_TOKENS. The agent's recall tool budget is fixed in this file (MEMORY_TOOL_RECALL_BUDGET: mid).
@@ -68,6 +68,12 @@ services:
       HINDSIGHT_API_CONSOLIDATION_LLM_MODEL: anthropic/claude-haiku-5-5
       HINDSIGHT_API_CONSOLIDATION_LLM_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in Coolify}
       HINDSIGHT_API_CONSOLIDATION_LLM_REASONING_EFFORT: "medium"
+      # Decision model: Jev (TypeSafe AI) answers the typed in-between questions (does this fact restate an observation,
+      # can this memory change a knowledge page) in place of an LLM call. Consolidation and knowledge page refreshes use
+      # it; they fall back to the LLM when it fails.
+      HINDSIGHT_API_DECISION_MODEL_PROVIDER: typesafe
+      HINDSIGHT_API_DECISION_MODEL_MODEL: jev-latest
+      HINDSIGHT_API_DECISION_MODEL_API_KEY: ${TYPESAFE_API_KEY:?set TYPESAFE_API_KEY in Coolify}
     volumes:
       - hindsight-data:/home/hindsight/.pg0
     healthcheck:
