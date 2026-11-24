@@ -40,8 +40,9 @@ services:
       HINDSIGHT_API_WORKER_ID: artemis-hindsight
       # No consolidation after each retain: duplicates copies of each fact. The daily job in the web app runs it instead.
       HINDSIGHT_API_ENABLE_AUTO_CONSOLIDATION: "false"
-      # LLM request traces are kept forever (0 disables the purge): the usage page reads memory usage from them.
-      HINDSIGHT_API_LLM_TRACE_RETENTION_DAYS: "0"
+      # The request log is where the web app copies the memory's model calls from (every 15 minutes, into model_calls).
+      # 30 days leave room for the copy to catch up after an outage; older entries are not needed.
+      HINDSIGHT_API_LLM_TRACE_RETENTION_DAYS: "30"
       # Recall drops raw facts that an observation was consolidated from (the duplicates).
       HINDSIGHT_API_RECALL_PREFER_OBSERVATIONS: "true"
       # Embeddings from Voyage through its OpenAI-compatible API (native client, no LiteLLM layer).

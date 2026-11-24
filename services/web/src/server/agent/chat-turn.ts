@@ -48,8 +48,8 @@ import { textOf, type MemoryLookup } from "./memory-context";
 import type { ProjectContext } from "./project-context";
 import { loadSystemPrompt } from "./system-prompt";
 import { buildToolboxTools } from "./toolbox-tools";
-import { recordModelUsage } from "../usage/usage-service";
-import { createTurnTiming, observeTurnTiming, snapshotTiming, usageOfTiming } from "./turn-timing";
+import { recordModelCall, tokensOfLanguageModel } from "../usage/model-calls";
+import { createTurnTiming, observeTurnTiming, snapshotTiming } from "./turn-timing";
 import { acquireTurn, endTurn, hasViewers, resumable, startTurn, watchViewers } from "./turn-registry";
 import { announceListChange } from "../events/list-events";
 
@@ -211,8 +211,11 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   }
   const modelMessages = await convertToModelMessages(quotedHistory);
 
+  // The reply's id, chosen now so every model call of the turn (its steps, an image a tool makes) is recorded against it.
+  // A continuation goes on in the stopped reply.
+  const replyId = stopped?.id ?? crypto.randomUUID();
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
-  const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null, user.id);
+  const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null, user.id, replyId);
   // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd). A temporary chat,
   // never saved, does not get it.
   let memoryFlushRequested = false;
@@ -226,8 +229,6 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       };
 
   const streamId = crypto.randomUUID();
-  // The usage of a continuation is its own record: the stopped run's tokens, keyed by the message, stay counted.
-  const usageKey = stopped ? `${stopped.id}:continue:${streamId}` : undefined;
   const turn = startTurn(conversationId, streamId, user.id);
   // The lists show the running spinner from the start of the turn, so they are read again now.
   announceListChange(user.id);
@@ -245,9 +246,27 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
         stopWhen: stepCountIs(config.MAX_AGENT_STEPS),
         abortSignal: turn.abort.signal,
         // Effort only shapes thinking when thinking is on: adaptive lets the model decide how much to think.
+        // cacheControl is Anthropic's automatic prompt caching: each step reads the prompt the step before it wrote.
         providerOptions: {
-          anthropic: { effort: reasoningEffort, thinking: { type: "adaptive", display: "summarized" } },
+          anthropic: {
+            effort: reasoningEffort,
+            thinking: { type: "adaptive", display: "summarized" },
+            cacheControl: { type: "ephemeral" },
+          },
         },
+        // Each step is one request to the model, recorded with the usage the API reported for it.
+        onStepEnd: (step) =>
+          recordModelCall({
+            userId: user.id,
+            sourceKey: `anthropic:${step.response.id}`,
+            context: "conversation",
+            operation: "generate",
+            cause: "message_sent",
+            model: step.response.modelId,
+            tokens: tokensOfLanguageModel(step.usage),
+            conversationId,
+            messageId: replyId,
+          }),
       });
       if (naming) {
         // Not awaited: the agent's reply never waits for the name. The name is announced on this stream if it is still open.
@@ -256,6 +275,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
           userId: user.id,
           placeholderTitle: conversation.title,
           firstMessage: naming,
+          cause: "conversation_created",
         }).then((title) => {
           if (title) announceTitle(writer, title);
         });
@@ -269,7 +289,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
         return part.type === "start" || part.type === "finish" ? { turnTiming: snapshotTiming(timing) } : undefined;
       };
       if (!stopped) {
-        writer.merge(toUIMessageStream({ stream: observed, messageMetadata }));
+        writer.merge(toUIMessageStream({ stream: observed, messageMetadata, generateMessageId: () => replyId }));
         return;
       }
       // Continuing: the reply opens under the stopped reply's id with what it had, then the model goes on with it.
@@ -281,25 +301,21 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
     },
     onStepEnd: async ({ messages }) => {
       await persistLatestAssistant(
-        user.id,
         conversationId,
         incoming.id,
         messages,
         "streaming",
         snapshotTiming(timing),
-        usageKey,
       );
     },
     onEnd: async ({ messages, isAborted }) => {
       timing.endedAt ??= Date.now();
       await persistLatestAssistant(
-        user.id,
         conversationId,
         incoming.id,
         messages,
         isAborted ? "aborted" : "complete",
         snapshotTiming(timing),
-        usageKey,
       );
       await touchConversation(conversationId, user.id);
       // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
@@ -400,13 +416,11 @@ async function lookupMemory(username: string, query: string): Promise<MemoryLook
  * message, and the conversation's active leaf moves from the user message to the reply.
  */
 async function persistLatestAssistant(
-  userId: string,
   conversationId: string,
   userMessageId: string,
   all: UIMessage[],
   status: "streaming" | "complete" | "aborted",
   turnTiming: TurnTiming,
-  usageKey?: string,
 ): Promise<void> {
   const after = all.slice(all.findIndex((message) => message.id === userMessageId) + 1);
   const latest = after.findLast((message) => message.role === "assistant");
@@ -421,11 +435,6 @@ async function persistLatestAssistant(
     status,
   });
   await advanceActiveLeaf(conversationId, userMessageId, latest.id);
-  // The reply's tokens go to the usage record, keyed by the message: updated while it streams, final when it ends.
-  const usage = usageOfTiming(turnTiming);
-  if (usage) {
-    await recordModelUsage({ userId, part: "chat", messageId: usageKey ?? latest.id, model: getConfig().CHAT_MODEL, usage });
-  }
 }
 
 function toUIMessage(row: MessageRow): UIMessage {

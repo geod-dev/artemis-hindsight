@@ -1,38 +1,14 @@
 // Shared by the usage API (server) and the usage settings page (client): the periods, the parts, the units and their
 // conversions.
 
-/** Anthropic list prices, USD per million tokens, from the claude-api reference (cached 2026-10-06). */
-export interface ModelPrice {
-  input: number;
-  output: number;
-}
-
-export const MODEL_PRICES: Record<string, ModelPrice> = {
-  "claude-fable-5-1": { input: 10, output: 50 },
-  "claude-mythos-5-1": { input: 10, output: 50 },
-  "claude-fable-5": { input: 10, output: 50 },
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-opus-5": { input: 5, output: 25 },
-  "claude-opus-4-8": { input: 5, output: 25 },
-  "claude-opus-4-7": { input: 5, output: 25 },
-  "claude-opus-4-6": { input: 5, output: 25 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-sonnet-5": { input: 2, output: 10 },
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
-  "claude-haiku-4-5": { input: 1, output: 5 },
-};
-
-/** Cache reads cost a tenth of the input price (cache writes are billed at a premium and are not split out here). */
-export const CACHE_READ_MULTIPLIER = 0.1;
-
 /** Assumption, not a quoted rate: US dollars to euros. Update it when the exchange rate should change. */
 export const EUR_PER_USD = 0.92;
 
 /**
  * Grams of CO2 equivalent per US dollar of model usage, an estimate. The footprint follows the cost: the price already
  * weighs what each token costs to compute (cached input at a tenth of input, output above both, an image's output far
- * above text), for every part, memory included. A model without a listed price costs nothing here, so it emits nothing.
+ * above text), for every part, memory included. A model missing from server/usage/prices.ts costs nothing, so it emits
+ * nothing.
  */
 export const GRAMS_CO2E_PER_USD = 200;
 
@@ -114,9 +90,10 @@ export function rangeStart(range: UsageRange, now: Date): Date | null {
 }
 
 /**
- * The parts of the usage, drawn as the segments of one bar. `input` and `output` come from the chat replies; the model
- * call that names a new conversation counts as input (it reads the user's message). `image` is the images the agent
- * generates, and `memory` what Hindsight spends on retain, reflect and consolidation (read from its LLM request traces).
+ * The parts of the usage, drawn as the segments of one bar. `input` and `output` come from the chat replies (input with
+ * its cache reads and writes); the model call that names a conversation counts as input (it reads the user's message).
+ * `image` is the images the agent generates, and `memory` what Hindsight spends (retain, recall, reflect, consolidation,
+ * summary refreshes, its decision model). Every figure comes from the ledger of model calls (server/usage/model-calls.ts).
  */
 export const USAGE_PARTS = [
   { id: "input", label: "Input" },
@@ -136,8 +113,6 @@ export interface PartTotals {
 /** Raw counts for a set of turns. Costs are in US dollars. */
 export interface UsageTotals {
   parts: Record<UsagePart, PartTotals>;
-  /** The part of the input read from the prompt cache. Already counted in the input part. */
-  cachedInputTokens: number;
   turns: number;
 }
 
@@ -149,7 +124,6 @@ export function emptyTotals(): UsageTotals {
       memory: { tokens: 0, costUsd: 0 },
       image: { tokens: 0, costUsd: 0 },
     },
-    cachedInputTokens: 0,
     turns: 0,
   };
 }
@@ -169,42 +143,7 @@ export function addTotals(target: UsageTotals, part: UsageTotals): void {
     target.parts[id].tokens += part.parts[id].tokens;
     target.parts[id].costUsd += part.parts[id].costUsd;
   }
-  target.cachedInputTokens += part.cachedInputTokens;
   target.turns += part.turns;
-}
-
-/**
- * The image model's prices, USD per million tokens (OpenAI's pricing page for gpt-image-2.6-flare, as reported by
- * third-party trackers in 2026): text input, image input, image output. Its text output is not billed.
- */
-export const IMAGE_MODEL_PRICES: Record<string, { textInput: number; imageInput: number; imageOutput: number }> = {
-  "gpt-image-2.6-flare": { textInput: 5, imageInput: 8, imageOutput: 30 },
-};
-
-/**
- * The input and output costs of one model's tokens. An image model prices its image input and output apart from its
- * text; a model without a listed price costs nothing here.
- */
-export function inputOutputCost(
-  model: string,
-  tokens: { inputTokens: number; cachedInputTokens: number; outputTokens: number; imageInputTokens?: number | undefined },
-): { input: number; output: number } {
-  const imagePrice = IMAGE_MODEL_PRICES[model];
-  if (imagePrice) {
-    const imageInput = tokens.imageInputTokens ?? 0;
-    const textInput = Math.max(tokens.inputTokens - imageInput, 0);
-    return {
-      input: (textInput * imagePrice.textInput + imageInput * imagePrice.imageInput) / 1_000_000,
-      output: (tokens.outputTokens * imagePrice.imageOutput) / 1_000_000,
-    };
-  }
-  const price = MODEL_PRICES[model];
-  if (!price) return { input: 0, output: 0 };
-  const uncachedInput = Math.max(tokens.inputTokens - tokens.cachedInputTokens, 0);
-  return {
-    input: (uncachedInput * price.input + tokens.cachedInputTokens * price.input * CACHE_READ_MULTIPLIER) / 1_000_000,
-    output: (tokens.outputTokens * price.output) / 1_000_000,
-  };
 }
 
 /** The value of one part in the chosen unit. */

@@ -96,18 +96,10 @@ export function createGenerateImageTool(sandbox: SandboxClient, openai: OpenAI):
         path: saved.path,
         absolutePath: saved.absolutePath,
         link: `[${saved.name}](<#sandbox-file:${saved.path}>)`,
-        // The tokens the image cost, for the usage page. The web app records them and removes them before the model
-        // reads the result (see toolbox-tools.ts in the web app).
+        // What the call cost, as OpenAI reported it: the web app records it in its ledger of model calls and removes it
+        // before the model reads the result (see toolbox-tools.ts in the web app).
         ...(response.usage
-          ? {
-              usage: {
-                part: "image" as const,
-                model: MODEL,
-                inputTokens: response.usage.input_tokens,
-                outputTokens: response.usage.output_tokens,
-                imageInputTokens: response.usage.input_tokens_details.image_tokens,
-              },
-            }
+          ? { usage: { provider: "openai" as const, model: MODEL, requestId: response._request_id ?? null, usage: response.usage } }
           : {}),
       };
     },

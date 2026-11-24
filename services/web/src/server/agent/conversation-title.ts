@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "../config";
 import { renameUntitledConversation, setConversationTitle } from "../repositories/conversation-repository";
-import { recordModelUsage } from "../usage/usage-service";
+import { recordModelCall, tokensOfLanguageModel } from "../usage/model-calls";
 
 // The naming prompt lives in prompts/conversation-title.md so it can be reviewed and edited without touching code.
 // Same caching as the system prompt: read on every call in development, once per process in production.
@@ -36,6 +36,8 @@ export const NAMING_INPUT_CHARS = 2000;
  * current title (the user asked for a new name, from the user's messages of the whole conversation).
  * Resolves to the stored name, or undefined when nothing was named.
  *
+ * `cause` is why the name is asked for: a new conversation, or the user (rename, name the untitled conversations).
+ *
  * Never rejects. Naming is best effort: when it fails, the title stays. A turn starts it without awaiting it, so the
  * agent's reply never waits for it.
  */
@@ -44,10 +46,11 @@ export async function nameConversation(params: {
   userId: string;
   placeholderTitle?: string;
   firstMessage: string;
+  cause: "conversation_created" | "user_action";
 }): Promise<string | undefined> {
-  const { conversationId, userId, placeholderTitle, firstMessage } = params;
+  const { conversationId, userId, placeholderTitle, firstMessage, cause } = params;
   try {
-    const { text, usage } = await generateText({
+    const { text, usage, response } = await generateText({
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
       prompt: firstMessage.slice(0, NAMING_INPUT_CHARS),
@@ -55,7 +58,16 @@ export async function nameConversation(params: {
       // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
       maxRetries: 4,
     });
-    await recordModelUsage({ userId, part: "title", model: getConfig().TITLE_MODEL, metadata: { conversationId }, usage });
+    await recordModelCall({
+      userId,
+      sourceKey: `anthropic:${response.id}`,
+      context: "title",
+      operation: "generate",
+      cause,
+      model: response.modelId,
+      tokens: tokensOfLanguageModel(usage),
+      conversationId,
+    });
     const title = cleanTitle(text);
     if (!title) return undefined;
     const renamed =

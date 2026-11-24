@@ -208,6 +208,7 @@ const llmRequestsSchema = z.object({
   total: z.number(),
   items: z.array(
     z.object({
+      id: z.string(),
       operation: z.string().nullish(),
       model: z.string().nullish(),
       started_at: z.string(),
@@ -215,52 +216,76 @@ const llmRequestsSchema = z.object({
       output_tokens: z.number().nullish(),
       cached_tokens: z.number().nullish(),
       thoughts_tokens: z.number().nullish(),
+      metadata: z.record(z.string(), z.unknown()).nullish(),
     }),
   ),
 });
 
-/** One model call Hindsight made for a bank (retain, reflect, consolidation...), as its trace recorded it. */
-export interface HindsightLlmCall {
-  operation: string;
+/** One model call Hindsight made for a bank, as its request log recorded it. */
+export interface HindsightModelCall {
+  /** Hindsight's id for the request. */
+  id: string;
+  /** retain, recall, reflect, consolidation, refresh_mental_model. */
+  operation: string | null;
   /** As Hindsight names it, with its provider prefix ("anthropic/claude-haiku-5-5"). */
   model: string;
   startedAt: Date;
+  /** Every input token, cache reads and writes included (Hindsight's TokenUsage contract). */
   inputTokens: number;
+  /** The visible output. */
   outputTokens: number;
+  /** The input tokens read from the prompt cache. */
   cachedTokens: number;
-  /** Reasoning tokens. Not in outputTokens, but billed as output by Anthropic. */
+  /** Reasoning tokens: not in outputTokens, billed as output. */
   thoughtsTokens: number;
+  /** The document the call processed: a retain's conversation (memory-flush.ts names documents by conversation). */
+  documentId: string | null;
 }
 
 const LLM_REQUESTS_PAGE = 500;
 
 /**
- * The language-model calls Hindsight made for the bank since `start` (all of them when null), from its LLM request
- * traces. Embedding and rerank calls are left out. Hindsight keeps traces for HINDSIGHT_API_LLM_TRACE_RETENTION_DAYS
- * (0: forever, see docker-compose.yml); older calls are gone.
+ * The model calls Hindsight made for the bank since `start` (all of them when null), from its request log: the
+ * language-model calls and the decision-model calls (Jev). Embedding and rerank calls are left out. Hindsight keeps
+ * the log for HINDSIGHT_API_LLM_TRACE_RETENTION_DAYS (see docker-compose.yml). A bank that does not exist
+ * yet has made no calls.
  */
-export async function listLlmCalls(bankId: string, start: Date | null): Promise<HindsightLlmCall[]> {
-  const calls: HindsightLlmCall[] = [];
+export async function listModelCalls(bankId: string, start: Date | null): Promise<HindsightModelCall[]> {
+  const [llm, decision] = await Promise.all([
+    listLoggedCalls(bankId, start, "llm"),
+    listLoggedCalls(bankId, start, "decision"),
+  ]);
+  return [...llm, ...decision];
+}
+
+async function listLoggedCalls(
+  bankId: string,
+  start: Date | null,
+  callType: "llm" | "decision",
+): Promise<HindsightModelCall[]> {
+  const calls: HindsightModelCall[] = [];
   for (let offset = 0; ; offset += LLM_REQUESTS_PAGE) {
     const url = bankUrl(bankId, "/llm-requests");
-    url.searchParams.set("call_type", "llm");
+    url.searchParams.set("call_type", callType);
     url.searchParams.set("limit", String(LLM_REQUESTS_PAGE));
     url.searchParams.set("offset", String(offset));
     if (start) url.searchParams.set("start_date", start.toISOString());
     const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(30_000) });
-    // A user without a bank yet has made no memory calls.
     if (res.status === 404) return calls;
     if (!res.ok) throw new Error(`hindsight llm-requests failed for ${bankId}: HTTP ${res.status}`);
     const page = llmRequestsSchema.parse(await res.json());
     for (const item of page.items) {
+      const documentId = item.metadata?.document_id;
       calls.push({
-        operation: item.operation ?? "unknown",
+        id: item.id,
+        operation: item.operation ?? null,
         model: item.model ?? "unknown",
         startedAt: new Date(item.started_at),
         inputTokens: item.input_tokens ?? 0,
         outputTokens: item.output_tokens ?? 0,
         cachedTokens: item.cached_tokens ?? 0,
         thoughtsTokens: item.thoughts_tokens ?? 0,
+        documentId: typeof documentId === "string" ? documentId : null,
       });
     }
     if (page.items.length < LLM_REQUESTS_PAGE || offset + LLM_REQUESTS_PAGE >= page.total) return calls;

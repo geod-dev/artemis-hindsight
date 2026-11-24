@@ -63,6 +63,19 @@ list, settings, memory, skills, admin) is made in **both** `services/web` and `a
 - Open pages call `POST /api/conversations/[id]/keepalive` every 5 minutes (web `TemporaryChatKeepAlive`, phone the
   same name). An hourly sweep (`server/conversations/temporary-chats.ts`) deletes chats not kept alive for an hour.
 
+## Model calls and costs
+
+- Every model call made for a user is one row of `model_calls` (`server/usage/model-calls.ts`): one row per request
+  to a provider, with its context, operation, cause, model, tokens and cost. A new feature that calls a model records
+  its calls there.
+- Tokens come from what the provider reported for that request (AI SDK `usage`, OpenAI's `usage`, Hindsight's request
+  log), never from estimates. `source_key` is the provider's id for the request, so a call is never counted twice.
+- A call is priced once, when it is recorded (`server/usage/prices.ts`). A price change never reprices the past. A new
+  model needs its price there.
+- A reply records each step from `streamText`'s `onStepEnd`, against the reply's id (chosen before the stream starts).
+- Memory calls run inside Hindsight: `server/usage/memory-calls.ts` copies them from its request log every 15 minutes and
+  before the usage page is read. Retain stays async.
+
 ## Mobile app (`apps/mobile`)
 
 - Expo SDK 58, Expo Router, TypeScript. It is **not** an npm workspace: its React version differs from the web's, so

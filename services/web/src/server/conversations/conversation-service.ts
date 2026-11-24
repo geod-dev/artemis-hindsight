@@ -70,7 +70,7 @@ export async function regenerateTitle(userId: string, id: string): Promise<strin
     .join("\n\n")
     .slice(-NAMING_INPUT_CHARS);
   if (!text) throw new ConversationServiceError("this conversation has no text to name it from", 400);
-  const title = await nameConversation({ conversationId: id, userId, firstMessage: text });
+  const title = await nameConversation({ conversationId: id, userId, firstMessage: text, cause: "user_action" });
   if (!title) throw new ConversationServiceError("the title could not be generated right now", 502);
   return title;
 }
@@ -92,7 +92,9 @@ export async function nameUntitledConversations(userId: string): Promise<{ named
   for (let start = 0; start < untitled.length; start += 4) {
     const batch = untitled.slice(start, start + 4);
     const titles = await Promise.all(
-      batch.map(({ id, title, text }) => nameConversation({ conversationId: id, userId, placeholderTitle: title, firstMessage: text })),
+      batch.map(({ id, title, text }) =>
+        nameConversation({ conversationId: id, userId, placeholderTitle: title, firstMessage: text, cause: "user_action" }),
+      ),
     );
     named += titles.filter(Boolean).length;
   }
