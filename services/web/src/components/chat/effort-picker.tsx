@@ -12,21 +12,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export type ReasoningEffort = "low" | "medium" | "high";
+// "auto": Jev picks the effort of each reply from the conversation (server/agent/reasoning-effort.ts). The phone's
+// choice list is apps/mobile/src/lib/storage.ts; keep the two in step.
+export type ReasoningEffort = "auto" | "low" | "medium" | "high";
 
 const OPTIONS: { value: ReasoningEffort; name: string; meta: string }[] = [
+  { value: "auto", name: "Auto", meta: "Jev picks per reply" },
   { value: "low", name: "Low", meta: "Quick replies" },
   { value: "medium", name: "Medium", meta: "Everyday tasks" },
   { value: "high", name: "High", meta: "Complex works" },
 ];
 
-export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "auto";
 
 // The last choice is remembered per browser, so a new message starts with the same effort.
 const STORAGE_KEY = "artemis.reasoningEffort";
 
 export function isEffort(value: unknown): value is ReasoningEffort {
-  return value === "low" || value === "medium" || value === "high";
+  return value === "auto" || value === "low" || value === "medium" || value === "high";
 }
 
 /** The browser's last choice, or the default. */
@@ -51,7 +54,7 @@ export const EffortMenu: FC<{ value: ReasoningEffort; onChange: (value: Reasonin
   value,
   onChange,
 }) => {
-  const selectedName = OPTIONS.find((option) => option.value === value)?.name ?? "Medium";
+  const selectedName = OPTIONS.find((option) => option.value === value)?.name ?? "Auto";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

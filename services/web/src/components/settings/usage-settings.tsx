@@ -62,6 +62,7 @@ const PART_COLOR: Record<UsagePart, AvatarColorId> = {
   title: "violet",
   image: "emerald",
   memory: "pink",
+  effort: "teal",
 };
 
 export function UsageSettings() {

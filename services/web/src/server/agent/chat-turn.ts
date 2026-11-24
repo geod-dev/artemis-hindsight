@@ -16,7 +16,7 @@ import { recallMemories } from "../clients/hindsight-client";
 import { CONVERSATION_TITLE_PART, type ConversationTitleData } from "@/lib/conversation-title-part";
 import type { TemporaryMode } from "@/lib/temporary-chat";
 import { injectQuoteContext } from "@assistant-ui/ai-sdk";
-import type { StoredMessageMetadata, TurnTiming } from "@/server/db/schema";
+import type { EffortDecision, ReasoningEffortChoice, StoredMessageMetadata, TurnTiming } from "@/server/db/schema";
 import type { CurrentUser } from "../auth/session";
 import {
   canUseConversation,
@@ -43,6 +43,7 @@ import { checkAttachments } from "./attachments";
 import { CONTINUE_INSTRUCTION, continueInOpenText, replayReply } from "./continue-reply";
 import { nameConversation, namingMessages, type NamingMessage } from "./conversation-title";
 import { flushMemoryTool } from "./flush-memory-tool";
+import { resolveReasoningEffort } from "./reasoning-effort";
 import { latestModelInput, loadUsableSkills, toModelHistory, type UserContext } from "./model-history";
 import { textOf, type MemoryLookup } from "./memory-context";
 import type { ProjectContext } from "./project-context";
@@ -100,7 +101,8 @@ export interface ChatTurnParams {
   regenerate: boolean;
   /** With `regenerate`: the stopped reply to continue instead of answering again. */
   continueMessageId?: string | null;
-  reasoningEffort?: "low" | "medium" | "high";
+  /** The composer's effort: a fixed one, or "auto" (Jev picks it for each reply). Auto when the browser sends none. */
+  reasoningEffort?: ReasoningEffortChoice;
   projectId?: string | null;
   temporary?: TemporaryMode | null;
   user: CurrentUser;
@@ -119,8 +121,8 @@ export async function runChatTurn(params: ChatTurnParams): Promise<Response> {
 
 async function startChatTurn(params: ChatTurnParams, release: () => void): Promise<Response> {
   const { conversationId, incoming, user } = params;
-  // The composer's Low / Medium / High choice. Medium when the browser sends none.
-  const reasoningEffort = params.reasoningEffort ?? "medium";
+  // The composer's choice: Auto, or a fixed Low / Medium / High. Auto when the browser sends none.
+  const requestedEffort = params.reasoningEffort ?? "auto";
   const config = getConfig();
   const userText = textOf(incoming);
 
@@ -173,7 +175,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       metadata: {
         ...(context ? { memory: memoryMetadata(context.lookup) } : {}),
         ...(custom ? { custom } : {}),
-        reasoningEffort,
+        reasoningEffort: requestedEffort,
       },
       status: "complete",
     });
@@ -214,6 +216,15 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
   // The reply's id, chosen now so every model call of the turn (its steps, an image a tool makes) is recorded against it.
   // A continuation goes on in the stopped reply.
   const replyId = stopped?.id ?? crypto.randomUUID();
+  // The effort the reply runs with. Auto asks Jev with the transcript before the reply starts (a second or so).
+  const effort = await resolveReasoningEffort({
+    requested: requestedEffort,
+    continued: stoppedRow?.metadata?.effort,
+    transcript: namingMessages(history),
+    userId: user.id,
+    conversationId,
+    replyId,
+  });
   // Resolved before streaming starts, so a toolbox outage returns a clear error instead of a half-started reply.
   const toolboxTools = await buildToolboxTools(conversationId, personalized ? user.username : null, user.id, replyId);
   // The flush tool only asks for a save: the conversation is saved when this reply ends (see onEnd). A temporary chat,
@@ -249,7 +260,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
         // cacheControl is Anthropic's automatic prompt caching: each step reads the prompt the step before it wrote.
         providerOptions: {
           anthropic: {
-            effort: reasoningEffort,
+            effort: effort.used,
             thinking: { type: "adaptive", display: "summarized" },
             cacheControl: { type: "ephemeral" },
           },
@@ -300,13 +311,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
       );
     },
     onStepEnd: async ({ messages }) => {
-      await persistLatestAssistant(
-        conversationId,
-        incoming.id,
-        messages,
-        "streaming",
-        snapshotTiming(timing),
-      );
+      await persistLatestAssistant(conversationId, incoming.id, messages, "streaming", snapshotTiming(timing), effort);
     },
     onEnd: async ({ messages, isAborted }) => {
       timing.endedAt ??= Date.now();
@@ -316,6 +321,7 @@ async function startChatTurn(params: ChatTurnParams, release: () => void): Promi
         messages,
         isAborted ? "aborted" : "complete",
         snapshotTiming(timing),
+        effort,
       );
       await touchConversation(conversationId, user.id);
       // A reply that finished with nobody connected to read it is unread. With a client connected, it was read.
@@ -424,6 +430,7 @@ async function persistLatestAssistant(
   all: UIMessage[],
   status: "streaming" | "complete" | "aborted",
   turnTiming: TurnTiming,
+  effort: EffortDecision,
 ): Promise<void> {
   const after = all.slice(all.findIndex((message) => message.id === userMessageId) + 1);
   const latest = after.findLast((message) => message.role === "assistant");
@@ -434,7 +441,7 @@ async function persistLatestAssistant(
     parentId: userMessageId,
     role: "assistant",
     parts: latest.parts,
-    metadata: { model: getConfig().CHAT_MODEL, turnTiming },
+    metadata: { model: getConfig().CHAT_MODEL, turnTiming, effort },
     status,
   });
   await advanceActiveLeaf(conversationId, userMessageId, latest.id);

@@ -23,7 +23,7 @@ const requestSchema = z.object({
   // With a regenerate: the stopped reply to continue (the Continue button under a stopped reply).
   continueMessageId: z.string().min(1).nullable().optional(),
   // Model context settings from the composer. Only the reasoning effort is used.
-  config: z.object({ reasoningEffort: z.enum(["low", "medium", "high"]).optional() }).optional(),
+  config: z.object({ reasoningEffort: z.enum(["auto", "low", "medium", "high"]).optional() }).optional(),
   // The project selected in the new chat. Used when this message creates the conversation.
   projectId: z.uuid().nullable().optional(),
   // The temporary mode selected in the new chat, or null for a normal chat. Used when this message creates the conversation.

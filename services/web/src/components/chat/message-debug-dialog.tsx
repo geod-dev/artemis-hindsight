@@ -137,6 +137,13 @@ function Details({ message }: { message: MessageDebug }) {
         </>
       )}
 
+      {message.effort && (
+        <>
+          <dt className="text-muted-foreground">Reasoning effort</dt>
+          <dd>{effortLabel(message.effort)}</dd>
+        </>
+      )}
+
       <dt className="text-muted-foreground">Memory</dt>
       <dd className="flex flex-col gap-1">
         {message.memorizedAt ? (
@@ -157,6 +164,23 @@ function Details({ message }: { message: MessageDebug }) {
       </dd>
     </dl>
   );
+}
+
+const EFFORT_NAME = { low: "Low", medium: "Medium", high: "High" } as const;
+
+/** The reply's effort, and why it has that one: the user's choice, Jev's pick under Auto, or the fallback. */
+function effortLabel(effort: NonNullable<MessageDebug["effort"]>): string {
+  const used = EFFORT_NAME[effort.used];
+  switch (effort.decidedBy) {
+    case "user":
+      return used;
+    case "jev":
+      return `${used}, picked by Jev (Auto)`;
+    case "fallback":
+      return `${used}, Auto fallback: Jev did not answer`;
+    case "continued":
+      return `${used}, kept from the first answer (Auto)`;
+  }
 }
 
 function RecalledMemories({ memory }: { memory: MessageDebug["memory"] }) {

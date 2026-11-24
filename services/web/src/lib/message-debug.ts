@@ -1,5 +1,11 @@
 import type { UIMessage } from "ai";
-import type { MessageStatus, StoredMessageMetadata, StoredModelInput, TurnTiming } from "@/server/db/schema";
+import type {
+  EffortDecision,
+  MessageStatus,
+  StoredMessageMetadata,
+  StoredModelInput,
+  TurnTiming,
+} from "@/server/db/schema";
 
 /**
  * What the message debug view shows for one message: the stored message, what it recalled or what the model
@@ -24,4 +30,6 @@ export interface MessageDebug {
   modelInput?: StoredModelInput;
   /** Assistant messages: the turn's timing, measured by the server. */
   turnTiming?: TurnTiming;
+  /** Assistant messages: the reasoning effort the reply ran with, and who chose it. */
+  effort?: EffortDecision;
 }

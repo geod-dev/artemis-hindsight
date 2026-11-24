@@ -38,6 +38,7 @@ export async function GET(
     ...(row.metadata?.memory ? { memory: row.metadata.memory } : {}),
     ...(row.metadata?.modelInput ? { modelInput: row.metadata.modelInput } : {}),
     ...(row.metadata?.turnTiming ? { turnTiming: row.metadata.turnTiming } : {}),
+    ...(row.metadata?.effort ? { effort: row.metadata.effort } : {}),
   };
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }

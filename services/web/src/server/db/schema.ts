@@ -142,6 +142,20 @@ export interface StoredModelInput {
   files: { filename?: string; mediaType: string }[];
 }
 
+/** A reasoning effort the user can choose. "auto" lets Jev pick one per reply. */
+export type ReasoningEffortChoice = "auto" | "low" | "medium" | "high";
+
+/**
+ * The reasoning effort of one reply: what the user asked for, what the reply ran with, and who picked it. `decidedBy`
+ * is "user" for a fixed effort, "jev" when Jev chose it, "fallback" when Auto could not ask Jev and used medium, and
+ * "continued" when a continued reply keeps the effort of its first answer.
+ */
+export interface EffortDecision {
+  requested: ReasoningEffortChoice;
+  used: Exclude<ReasoningEffortChoice, "auto">;
+  decidedBy: "user" | "jev" | "fallback" | "continued";
+}
+
 export interface StoredMessageMetadata {
   /** Facts recalled from Hindsight that were injected into this user message for the model. */
   memory?: {
@@ -157,8 +171,10 @@ export interface StoredMessageMetadata {
   /** The exact input the model read for this user message. Absent on messages stored before it was recorded. */
   modelInput?: StoredModelInput;
   model?: string;
-  /** The reasoning effort the user message was sent with. Absent on messages stored before it was recorded. */
-  reasoningEffort?: "low" | "medium" | "high";
+  /** The reasoning effort the user message was sent with ("auto" included). Absent on messages stored before it was recorded. */
+  reasoningEffort?: ReasoningEffortChoice;
+  /** Assistant messages: the reasoning effort the reply ran with, and who chose it. Absent on older replies. */
+  effort?: EffortDecision;
   /** The assistant turn's timing, measured by the server. Epoch milliseconds. */
   turnTiming?: TurnTiming;
   /** assistant-ui's composer quote, kept under the same key the runtime uses (metadata.custom). */
@@ -196,7 +212,7 @@ export const messages = pgTable(
 );
 
 /** What a model call served. */
-export type ModelCallContext = "conversation" | "title" | "memory" | "image";
+export type ModelCallContext = "conversation" | "title" | "memory" | "image" | "effort";
 
 /** What the call did: write a reply, a title or an image, or one of the memory's operations. */
 export type ModelCallOperation = "generate" | "retain" | "recall" | "reflect" | "consolidate" | "refresh";

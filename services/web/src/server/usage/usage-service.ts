@@ -91,6 +91,8 @@ function partsOf(context: ModelCallContext): [UsagePart, ModelCallTokenKind[]][]
       return [["image", ALL_KINDS]];
     case "memory":
       return [["memory", ALL_KINDS]];
+    case "effort":
+      return [["effort", ALL_KINDS]];
   }
 }
 

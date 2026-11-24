@@ -19,6 +19,11 @@ const envSchema = z.object({
    * which the hour-long cache keeps well within. Any token works, with no scope.
    */
   GITHUB_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  /**
+   * TypeSafe AI key for Jev, the decision model that picks the reasoning effort of an Auto reply. Optional: without it an
+   * Auto reply uses the medium effort, and the debug view says so.
+   */
+  TYPESAFE_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
   CHAT_MODEL: z.string().default("claude-haiku-5-5"),
   /** Names a new conversation from its first message, in the background. Its prompt is prompts/conversation-title.md. */
   TITLE_MODEL: z.string().default("claude-haiku-5-5"),
