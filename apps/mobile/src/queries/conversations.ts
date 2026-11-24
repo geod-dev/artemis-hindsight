@@ -109,6 +109,27 @@ export function useSetConversationProject() {
   });
 }
 
+/** Renames one conversation with the title the user typed (web: rename-conversation-dialog.tsx). */
+export function useRenameConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      apiFetch(`/api/conversations/${id}`, { method: "PATCH", json: { title } }),
+    onSuccess: (_data, { id }) =>
+      Promise.all([invalidateConversationLists(queryClient), queryClient.invalidateQueries({ queryKey: messagesKey(id) })]),
+  });
+}
+
+/** Names one conversation again from its whole branch, with the server's naming task. Resolves to the new title. */
+export function useRegenerateConversationTitle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ title: string }>(`/api/conversations/${id}/title`, { method: "POST" }),
+    onSuccess: (_data, id) =>
+      Promise.all([invalidateConversationLists(queryClient), queryClient.invalidateQueries({ queryKey: messagesKey(id) })]),
+  });
+}
+
 export function useDeleteConversation() {
   const queryClient = useQueryClient();
   return useMutation({

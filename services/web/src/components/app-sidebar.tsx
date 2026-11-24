@@ -1,6 +1,17 @@
 "use client";
 
-import { Archive, ChevronDown, FolderInput, FolderMinus, ListFilter, MessageSquarePlus, MoreVertical, Plus, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  FolderInput,
+  FolderMinus,
+  ListFilter,
+  MessageSquarePlus,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,6 +27,7 @@ import {
   conversationIdFromDragId,
   DraggableConversationRow,
 } from "@/components/conversations/draggable-conversation-row";
+import { RenameConversationDialog } from "@/components/conversations/rename-conversation-dialog";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -169,6 +181,8 @@ export function AppSidebar({
   );
 
   const [pendingConversationDelete, setPendingConversationDelete] = useState<ConversationSummary | null>(null);
+  // The conversation whose rename dialog is open, with the title the list shows.
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -418,6 +432,10 @@ export function AppSidebar({
                           // The project dialog opens from this menu: it takes the focus, the menu must not hand it back.
                           onCloseAutoFocus={(event) => event.preventDefault()}
                         >
+                          <DropdownMenuItem onSelect={() => setRenaming({ id: conversation.id, title })}>
+                            <Pencil />
+                            Rename
+                          </DropdownMenuItem>
                           <DropdownMenuSub>
                             <DropdownMenuSubTrigger>
                               <FolderInput />
@@ -486,6 +504,8 @@ export function AppSidebar({
       </SidebarFooter>
 
       <SidebarRail />
+
+      <RenameConversationDialog conversation={renaming} onClose={() => setRenaming(null)} />
 
       <ProjectDialog
         open={projectDialogOpen}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Code, Loader2, Save, Sparkles, type LucideIcon } from "lucide-react";
+import { Code, Loader2, Save, Sparkles, Type, type LucideIcon } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -31,6 +31,7 @@ export function DeveloperSettingsDialog() {
           <MessageDebugRow />
           <FlushRow />
           <ConsolidateRow />
+          <UntitledTitlesRow />
         </div>
       </DialogContent>
     </Dialog>
@@ -94,6 +95,25 @@ function ConsolidateRow() {
         return pending === 0
           ? "Nothing new to consolidate."
           : `Consolidating ${pending} ${pending === 1 ? "memory" : "memories"}. It runs in the background, then the memory summaries refresh.`;
+      }}
+    />
+  );
+}
+
+function UntitledTitlesRow() {
+  return (
+    <ActionRow
+      title="Name untitled conversations"
+      description="Runs the naming again for every conversation whose title was never generated (it still shows its first message)."
+      icon={Type}
+      buttonLabel="Name now"
+      run={async () => {
+        const result = await request<{ named: number; failed: number }>("POST", "/api/conversations/untitled-titles");
+        const named = result?.named ?? 0;
+        const failed = result?.failed ?? 0;
+        if (named === 0 && failed === 0) return "Every conversation already has a generated title.";
+        const done = `${named} ${named === 1 ? "conversation" : "conversations"} named.`;
+        return failed === 0 ? done : `${done} ${failed} could not be named; try again later.`;
       }}
     />
   );

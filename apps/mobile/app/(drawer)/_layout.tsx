@@ -62,6 +62,8 @@ export default function DrawerLayout() {
       {/* A project's full conversation list ("See more") and the create/edit form. Both go back to the project's new chat. */}
       <Drawer.Screen name="projects/[id]" options={{ title: "Project" }} />
       <Drawer.Screen name="projects/form" options={{ title: "Project", headerLeft: () => <BackButton to="/new" /> }} />
+      {/* "Type a name" from a conversation's menu. Its back button goes to the page the menu was opened on (rename.tsx). */}
+      <Drawer.Screen name="rename" options={{ title: "Rename" }} />
       {/* The settings are a native stack of their own (settings/_layout.tsx), so their headers and back come from the stack. */}
       <Drawer.Screen name="settings" options={{ headerShown: false }} />
     </Drawer>

@@ -3,18 +3,24 @@ import { getCurrentUser, unauthorized } from "@/server/auth/session";
 import {
   ConversationServiceError,
   deleteConversation,
+  rename,
   setArchived,
   setProject,
 } from "@/server/conversations/conversation-service";
 
 export const runtime = "nodejs";
 
-// One change per request: archiving, or moving into a project (`projectId` null takes the conversation out of it).
-const changeBody = z.union([z.object({ archived: z.boolean() }), z.object({ projectId: z.uuid().nullable() })]);
+// One change per request: archiving, moving into a project (`projectId` null takes the conversation out of it), or
+// renaming.
+const changeBody = z.union([
+  z.object({ archived: z.boolean() }),
+  z.object({ projectId: z.uuid().nullable() }),
+  z.object({ title: z.string().trim().min(1).max(120) }),
+]);
 
 /**
- * Archives (`{ "archived": true }`), restores (`{ "archived": false }`), or moves one conversation into a project
- * (`{ "projectId": "<uuid>" }`) or out of its project (`{ "projectId": null }`).
+ * Archives (`{ "archived": true }`), restores (`{ "archived": false }`), moves one conversation into a project
+ * (`{ "projectId": "<uuid>" }`) or out of its project (`{ "projectId": null }`), or renames it (`{ "title": "..." }`).
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
   const user = await getCurrentUser();
@@ -26,11 +32,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   }
   const body = changeBody.safeParse(await req.json().catch(() => null));
   if (!body.success) {
-    return Response.json({ error: "send archived (true or false) or projectId (a project or null)" }, { status: 400 });
+    return Response.json({ error: "send archived (true or false), projectId (a project or null) or title (1 to 120 characters)" }, { status: 400 });
   }
 
   try {
     if ("archived" in body.data) await setArchived(user.id, id, body.data.archived);
+    else if ("title" in body.data) await rename(user.id, id, body.data.title);
     else await setProject(user.id, id, body.data.projectId);
     return new Response(null, { status: 204 });
   } catch (error) {

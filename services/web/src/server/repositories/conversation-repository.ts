@@ -229,6 +229,28 @@ export async function renameUntitledConversation(
 }
 
 /**
+ * Sets the title, whatever it was: a name the user typed, or one generated on request. Its place in the lists does not
+ * change. Returns false when the conversation is not the user's. A temporary chat keeps its fixed title.
+ */
+export async function setConversationTitle(id: string, userId: string, title: string): Promise<boolean> {
+  const updated = await getDb()
+    .update(conversations)
+    .set({ title })
+    .where(and(eq(conversations.id, id), eq(conversations.userId, userId), notTemporary))
+    .returning({ id: conversations.id });
+  if (updated.length > 0) announceListChange(userId);
+  return updated.length > 0;
+}
+
+/** Every saved conversation of the user, archived ones included, with its title. Temporary chats are left out. */
+export async function listTitledConversations(userId: string): Promise<{ id: string; title: string }[]> {
+  return getDb()
+    .select({ id: conversations.id, title: conversations.title })
+    .from(conversations)
+    .where(and(eq(conversations.userId, userId), notTemporary));
+}
+
+/**
  * Moves the conversation to the top of the lists: a turn touched it. Announced, so the other windows and devices list it
  * in its new place. A temporary chat is kept alive. The caller has checked that the conversation belongs to the user.
  */

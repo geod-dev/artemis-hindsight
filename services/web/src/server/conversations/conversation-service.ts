@@ -7,10 +7,17 @@ import {
   conversationIdsOf,
   deleteAllConversations,
   deleteConversation as deleteOneConversation,
+  DEFAULT_TITLE,
   findConversation,
+  listTitledConversations,
   setConversationArchived,
   setConversationProject,
+  setConversationTitle,
+  titleFrom,
 } from "../repositories/conversation-repository";
+import { activeLeafOf, branchTo, listMessages, type MessageRow } from "../repositories/message-repository";
+import { NAMING_INPUT_CHARS, nameConversation } from "../agent/conversation-title";
+import { textOf } from "../agent/memory-context";
 import { findProject } from "../repositories/project-repository";
 
 // The conversation actions of the danger zone and the conversation menus. Every function takes the owner's id, so a
@@ -42,6 +49,62 @@ export async function setProject(userId: string, id: string, projectId: string |
   }
   const updated = await setConversationProject(id, userId, projectId);
   if (!updated) throw new ConversationServiceError("conversation not found", 404);
+}
+
+/** Renames a conversation with the title the user typed. */
+export async function rename(userId: string, id: string, title: string): Promise<void> {
+  const updated = await setConversationTitle(id, userId, title);
+  if (!updated) throw new ConversationServiceError("conversation not found", 404);
+}
+
+/**
+ * Names the conversation again with the naming task, from the user's messages of the branch it is on (not only the
+ * first one). A long conversation is cut from its start: its latest messages say best what it is about now.
+ * Returns the new title.
+ */
+export async function regenerateTitle(userId: string, id: string): Promise<string> {
+  const conversation = await findConversation(id, userId);
+  if (!conversation || conversation.temporary) throw new ConversationServiceError("conversation not found", 404);
+  const rows = await listMessages(id);
+  const text = userTexts(branchTo(rows, activeLeafOf(rows, conversation.activeLeafId)))
+    .join("\n\n")
+    .slice(-NAMING_INPUT_CHARS);
+  if (!text) throw new ConversationServiceError("this conversation has no text to name it from", 400);
+  const title = await nameConversation({ conversationId: id, userId, firstMessage: text });
+  if (!title) throw new ConversationServiceError("the title could not be generated right now", 502);
+  return title;
+}
+
+/**
+ * Runs the naming task again for every conversation of the user that still has its placeholder title (the default one,
+ * or the start of one of its messages): its naming failed when it was created. Archived conversations are included,
+ * temporary chats are not. Returns how many were named and how many are left untitled.
+ */
+export async function nameUntitledConversations(userId: string): Promise<{ named: number; failed: number }> {
+  const untitled: { id: string; title: string; text: string }[] = [];
+  for (const { id, title } of await listTitledConversations(userId)) {
+    const texts = userTexts(await listMessages(id));
+    const isPlaceholder = title === DEFAULT_TITLE || texts.some((text) => titleFrom(text) === title);
+    if (isPlaceholder && texts[0]) untitled.push({ id, title, text: texts[0] });
+  }
+  let named = 0;
+  // A few at a time, so a long list does not hit the model's rate limit all at once.
+  for (let start = 0; start < untitled.length; start += 4) {
+    const batch = untitled.slice(start, start + 4);
+    const titles = await Promise.all(
+      batch.map(({ id, title, text }) => nameConversation({ conversationId: id, userId, placeholderTitle: title, firstMessage: text })),
+    );
+    named += titles.filter(Boolean).length;
+  }
+  return { named, failed: untitled.length - named };
+}
+
+/** The non-empty texts of the user's messages, in order. */
+function userTexts(rows: MessageRow[]): string[] {
+  return rows
+    .filter((row) => row.role === "user")
+    .map((row) => textOf({ id: row.id, role: "user", parts: row.parts }))
+    .filter(Boolean);
 }
 
 /** Archives every listed conversation of the user. Returns how many were archived. */

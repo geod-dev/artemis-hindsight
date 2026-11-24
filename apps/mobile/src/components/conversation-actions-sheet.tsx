@@ -1,11 +1,24 @@
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Archive, ArchiveRestore, ChevronLeft, Folder, FolderInput, FolderMinus, Plus, Trash2 } from "lucide-react-native";
+import { useGlobalSearchParams, usePathname, useRouter, type Href } from "expo-router";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Folder,
+  FolderInput,
+  FolderMinus,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Type,
+} from "lucide-react-native";
 import { paletteHex } from "@/lib/avatar";
 import { ApiError } from "@/lib/api";
 import {
   useDeleteConversation,
+  useRegenerateConversationTitle,
   useSetConversationArchived,
   useSetConversationProject,
   type ConversationSummary,
@@ -15,8 +28,8 @@ import { usePreferences } from "@/preferences";
 import { ActionSheet, ActionSheetOption } from "./action-sheet";
 
 /**
- * The long-press menu of a conversation: move it into a project (or out of its project), archive (or restore, in the
- * archived list) and delete. Shared by the drawer's list and the archived chats screen, so both offer the same actions.
+ * The long-press menu of a conversation: rename it (generated from the conversation, or typed), move it into a project
+ * (or out of its project), archive (or restore, in the archived list) and delete. Shared by the drawer's list and the archived chats screen, so both offer the same actions.
  * Pass `conversation` to open it, null to close it.
  */
 export function ConversationActionsSheet({
@@ -38,10 +51,14 @@ export function ConversationActionsSheet({
   const setArchived = useSetConversationArchived();
   const setProject = useSetConversationProject();
   const remove = useDeleteConversation();
+  const regenerateTitle = useRegenerateConversationTitle();
+  // Where the rename screen comes back to: the page this sheet was opened on.
+  const pathname = usePathname();
+  const { session } = useGlobalSearchParams<{ session?: string }>();
   // The sheet keeps the last conversation while it slides away, so its title does not vanish mid-animation.
   const [shown, setShown] = useState(conversation);
-  // The menu, or the list of projects to move the conversation into.
-  const [view, setView] = useState<"menu" | "projects">("menu");
+  // The menu, the list of projects to move the conversation into, or the two ways to rename it.
+  const [view, setView] = useState<"menu" | "projects" | "rename">("menu");
   useEffect(() => {
     if (conversation) {
       setShown(conversation);
@@ -102,11 +119,38 @@ export function ConversationActionsSheet({
           />
           <ActionSheetOption label="Back" icon={ChevronLeft} onPress={() => setView("menu")} />
         </>
+      ) : shown && view === "rename" ? (
+        <>
+          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
+            Rename
+          </Text>
+          <ActionSheetOption
+            label="Generate from conversation"
+            icon={Sparkles}
+            onPress={() => {
+              onClose();
+              regenerateTitle.mutate(shown.id, { onError: failed("Rename failed") });
+            }}
+          />
+          <ActionSheetOption
+            label="Type a name"
+            icon={Type}
+            onPress={() => {
+              onClose();
+              const back = session ? `${pathname}?session=${session}` : pathname;
+              router.navigate(
+                `/rename?id=${shown.id}&title=${encodeURIComponent(shown.title)}&back=${encodeURIComponent(back)}&at=${Date.now()}` as Href,
+              );
+            }}
+          />
+          <ActionSheetOption label="Back" icon={ChevronLeft} onPress={() => setView("menu")} />
+        </>
       ) : shown ? (
         <>
           <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
             {shown.title}
           </Text>
+          <ActionSheetOption label="Rename" icon={Pencil} onPress={() => setView("rename")} />
           <ActionSheetOption label="Move to project" icon={FolderInput} onPress={() => setView("projects")} />
           {shown.project ? (
             <ActionSheetOption label="Remove from project" icon={FolderMinus} onPress={() => move(shown, null)} />

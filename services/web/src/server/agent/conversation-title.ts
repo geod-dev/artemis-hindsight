@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "../config";
-import { renameUntitledConversation } from "../repositories/conversation-repository";
+import { renameUntitledConversation, setConversationTitle } from "../repositories/conversation-repository";
 import { recordModelUsage } from "../usage/usage-service";
 
 // The naming prompt lives in prompts/conversation-title.md so it can be reviewed and edited without touching code.
@@ -24,20 +24,25 @@ export function loadConversationTitlePrompt(): string {
 
 /** The same limit the placeholder title uses, so a generated name never looks longer than a first message. */
 const MAX_TITLE_LENGTH = 60;
-/** The naming model only needs the start of the first message. */
-const MAX_INPUT_CHARS = 2000;
+/**
+ * The most text the naming model reads: the start of a first message, or the end of a whole conversation when the user
+ * asks for a new name (regenerateTitle in conversation-service.ts cuts it from its start).
+ */
+export const NAMING_INPUT_CHARS = 2000;
 
 /**
- * Names a new conversation from its first message with one short model call, then stores the name over the
- * placeholder title. Resolves to the stored name, or undefined when nothing was named.
+ * Names a conversation from its text with one short model call, then stores the name. With `placeholderTitle`, the name
+ * only replaces that placeholder (a new conversation named from its first message). Without it, the name replaces the
+ * current title (the user asked for a new name, from the user's messages of the whole conversation).
+ * Resolves to the stored name, or undefined when nothing was named.
  *
- * Never rejects. Naming is best effort: when it fails, the placeholder title stays. The caller starts it without
- * awaiting it, so the agent's reply never waits for it.
+ * Never rejects. Naming is best effort: when it fails, the title stays. A turn starts it without awaiting it, so the
+ * agent's reply never waits for it.
  */
 export async function nameConversation(params: {
   conversationId: string;
   userId: string;
-  placeholderTitle: string;
+  placeholderTitle?: string;
   firstMessage: string;
 }): Promise<string | undefined> {
   const { conversationId, userId, placeholderTitle, firstMessage } = params;
@@ -45,7 +50,7 @@ export async function nameConversation(params: {
     const { text, usage } = await generateText({
       model: anthropic(getConfig().TITLE_MODEL),
       system: loadConversationTitlePrompt(),
-      prompt: firstMessage.slice(0, MAX_INPUT_CHARS),
+      prompt: firstMessage.slice(0, NAMING_INPUT_CHARS),
       maxOutputTokens: 32,
       // An overloaded or rate-limited answer is retried before giving up. A later turn tries again if all fail.
       maxRetries: 4,
@@ -53,7 +58,10 @@ export async function nameConversation(params: {
     await recordModelUsage({ userId, part: "title", model: getConfig().TITLE_MODEL, metadata: { conversationId }, usage });
     const title = cleanTitle(text);
     if (!title) return undefined;
-    const renamed = await renameUntitledConversation(conversationId, userId, placeholderTitle, title);
+    const renamed =
+      placeholderTitle === undefined
+        ? await setConversationTitle(conversationId, userId, title)
+        : await renameUntitledConversation(conversationId, userId, placeholderTitle, title);
     return renamed ? title : undefined;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
