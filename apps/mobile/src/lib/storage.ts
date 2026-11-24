@@ -18,7 +18,9 @@ export async function clearToken(): Promise<void> {
 }
 
 export type Appearance = "system" | "light" | "dark";
-export type ReasoningEffort = "low" | "medium" | "high";
+// "auto": Jev picks the effort of each reply (services/web/src/server/agent/reasoning-effort.ts). Same list as the web's
+// effort picker (services/web/src/components/chat/effort-picker.tsx).
+export type ReasoningEffort = "auto" | "low" | "medium" | "high";
 
 export interface Preferences {
   appearance: Appearance;
@@ -34,7 +36,7 @@ export interface Preferences {
 
 const DEFAULT_PREFERENCES: Preferences = {
   appearance: "system",
-  reasoningEffort: "medium",
+  reasoningEffort: "auto",
   showProjectConversations: true,
   showProjects: true,
 };

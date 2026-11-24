@@ -59,7 +59,7 @@ const PreferencesContext = createContext<PreferencesValue | null>(null);
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState<Preferences>({
     appearance: "system",
-    reasoningEffort: "medium",
+    reasoningEffort: "auto",
     showProjectConversations: true,
     showProjects: true,
   });
